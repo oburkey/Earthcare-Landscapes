@@ -5,8 +5,9 @@ import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { uploadToR2, deleteFromR2 } from '@/lib/r2'
 
-type EditState   = { error?: string; success?: boolean } | null
-type UploadState = { error: string } | null
+import type { UploadActionState } from '@/types/actions'
+
+type EditState = { error?: string; success?: boolean } | null
 
 export async function updateSite(
   _prev: EditState,
@@ -38,9 +39,9 @@ export async function updateSite(
 }
 
 export async function uploadSitePlan(
-  _prev: UploadState,
+  _prev: UploadActionState,
   formData: FormData
-): Promise<UploadState> {
+): Promise<UploadActionState> {
   const profile = await requireAuth()
   if (profile.role !== 'admin') return { error: 'Only admins can upload site plans.' }
 

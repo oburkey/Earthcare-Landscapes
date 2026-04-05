@@ -3,9 +3,7 @@
 import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { compressImage } from '@/lib/compressImage'
-
-type ActionState = { error: string } | null
-type UploadAction = (prevState: ActionState, formData: FormData) => Promise<ActionState>
+import type { UploadAction } from '@/types/actions'
 
 interface Props {
   action: UploadAction
