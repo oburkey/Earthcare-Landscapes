@@ -44,7 +44,7 @@ function getVehicleStatus(v: Vehicle, today: string): StatusLevel {
   for (const d of dates) {
     const diff = daysDiff(d, today)
     if (diff < 0) return 'red'
-    if (diff <= 30 && worst !== 'red') worst = 'amber'
+    if (diff <= 30) worst = 'amber'
   }
   return worst
 }

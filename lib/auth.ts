@@ -15,6 +15,8 @@ export async function requireAuth(): Promise<Profile> {
       id: 'local-dev',
       full_name: 'Local Dev',
       role: 'admin',
+      phone_number: null,
+      credentials: [],
       created_at: new Date().toISOString(),
     }
   }
