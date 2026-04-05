@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(npm ls:*)",
+      "Bash(node:*)",
+      "Bash(python3 -c \"import json,sys; p=json.load\\(sys.stdin\\); print\\(p.get\\('version'\\), p.get\\('peerDependencies', {}\\)\\)\")",
+      "Bash(taskkill:*)",
+      "Bash(cmd:*)",
+      "Bash(npm run:*)",
+      "Bash(xargs grep:*)",
+      "Bash(cat /c/Users/Ollie/AppData/Roaming/nextjs-nodejs/*.json)",
+      "Bash(cat /c/Users/Ollie/AppData/Roaming/nextjs-nodejs/*)",
+      "Bash(npm install:*)",
+      "Bash(mkdir -p \"C:\\\\Users\\\\Ollie\\\\desktop\\\\earthcare\\\\app\\\\\\(app\\)\\\\sites\\\\[siteId]\\\\stages\\\\[stageId]\\\\extra-jobs\\\\new\")",
+      "Bash(mkdir -p \"C:\\\\Users\\\\Ollie\\\\desktop\\\\earthcare\\\\app\\\\\\(app\\)\\\\sites\\\\[siteId]\\\\stages\\\\[stageId]\\\\extra-jobs\\\\[extraJobId]\")"
+    ]
+  }
+}
