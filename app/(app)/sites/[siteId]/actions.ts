@@ -5,12 +5,13 @@ import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { uploadToR2, deleteFromR2 } from '@/lib/r2'
 
-type ActionState = { error?: string; success?: boolean } | null
+type EditState   = { error?: string; success?: boolean } | null
+type UploadState = { error: string } | null
 
 export async function updateSite(
-  _prev: ActionState,
+  _prev: EditState,
   formData: FormData
-): Promise<ActionState> {
+): Promise<EditState> {
   const profile = await requireAuth()
   if (profile.role !== 'supervisor' && profile.role !== 'admin') {
     return { error: 'Only supervisors and admins can edit sites.' }
@@ -37,9 +38,9 @@ export async function updateSite(
 }
 
 export async function uploadSitePlan(
-  _prev: ActionState,
+  _prev: UploadState,
   formData: FormData
-): Promise<ActionState> {
+): Promise<UploadState> {
   const profile = await requireAuth()
   if (profile.role !== 'admin') return { error: 'Only admins can upload site plans.' }
 
