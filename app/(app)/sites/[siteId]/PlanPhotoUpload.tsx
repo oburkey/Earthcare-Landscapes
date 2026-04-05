@@ -44,7 +44,7 @@ export default function PlanPhotoUpload({ action, hiddenFields, hasPlan }: Props
     formData.set('photo', compressed, compressed.name)
 
     startUpload(async () => {
-      const result = await action(null, formData)
+      const result = await action(formData)
       if (result?.error) {
         setError(result.error)
       } else {

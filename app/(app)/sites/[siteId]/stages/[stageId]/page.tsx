@@ -151,7 +151,7 @@ export default async function StagePage({ params }: Props) {
               {isAdmin && (
                 <div className="p-4 border-t border-stone-100">
                   <PlanPhotoUpload
-                    action={uploadStagePlan}
+                    action={uploadStagePlan.bind(null, null)}
                     hiddenFields={{ site_id: siteId, stage_id: stageId }}
                     hasPlan={true}
                   />
@@ -162,7 +162,7 @@ export default async function StagePage({ params }: Props) {
             <div className="rounded-xl border border-stone-200 bg-white p-5">
               {isAdmin ? (
                 <PlanPhotoUpload
-                  action={uploadStagePlan}
+                  action={uploadStagePlan.bind(null, null)}
                   hiddenFields={{ site_id: siteId, stage_id: stageId }}
                   hasPlan={false}
                 />
