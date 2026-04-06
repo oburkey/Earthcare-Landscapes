@@ -78,7 +78,6 @@ export default async function DashboardPage() {
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  const todayStr = today.toISOString().split('T')[0]
 
   const fortnight = new Date(today)
   fortnight.setDate(fortnight.getDate() + 14)

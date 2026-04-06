@@ -1,7 +1,7 @@
 // Layout for the client-facing portal.
 // Separate from (app) — clean, no internal nav, no costs or invoices shown.
 
-import { requireAuth, requireRole } from '@/lib/auth'
+import { requireAuth } from '@/lib/auth'
 import { cookies } from 'next/headers'
 
 export default async function ClientLayout({
