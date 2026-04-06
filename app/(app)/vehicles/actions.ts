@@ -3,8 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
-
-type ActionState = { error?: string; success?: string } | null
+import type { MutationState } from '@/types/actions'
 
 function parseFields(formData: FormData) {
   const str  = (key: string) => (formData.get(key) as string)?.trim() || null
@@ -51,9 +50,9 @@ function validate(fields: ReturnType<typeof parseFields>): string | null {
 }
 
 export async function createVehicle(
-  _prev: ActionState,
+  _prev: MutationState,
   formData: FormData
-): Promise<ActionState> {
+): Promise<MutationState> {
   const profile = await requireAuth()
   if (profile.role !== 'supervisor' && profile.role !== 'admin') {
     return { error: 'Only supervisors and admins can manage vehicles.' }
@@ -72,9 +71,9 @@ export async function createVehicle(
 }
 
 export async function updateVehicle(
-  _prev: ActionState,
+  _prev: MutationState,
   formData: FormData
-): Promise<ActionState> {
+): Promise<MutationState> {
   const profile = await requireAuth()
   if (profile.role !== 'supervisor' && profile.role !== 'admin') {
     return { error: 'Only supervisors and admins can manage vehicles.' }
@@ -97,9 +96,9 @@ export async function updateVehicle(
 }
 
 export async function deleteVehicle(
-  _prev: ActionState,
+  _prev: MutationState,
   formData: FormData
-): Promise<ActionState> {
+): Promise<MutationState> {
   const profile = await requireAuth()
   if (profile.role !== 'supervisor' && profile.role !== 'admin') {
     return { error: 'Only supervisors and admins can manage vehicles.' }

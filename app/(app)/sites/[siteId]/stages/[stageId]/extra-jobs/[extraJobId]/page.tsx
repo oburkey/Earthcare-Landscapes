@@ -4,8 +4,10 @@ import { requireAuth } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { getR2SignedUrl } from '@/lib/r2'
 import type { ExtraJobStatus } from '@/types/database'
+import { EXTRA_JOB_STATUS_CONFIG, PHOTO_TYPE_LABELS } from '@/lib/lotStatus'
+import { uploadExtraJobPhoto } from './actions'
 import EditExtraJobForm from './EditExtraJobForm'
-import ExtraJobPhotoUpload from './ExtraJobPhotoUpload'
+import PhotoUpload from '@/app/_components/PhotoUpload'
 
 interface Props {
   params: Promise<{ siteId: string; stageId: string; extraJobId: string }>
@@ -22,16 +24,9 @@ export async function generateMetadata({ params }: Props) {
   return { title: data ? `${data.title} — Earthcare Landscapes` : 'Extra Job' }
 }
 
-const STATUS_CONFIG: Record<ExtraJobStatus, { label: string; badge: string }> = {
-  not_started: { label: 'Not started', badge: 'bg-stone-100 text-stone-600' },
-  in_progress: { label: 'In progress', badge: 'bg-blue-100 text-blue-700' },
-  complete:    { label: 'Complete',    badge: 'bg-green-100 text-green-700' },
-}
-
-const PHOTO_TYPE_LABELS: Record<string, string> = {
-  before: 'Before',
-  during: 'During',
-  after:  'After',
+async function uploadExtraJobPhotoAction(formData: FormData) {
+  'use server'
+  return uploadExtraJobPhoto(null, formData)
 }
 
 export default async function ExtraJobPage({ params }: Props) {
@@ -70,7 +65,7 @@ export default async function ExtraJobPage({ params }: Props) {
     : (stage.sites as { id: string; name: string })
 
   const status = job.status as ExtraJobStatus
-  const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.not_started
+  const cfg = EXTRA_JOB_STATUS_CONFIG[status] ?? EXTRA_JOB_STATUS_CONFIG.not_started
 
   type PhotoWithUrl = { id: string; url: string; photo_type: string }
   let photos: PhotoWithUrl[] = []
@@ -137,7 +132,10 @@ export default async function ExtraJobPage({ params }: Props) {
           <h2 className="text-base font-semibold text-stone-800 mb-3">Photos</h2>
 
           <div className="rounded-xl border border-stone-200 bg-white p-5 mb-4">
-            <ExtraJobPhotoUpload extraJobId={extraJobId} siteId={siteId} stageId={stageId} />
+            <PhotoUpload
+                action={uploadExtraJobPhotoAction}
+                hiddenFields={{ extra_job_id: extraJobId, site_id: siteId, stage_id: stageId }}
+              />
           </div>
 
           {photos.length > 0 ? (

@@ -5,9 +5,7 @@ import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { uploadToR2, deleteFromR2 } from '@/lib/r2'
 
-import type { UploadActionState } from '@/types/actions'
-
-type EditState = { error?: string; success?: boolean } | null
+import type { EditState, UploadActionState } from '@/types/actions'
 
 export async function updateStage(
   _prev: EditState,

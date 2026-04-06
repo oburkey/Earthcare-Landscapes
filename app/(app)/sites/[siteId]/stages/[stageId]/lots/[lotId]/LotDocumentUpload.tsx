@@ -2,15 +2,8 @@
 
 import { useActionState, useRef } from 'react'
 import { uploadLotDocument } from './actions'
-
-type ActionState = { error: string } | null
-
-const DOC_TYPE_LABELS: Record<string, string> = {
-  site_plan:     'Site Plan',
-  drawing:       'Drawing',
-  housing_claim: 'Housing Claim',
-  other:         'Other',
-}
+import type { ActionState } from '@/types/actions'
+import { DOC_TYPE_LABELS } from '@/lib/lotStatus'
 
 interface Props {
   lotId: string

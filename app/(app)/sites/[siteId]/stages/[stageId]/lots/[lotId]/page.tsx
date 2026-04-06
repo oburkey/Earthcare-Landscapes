@@ -2,10 +2,11 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireAuth } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { STATUS_CONFIG, formatDate } from '@/lib/lotStatus'
+import { STATUS_CONFIG, formatDate, PHOTO_TYPE_LABELS, DOC_TYPE_LABELS } from '@/lib/lotStatus'
 import type { LotStatus } from '@/types/database'
+import { uploadLotPhoto } from './actions'
 import EditLotForm from './EditLotForm'
-import LotPhotoUpload from './LotPhotoUpload'
+import PhotoUpload from '@/app/_components/PhotoUpload'
 import LotDocumentUpload from './LotDocumentUpload'
 import { getR2SignedUrl } from '@/lib/r2'
 
@@ -24,10 +25,9 @@ export async function generateMetadata({ params }: Props) {
   return { title: data ? `Lot ${data.lot_number} — Earthcare Landscapes` : 'Lot' }
 }
 
-const PHOTO_TYPE_LABELS: Record<string, string> = {
-  before: 'Before',
-  during: 'During',
-  after:  'After',
+async function uploadLotPhotoAction(formData: FormData) {
+  'use server'
+  return uploadLotPhoto(null, formData)
 }
 
 export default async function LotPage({ params }: Props) {
@@ -113,10 +113,6 @@ export default async function LotPage({ params }: Props) {
     documents = signed.filter((d) => d.url)
   }
 
-  const DOC_TYPE_LABELS: Record<string, string> = {
-    site_plan: 'Site Plan', drawing: 'Drawing', housing_claim: 'Housing Claim', other: 'Other',
-  }
-
   return (
     <div className="min-h-screen bg-stone-50">
       <div className="mx-auto max-w-lg px-4 py-6 space-y-5">
@@ -169,7 +165,10 @@ export default async function LotPage({ params }: Props) {
 
           {/* Upload form */}
           <div className="rounded-xl border border-stone-200 bg-white p-5 mb-4">
-            <LotPhotoUpload lotId={lotId} siteId={siteId} stageId={stageId} />
+            <PhotoUpload
+              action={uploadLotPhotoAction}
+              hiddenFields={{ lot_id: lotId, site_id: siteId, stage_id: stageId }}
+            />
           </div>
 
           {/* Photo grid, grouped by type */}

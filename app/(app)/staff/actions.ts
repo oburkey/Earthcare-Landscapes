@@ -3,13 +3,12 @@
 import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
-
-type ActionState = { error?: string; success?: string } | null
+import type { MutationState } from '@/types/actions'
 
 export async function createStaffMember(
-  _prevState: ActionState,
+  _prevState: MutationState,
   formData: FormData
-): Promise<ActionState> {
+): Promise<MutationState> {
   const profile = await requireAuth()
 
   if (profile.role !== 'supervisor' && profile.role !== 'admin') {
@@ -48,9 +47,9 @@ export async function createStaffMember(
 }
 
 export async function updateStaffMember(
-  _prevState: ActionState,
+  _prevState: MutationState,
   formData: FormData
-): Promise<ActionState> {
+): Promise<MutationState> {
   const profile = await requireAuth()
 
   if (profile.role !== 'supervisor' && profile.role !== 'admin') {
@@ -88,9 +87,9 @@ export async function updateStaffMember(
 }
 
 export async function deleteStaffMember(
-  _prevState: ActionState,
+  _prevState: MutationState,
   formData: FormData
-): Promise<ActionState> {
+): Promise<MutationState> {
   const profile = await requireAuth()
 
   if (profile.role !== 'supervisor' && profile.role !== 'admin') {

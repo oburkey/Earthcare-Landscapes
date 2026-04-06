@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireAuth } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { STATUS_CONFIG, formatDate } from '@/lib/lotStatus'
+import { STATUS_CONFIG, EXTRA_JOB_STATUS_CONFIG, formatDate } from '@/lib/lotStatus'
 import type { LotStatus, ExtraJobStatus } from '@/types/database'
 import { uploadStagePlan } from './actions'
 import PlanPhotoUpload from '../../PlanPhotoUpload'
@@ -25,12 +25,6 @@ export async function generateMetadata({ params }: Props) {
   return {
     title: data ? `${data.name} — ${siteName} — Earthcare Landscapes` : 'Stage',
   }
-}
-
-const EXTRA_JOB_STATUS_CONFIG: Record<ExtraJobStatus, { label: string; badge: string }> = {
-  not_started: { label: 'Not started', badge: 'bg-stone-100 text-stone-600' },
-  in_progress: { label: 'In progress', badge: 'bg-blue-100 text-blue-700' },
-  complete:    { label: 'Complete',    badge: 'bg-green-100 text-green-700' },
 }
 
 async function uploadStagePlanAction(formData: FormData) {

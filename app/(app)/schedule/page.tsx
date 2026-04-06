@@ -1,6 +1,6 @@
 import { requireAuth } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { STATUS_CONFIG } from '@/lib/lotStatus'
+import { STATUS_CONFIG, EXTRA_JOB_STATUS_CONFIG } from '@/lib/lotStatus'
 import Link from 'next/link'
 import type { LotStatus, ExtraJobStatus } from '@/types/database'
 
@@ -27,12 +27,6 @@ function formatWeekLabel(weekStart: string): string {
 function formatDate(dateStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number)
   return new Date(y, m - 1, d).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
-}
-
-const EXTRA_JOB_STATUS_CONFIG: Record<ExtraJobStatus, { label: string; badge: string }> = {
-  not_started: { label: 'Not started', badge: 'bg-stone-100 text-stone-600' },
-  in_progress: { label: 'In progress', badge: 'bg-amber-100 text-amber-700' },
-  complete:    { label: 'Complete',    badge: 'bg-green-100 text-green-700' },
 }
 
 type ScheduleItem =

@@ -2,13 +2,12 @@
 
 import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { uploadLotPhoto } from './actions'
 import { compressImage } from '@/lib/compressImage'
+import type { UploadAction } from '@/types/actions'
 
 interface Props {
-  lotId: string
-  siteId: string
-  stageId: string
+  action: UploadAction
+  hiddenFields: Record<string, string>
 }
 
 const PHOTO_TYPES = [
@@ -17,7 +16,7 @@ const PHOTO_TYPES = [
   { value: 'after',  label: 'After' },
 ] as const
 
-export default function LotPhotoUpload({ lotId, siteId, stageId }: Props) {
+export default function PhotoUpload({ action, hiddenFields }: Props) {
   const router = useRouter()
   const formRef = useRef<HTMLFormElement>(null)
   const [error, setError] = useState<string | null>(null)
@@ -35,7 +34,6 @@ export default function LotPhotoUpload({ lotId, siteId, stageId }: Props) {
 
     if (!file || file.size === 0) { setError('No file selected.'); return }
 
-    // Compress client-side: max 1920px wide, max 800 KB
     setCompressing(true)
     let compressed: File
     try {
@@ -50,7 +48,7 @@ export default function LotPhotoUpload({ lotId, siteId, stageId }: Props) {
     formData.set('photo', compressed, compressed.name)
 
     startUpload(async () => {
-      const result = await uploadLotPhoto(null, formData)
+      const result = await action(formData)
       if (result?.error) {
         setError(result.error)
       } else {
@@ -62,11 +60,10 @@ export default function LotPhotoUpload({ lotId, siteId, stageId }: Props) {
 
   return (
     <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
-      <input type="hidden" name="lot_id"   value={lotId} />
-      <input type="hidden" name="site_id"  value={siteId} />
-      <input type="hidden" name="stage_id" value={stageId} />
+      {Object.entries(hiddenFields).map(([name, value]) => (
+        <input key={name} type="hidden" name={name} value={value} />
+      ))}
 
-      {/* Photo type selector */}
       <div>
         <p className="text-sm font-medium text-stone-700 mb-2">Type</p>
         <div className="flex gap-2">
@@ -88,7 +85,6 @@ export default function LotPhotoUpload({ lotId, siteId, stageId }: Props) {
         </div>
       </div>
 
-      {/* File input */}
       <div>
         <p className="text-sm font-medium text-stone-700 mb-2">Photo</p>
         <input

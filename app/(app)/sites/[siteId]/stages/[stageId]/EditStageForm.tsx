@@ -2,8 +2,7 @@
 
 import { useActionState, useState } from 'react'
 import { updateStage } from './actions'
-
-type ActionState = { error?: string; success?: boolean } | null
+import type { EditState } from '@/types/actions'
 
 interface Props {
   siteId: string
@@ -13,7 +12,7 @@ interface Props {
 
 export default function EditStageForm({ siteId, stageId, name }: Props) {
   const [open, setOpen] = useState(false)
-  const [state, action, pending] = useActionState<ActionState, FormData>(updateStage, null)
+  const [state, action, pending] = useActionState<EditState, FormData>(updateStage, null)
 
   if (!open || state?.success) {
     return (

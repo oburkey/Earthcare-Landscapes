@@ -13,7 +13,11 @@
       "Bash(cat /c/Users/Ollie/AppData/Roaming/nextjs-nodejs/*)",
       "Bash(npm install:*)",
       "Bash(mkdir -p \"C:\\\\Users\\\\Ollie\\\\desktop\\\\earthcare\\\\app\\\\\\(app\\)\\\\sites\\\\[siteId]\\\\stages\\\\[stageId]\\\\extra-jobs\\\\new\")",
-      "Bash(mkdir -p \"C:\\\\Users\\\\Ollie\\\\desktop\\\\earthcare\\\\app\\\\\\(app\\)\\\\sites\\\\[siteId]\\\\stages\\\\[stageId]\\\\extra-jobs\\\\[extraJobId]\")"
+      "Bash(mkdir -p \"C:\\\\Users\\\\Ollie\\\\desktop\\\\earthcare\\\\app\\\\\\(app\\)\\\\sites\\\\[siteId]\\\\stages\\\\[stageId]\\\\extra-jobs\\\\[extraJobId]\")",
+      "Bash(npx next:*)",
+      "Bash(rm:*)",
+      "Bash(ls C:/Users/Ollie/desktop/earthcare/node_modules/eslint-config-next/*.js)",
+      "Bash(npm show:*)"
     ]
   }
 }

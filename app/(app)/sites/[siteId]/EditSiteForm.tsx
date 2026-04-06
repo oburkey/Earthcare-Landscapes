@@ -2,8 +2,7 @@
 
 import { useActionState, useState } from 'react'
 import { updateSite } from './actions'
-
-type ActionState = { error?: string; success?: boolean } | null
+import type { EditState } from '@/types/actions'
 
 interface Props {
   siteId: string
@@ -14,7 +13,7 @@ interface Props {
 
 export default function EditSiteForm({ siteId, name, address, clientContact }: Props) {
   const [open, setOpen] = useState(false)
-  const [state, action, pending] = useActionState<ActionState, FormData>(updateSite, null)
+  const [state, action, pending] = useActionState<EditState, FormData>(updateSite, null)
 
   if (!open || state?.success) {
     return (

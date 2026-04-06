@@ -4,8 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
-
-type ActionState = { error: string } | null
+import type { ActionState } from '@/types/actions'
 
 export async function createSite(
   _prevState: ActionState,

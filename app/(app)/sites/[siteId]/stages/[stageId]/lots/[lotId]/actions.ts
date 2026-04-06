@@ -5,8 +5,7 @@ import { requireAuth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { uploadToR2, deleteFromR2 } from '@/lib/r2'
-
-type ActionState = { error: string } | null
+import type { ActionState } from '@/types/actions'
 
 export async function uploadLotDocument(
   _prev: ActionState,
