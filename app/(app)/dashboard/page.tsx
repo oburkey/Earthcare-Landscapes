@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { requireAuth } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import Greeting from './Greeting'
@@ -194,11 +195,13 @@ export default async function DashboardPage() {
             label="Due this fortnight"
             value={dueFortnight.length}
             color="amber"
+            href="/schedule"
           />
           <MetricCard
             label="Overdue"
             value={overdueLots.length}
             color={overdueLots.length > 0 ? 'red' : 'green'}
+            href="/schedule"
           />
         </div>
 
@@ -238,9 +241,10 @@ export default async function DashboardPage() {
                         {stage.lots.map((lot) => {
                           const style = deadlineStyle(lot.days)
                           return (
-                            <div
+                            <Link
                               key={lot.id}
-                              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 ${style.row}`}
+                              href={`/sites/${lot.stages.sites.id}/stages/${lot.stages.id}/lots/${lot.id}`}
+                              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 ${style.row} hover:opacity-75 transition-opacity`}
                             >
                               <span className={`inline-block h-2 w-2 rounded-full shrink-0 ${style.dot}`} />
                               <span className="text-sm font-medium text-stone-800">
@@ -249,7 +253,7 @@ export default async function DashboardPage() {
                               <span className={`rounded-full px-1.5 py-0.5 text-xs font-semibold ${style.badge}`}>
                                 {style.label}
                               </span>
-                            </div>
+                            </Link>
                           )
                         })}
                       </div>
@@ -278,7 +282,7 @@ export default async function DashboardPage() {
                   ? Math.round((site.completed / site.total) * 100)
                   : 0
                 return (
-                  <div key={site.id} className="px-4 py-3.5">
+                  <Link key={site.id} href={`/sites/${site.id}`} className="block px-4 py-3.5 hover:bg-stone-50 transition-colors">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium text-stone-900">
                         {site.name}
@@ -293,7 +297,7 @@ export default async function DashboardPage() {
                         style={{ width: `${pct}%` }}
                       />
                     </div>
-                  </div>
+                  </Link>
                 )
               })}
             </div>
@@ -311,10 +315,12 @@ function MetricCard({
   label,
   value,
   color,
+  href,
 }: {
   label: string
   value: number
   color: 'blue' | 'amber' | 'red' | 'green'
+  href?: string
 }) {
   const colors = {
     blue:  'text-blue-700 bg-blue-50',
@@ -323,12 +329,14 @@ function MetricCard({
     green: 'text-green-700 bg-green-50',
   }
 
-  return (
-    <div className="rounded-xl border border-stone-200 bg-white px-3 py-3.5 flex flex-col gap-1">
+  const inner = (
+    <div className={`rounded-xl border border-stone-200 bg-white px-3 py-3.5 flex flex-col gap-1${href ? ' hover:bg-stone-50 transition-colors' : ''}`}>
       <span className={`text-2xl font-bold ${colors[color].split(' ')[0]}`}>
         {value}
       </span>
       <span className="text-xs text-stone-500 leading-tight">{label}</span>
     </div>
   )
+
+  return href ? <Link href={href}>{inner}</Link> : inner
 }

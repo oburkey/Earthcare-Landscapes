@@ -130,10 +130,7 @@ export default function AppNav({ role, name }: Props) {
       </aside>
 
       {/* ── Mobile top bar ────────────────────────────────────────────────────── */}
-      <header className="md:hidden fixed top-0 inset-x-0 z-30 h-14 bg-white border-b border-stone-200 flex items-center justify-between px-4">
-        <Link href="/dashboard" className="text-sm font-bold text-green-700 tracking-tight">
-          Earthcare
-        </Link>
+      <header className="md:hidden fixed top-0 inset-x-0 z-30 h-14 bg-white border-b border-stone-200 flex items-center px-4">
         <button
           onClick={() => setMobileOpen((v) => !v)}
           aria-label="Toggle menu"
@@ -149,6 +146,13 @@ export default function AppNav({ role, name }: Props) {
             </svg>
           )}
         </button>
+        <div className="flex-1 flex justify-center">
+          <Link href="/dashboard" className="text-sm font-bold text-green-700 tracking-tight">
+            Earthcare
+          </Link>
+        </div>
+        {/* Spacer to keep logo visually centred */}
+        <div className="w-9" />
       </header>
 
       {/* ── Mobile slide-out drawer ───────────────────────────────────────────── */}
