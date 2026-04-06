@@ -2,12 +2,14 @@
 // Separate from (app) — clean, no internal nav, no costs or invoices shown.
 
 import { requireAuth, requireRole } from '@/lib/auth'
+import { cookies } from 'next/headers'
 
 export default async function ClientLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  await cookies()
   const profile = await requireAuth()
   // Only client-role users (and admins previewing) can access this portal
   if (profile.role !== 'client' && profile.role !== 'admin') {

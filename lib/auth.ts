@@ -1,16 +1,17 @@
 // Server-side auth helpers used in layouts and server components.
 
 import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
 import type { Profile, Role } from '@/types/database'
 
 // Returns the current user's profile, redirects to /login if not authenticated.
 export async function requireAuth(): Promise<Profile> {
-  // If Supabase isn't configured, skip auth so the app can render locally.
+  // If Supabase isn't configured, return a stub so pages can render locally
+  // without a real database connection.
   if (
     !process.env.NEXT_PUBLIC_SUPABASE_URL ||
     !process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
   ) {
-    // Return a stub profile so pages can render without crashing.
     return {
       id: 'local-dev',
       full_name: 'Local Dev',
@@ -21,7 +22,6 @@ export async function requireAuth(): Promise<Profile> {
     }
   }
 
-  const { createClient } = await import('@/lib/supabase/server')
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 

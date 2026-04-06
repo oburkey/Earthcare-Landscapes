@@ -22,6 +22,11 @@ export async function generateMetadata({ params }: Props) {
   return { title: data ? `${data.name} — Earthcare Landscapes` : 'Site' }
 }
 
+async function uploadSitePlanAction(formData: FormData) {
+  'use server'
+  return uploadSitePlan(null, formData)
+}
+
 export default async function SitePage({ params }: Props) {
   const { siteId } = await params
   const profile = await requireAuth()
@@ -142,7 +147,7 @@ export default async function SitePage({ params }: Props) {
               {isAdmin && (
                 <div className="p-4 border-t border-stone-100">
                   <PlanPhotoUpload
-                    action={uploadSitePlan.bind(null, null)}
+                    action={uploadSitePlanAction}
                     hiddenFields={{ site_id: siteId }}
                     hasPlan={true}
                   />
@@ -153,7 +158,7 @@ export default async function SitePage({ params }: Props) {
             <div className="rounded-xl border border-stone-200 bg-white p-5">
               {isAdmin ? (
                 <PlanPhotoUpload
-                  action={uploadSitePlan.bind(null, null)}
+                  action={uploadSitePlanAction}
                   hiddenFields={{ site_id: siteId }}
                   hasPlan={false}
                 />

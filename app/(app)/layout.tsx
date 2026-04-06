@@ -1,12 +1,15 @@
 import { requireAuth } from '@/lib/auth'
 import type { Role } from '@/types/database'
 import AppNav from './AppNav'
+import { cookies } from 'next/headers'
 
 export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  // Direct call so Next.js static analysis marks all (app) routes as dynamic.
+  await cookies()
   const profile = await requireAuth()
 
   return (

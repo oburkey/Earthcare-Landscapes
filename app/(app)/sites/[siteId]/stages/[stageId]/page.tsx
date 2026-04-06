@@ -33,6 +33,11 @@ const EXTRA_JOB_STATUS_CONFIG: Record<ExtraJobStatus, { label: string; badge: st
   complete:    { label: 'Complete',    badge: 'bg-green-100 text-green-700' },
 }
 
+async function uploadStagePlanAction(formData: FormData) {
+  'use server'
+  return uploadStagePlan(null, formData)
+}
+
 export default async function StagePage({ params }: Props) {
   const { siteId, stageId } = await params
   const profile = await requireAuth()
@@ -151,7 +156,7 @@ export default async function StagePage({ params }: Props) {
               {isAdmin && (
                 <div className="p-4 border-t border-stone-100">
                   <PlanPhotoUpload
-                    action={uploadStagePlan.bind(null, null)}
+                    action={uploadStagePlanAction}
                     hiddenFields={{ site_id: siteId, stage_id: stageId }}
                     hasPlan={true}
                   />
@@ -162,7 +167,7 @@ export default async function StagePage({ params }: Props) {
             <div className="rounded-xl border border-stone-200 bg-white p-5">
               {isAdmin ? (
                 <PlanPhotoUpload
-                  action={uploadStagePlan.bind(null, null)}
+                  action={uploadStagePlanAction}
                   hiddenFields={{ site_id: siteId, stage_id: stageId }}
                   hasPlan={false}
                 />

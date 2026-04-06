@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { Role } from '@/types/database'
@@ -71,21 +71,10 @@ const NAV_ITEMS: NavItem[] = [
   },
 ]
 
-export default function AppNav({ role, name }: Props) {
-  const pathname = usePathname()
-  const [mobileOpen, setMobileOpen] = useState(false)
-
-  // Close mobile menu on route change
-  useEffect(() => {
-    setMobileOpen(false)
-  }, [pathname])
-
-  const visibleItems = NAV_ITEMS.filter((item) => hasAccess(role, item))
-  const firstName = name.split(' ')[0] || name
-
-  const NavLinks = ({ onClick }: { onClick?: () => void }) => (
+function NavLinks({ items, pathname, onClick }: { items: NavItem[]; pathname: string; onClick?: () => void }) {
+  return (
     <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
-      {visibleItems.map((item) => {
+      {items.map((item) => {
         const active = pathname === item.href || pathname.startsWith(item.href + '/')
         return (
           <Link
@@ -105,6 +94,20 @@ export default function AppNav({ role, name }: Props) {
       })}
     </nav>
   )
+}
+
+export default function AppNav({ role, name }: Props) {
+  const pathname = usePathname()
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const [prevPathname, setPrevPathname] = useState(pathname)
+
+  // Close mobile menu on route change (derived state, no effect needed)
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname)
+    setMobileOpen(false)
+  }
+
+  const visibleItems = NAV_ITEMS.filter((item) => hasAccess(role, item))
 
   return (
     <>
@@ -117,7 +120,7 @@ export default function AppNav({ role, name }: Props) {
           </Link>
         </div>
 
-        <NavLinks />
+        <NavLinks items={visibleItems} pathname={pathname} />
 
         {/* User footer */}
         <div className="shrink-0 px-4 py-3 border-t border-stone-100">
@@ -177,7 +180,7 @@ export default function AppNav({ role, name }: Props) {
           </button>
         </div>
 
-        <NavLinks onClick={() => setMobileOpen(false)} />
+        <NavLinks items={visibleItems} pathname={pathname} onClick={() => setMobileOpen(false)} />
 
         <div className="shrink-0 px-4 py-3 border-t border-stone-100">
           <p className="text-xs font-medium text-stone-700 truncate">{name}</p>

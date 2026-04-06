@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useEffect, useState } from 'react'
+import { useActionState, useState } from 'react'
 import { updateSite } from './actions'
 
 type ActionState = { error?: string; success?: boolean } | null
@@ -16,11 +16,7 @@ export default function EditSiteForm({ siteId, name, address, clientContact }: P
   const [open, setOpen] = useState(false)
   const [state, action, pending] = useActionState<ActionState, FormData>(updateSite, null)
 
-  useEffect(() => {
-    if (state?.success) setOpen(false)
-  }, [state])
-
-  if (!open) {
+  if (!open || state?.success) {
     return (
       <button
         onClick={() => setOpen(true)}
