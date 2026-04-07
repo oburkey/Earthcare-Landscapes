@@ -168,6 +168,56 @@ export interface ExtraJobPhoto {
   created_at: string
 }
 
+// ── Quote Template ────────────────────────────────────────────────────────────
+
+export type QuoteStatus = 'draft' | 'submitted' | 'approved'
+
+export interface QuoteTemplateSection {
+  id: string
+  name: string
+  order_index: number
+  is_active: boolean
+  created_at: string
+}
+
+export interface QuoteTemplateItem {
+  id: string
+  section_id: string
+  name: string
+  unit: string
+  unit_price: number | null
+  is_auto_calculated: boolean
+  auto_calc_formula: string | null
+  plant_category: 'front' | 'rear' | null
+  order_index: number
+  is_active: boolean
+  created_at: string
+}
+
+export interface LotQuote {
+  id: string
+  lot_id: string
+  is_estimated: boolean
+  status: QuoteStatus
+  quoted_by: string | null
+  quoted_at: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface LotQuoteItem {
+  id: string
+  quote_id: string
+  template_item_id: string | null
+  item_name: string
+  unit: string
+  quantity: number | null
+  unit_price_snapshot: number | null
+  notes: string | null
+  created_at: string
+}
+
 // ── Joined types (useful for queries that join tables) ────────────────────────
 export interface LotWithStageAndSite extends Lot {
   stage: Stage & { site: Site }

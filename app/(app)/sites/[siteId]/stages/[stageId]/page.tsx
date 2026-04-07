@@ -7,6 +7,7 @@ import type { LotStatus, ExtraJobStatus } from '@/types/database'
 import { uploadStagePlan } from './actions'
 import PlanPhotoUpload from '../../PlanPhotoUpload'
 import EditStageForm from './EditStageForm'
+import MaterialsSummary from './MaterialsSummary'
 import { getR2SignedUrl } from '@/lib/r2'
 
 interface Props {
@@ -35,10 +36,11 @@ async function uploadStagePlanAction(formData: FormData) {
 export default async function StagePage({ params }: Props) {
   const { siteId, stageId } = await params
   const profile = await requireAuth()
-  const canAddLot = profile.role === 'leading_hand' || profile.role === 'supervisor' || profile.role === 'admin'
+  const canAddLot          = profile.role === 'leading_hand' || profile.role === 'supervisor' || profile.role === 'admin'
   const canManageExtraJobs = profile.role === 'leading_hand' || profile.role === 'supervisor' || profile.role === 'admin'
-  const canManageStage = profile.role === 'supervisor' || profile.role === 'admin'
-  const isAdmin = profile.role === 'admin'
+  const canManageStage     = profile.role === 'supervisor' || profile.role === 'admin'
+  const isAdmin            = profile.role === 'admin'
+  const showSummary        = profile.role === 'supervisor' || profile.role === 'admin'
 
   const supabase = await createClient()
 
@@ -281,6 +283,14 @@ export default async function StagePage({ params }: Props) {
             </div>
           )}
         </div>
+
+        {/* ── Materials Summary ────────────────────────────────────────────── */}
+        {showSummary && (
+          <div>
+            <h2 className="text-base font-semibold text-stone-800 mb-3">Materials Summary</h2>
+            <MaterialsSummary stageId={stageId} siteId={siteId} isAdmin={isAdmin} />
+          </div>
+        )}
 
       </div>
     </div>
