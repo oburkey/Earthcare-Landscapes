@@ -288,7 +288,7 @@ export default async function StagePage({ params }: Props) {
         {showSummary && (
           <div>
             <h2 className="text-base font-semibold text-stone-800 mb-3">Materials Summary</h2>
-            <MaterialsSummary stageId={stageId} siteId={siteId} isAdmin={isAdmin} />
+            <MaterialsSummary stageId={stageId} siteId={siteId} />
           </div>
         )}
 
