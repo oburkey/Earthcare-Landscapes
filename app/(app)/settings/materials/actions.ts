@@ -61,6 +61,21 @@ export async function updateSectionName(
   return null
 }
 
+export async function toggleSectionAdminOnly(formData: FormData): Promise<void> {
+  const err = await requireAdmin(); if (err) return
+
+  const id       = formData.get('section_id') as string
+  const current  = formData.get('admin_only') === 'true'
+
+  const supabase = await createClient()
+  await supabase
+    .from('quote_template_sections')
+    .update({ admin_only: !current })
+    .eq('id', id)
+
+  revalidatePath('/settings/materials')
+}
+
 export async function toggleSectionActive(formData: FormData): Promise<void> {
   const err = await requireAdmin(); if (err) return
 
@@ -108,7 +123,7 @@ async function swapSectionOrder(id: string, direction: 'up' | 'down') {
 
 // ── Items ─────────────────────────────────────────────────────────────────────
 
-const ALLOWED_UNITS = ['No.', 'm²', 'm³', 'Lin M', 'toggle']
+const ALLOWED_UNITS = ['No.', 'm²', 'm³', 'Lm', 'tonne', 'ITEM', 'toggle']
 
 export async function createItem(
   _prev: ActionState,

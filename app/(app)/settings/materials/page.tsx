@@ -9,7 +9,7 @@ export default async function MaterialsSettingsPage() {
   const { data: sectionsData } = await supabase
     .from('quote_template_sections')
     .select(`
-      id, name, order_index, is_active,
+      id, name, order_index, is_active, admin_only,
       quote_template_items (
         id, name, unit, unit_price, is_auto_calculated, auto_calc_formula,
         plant_category, order_index, is_active
@@ -19,6 +19,7 @@ export default async function MaterialsSettingsPage() {
 
   const sections = (sectionsData ?? []).map((s) => ({
     ...s,
+    admin_only: (s as { admin_only?: boolean }).admin_only ?? false,
     quote_template_items: [...(s.quote_template_items ?? [])].sort(
       (a, b) => a.order_index - b.order_index
     ),

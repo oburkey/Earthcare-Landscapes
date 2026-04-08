@@ -44,7 +44,27 @@ type Props = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function initQty(quote: QuoteData): Record<string, string> {
+function buildVariantGroups(allItems: TemplateItem[]): {
+  variantGroups: Map<string, TemplateItem[]>
+  secondaryIds: Set<string>
+} {
+  const variantGroups = new Map<string, TemplateItem[]>()
+  for (const item of allItems) {
+    const m = item.auto_calc_formula?.match(/^variant_group:(.+)$/)
+    if (m) {
+      const group = m[1]
+      if (!variantGroups.has(group)) variantGroups.set(group, [])
+      variantGroups.get(group)!.push(item)
+    }
+  }
+  const secondaryIds = new Set<string>()
+  variantGroups.forEach((items) => {
+    for (let i = 1; i < items.length; i++) secondaryIds.add(items[i].id)
+  })
+  return { variantGroups, secondaryIds }
+}
+
+function initValues(quote: QuoteData): Record<string, string> {
   if (!quote) return {}
   return Object.fromEntries(
     quote.items
@@ -53,33 +73,34 @@ function initQty(quote: QuoteData): Record<string, string> {
   )
 }
 
-function computeAutoCalc(
-  formula: string | null,
-  qty: Record<string, string>,
-  allItems: TemplateItem[]
-): number {
-  if (!formula) return 0
-  const front = allItems
-    .filter((i) => i.plant_category === 'front')
-    .reduce((s, i) => s + (parseFloat(qty[i.id] || '0') || 0), 0)
-  const rear = allItems
-    .filter((i) => i.plant_category === 'rear')
-    .reduce((s, i) => s + (parseFloat(qty[i.id] || '0') || 0), 0)
-  const all = front + rear
-  switch (formula) {
-    case 'front_plants':    return front
-    case 'rear_plants':     return rear
-    case 'all_plants':      return all
-    case 'all_plants_x0.5': return Math.round(all * 0.5 * 10) / 10
-    default:                return 0
+function initVariantSel(
+  quote: QuoteData,
+  variantGroups: Map<string, TemplateItem[]>
+): Record<string, string> {
+  const sel: Record<string, string> = {}
+  variantGroups.forEach((items, groupName) => {
+    if (items.length > 0) sel[groupName] = items[0].id
+  })
+  if (quote) {
+    variantGroups.forEach((items, groupName) => {
+      for (const item of items) {
+        const saved = quote.items.find(
+          (i) => i.template_item_id === item.id && i.quantity !== null
+        )
+        if (saved) { sel[groupName] = item.id; break }
+      }
+    })
   }
+  return sel
 }
 
-function fmt(n: number, unit: string): string {
-  if (unit === 'Lin M' || unit === 'm²' || unit === 'm³') {
-    return n % 1 === 0 ? String(n) : n.toFixed(1)
+function commonPrefix(strings: string[]): string {
+  if (strings.length === 0) return ''
+  let prefix = strings[0]
+  for (let i = 1; i < strings.length; i++) {
+    while (!strings[i].startsWith(prefix)) prefix = prefix.slice(0, -1)
   }
-  return String(Math.round(n))
+  return prefix.trimEnd()
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -92,42 +113,65 @@ export default function LotQuantities({
   const [isEstimated, setIsEstimated] = useState(true)
   const activeQuote = isEstimated ? estimatedQuote : finalQuote
 
-  const [quantities, setQuantities] = useState<Record<string, string>>(() => initQty(estimatedQuote))
+  const allItems = useMemo(() => sections.flatMap((s) => s.items), [sections])
+  const { variantGroups, secondaryIds } = useMemo(
+    () => buildVariantGroups(allItems),
+    [allItems]
+  )
+
+  const [values, setValues] = useState<Record<string, string>>(
+    () => initValues(estimatedQuote)
+  )
+  const [variantSel, setVariantSel] = useState<Record<string, string>>(
+    () => initVariantSel(estimatedQuote, variantGroups)
+  )
   const [notes, setNotes]           = useState(estimatedQuote?.notes ?? '')
   const [error, setError]           = useState<string | null>(null)
   const [saved, setSaved]           = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  const allItems = useMemo(() => sections.flatMap((s) => s.items), [sections])
-
-  // Auto-calculated values derived from current quantities
-  const autoCalcValues = useMemo(() => {
-    const result: Record<string, number> = {}
-    allItems
-      .filter((i) => i.is_auto_calculated)
-      .forEach((i) => {
-        result[i.id] = computeAutoCalc(i.auto_calc_formula, quantities, allItems)
-      })
-    return result
-  }, [quantities, allItems])
+  const cornerFlagItem = useMemo(
+    () => allItems.find((i) => i.auto_calc_formula === 'corner_lot_flag'),
+    [allItems]
+  )
+  const isCornerLot = cornerFlagItem ? values[cornerFlagItem.id] === '1' : false
 
   function switchMode(estimated: boolean) {
     const quote = estimated ? estimatedQuote : finalQuote
     setIsEstimated(estimated)
-    setQuantities(initQty(quote))
+    setValues(initValues(quote))
+    setVariantSel(initVariantSel(quote, variantGroups))
     setNotes(quote?.notes ?? '')
     setError(null)
     setSaved(false)
   }
 
-  function setQty(itemId: string, value: string) {
+  function toggle(itemId: string) {
     setSaved(false)
-    setQuantities((prev) => ({ ...prev, [itemId]: value }))
+    setValues((prev) => ({ ...prev, [itemId]: prev[itemId] === '1' ? '0' : '1' }))
   }
 
-  function toggleCornerLot(itemId: string) {
-    const current = quantities[itemId] === '1'
-    setQty(itemId, current ? '0' : '1')
+  function setVal(itemId: string, value: string) {
+    setSaved(false)
+    setValues((prev) => ({ ...prev, [itemId]: value }))
+  }
+
+  function selectVariant(groupName: string, itemId: string) {
+    setSaved(false)
+    setVariantSel((prev) => ({ ...prev, [groupName]: itemId }))
+  }
+
+  function getItemQty(item: TemplateItem): number | null {
+    if (item.unit === 'ITEM') return 1
+    if (item.unit === 'toggle') return values[item.id] === '1' ? 1 : 0
+    const m = item.auto_calc_formula?.match(/^variant_group:(.+)$/)
+    if (m) {
+      if (variantSel[m[1]] !== item.id) return null
+      const v = values[item.id]
+      return v !== undefined && v !== '' ? parseFloat(v) : null
+    }
+    const v = values[item.id]
+    return v !== undefined && v !== '' ? parseFloat(v) : null
   }
 
   function handleSave(submitStatus: 'draft' | 'submitted') {
@@ -135,17 +179,12 @@ export default function LotQuantities({
     setSaved(false)
 
     const items: QuoteItemPayload[] = allItems.map((item) => {
-      const rawQty = item.is_auto_calculated
-        ? autoCalcValues[item.id] ?? null
-        : quantities[item.id] !== undefined && quantities[item.id] !== ''
-          ? parseFloat(quantities[item.id])
-          : null
-
+      const qty = getItemQty(item)
       return {
         template_item_id:    item.id,
         item_name:           item.name,
         unit:                item.unit,
-        quantity:            rawQty === null || isNaN(rawQty as number) ? null : rawQty as number,
+        quantity:            qty === null || isNaN(qty) ? null : qty,
         unit_price_snapshot: isAdmin ? item.unit_price : null,
       }
     })
@@ -157,51 +196,53 @@ export default function LotQuantities({
         notes,
         items,
       })
-      if (result?.error) {
-        setError(result.error)
-      } else {
-        setSaved(true)
-      }
+      if (result?.error) setError(result.error)
+      else setSaved(true)
     })
   }
 
   const currentStatus = activeQuote?.status ?? 'draft'
   const isApproved    = currentStatus === 'approved'
+  const disabled      = isApproved || !canManage
+
+  const colClass = isAdmin
+    ? 'grid-cols-[1fr_100px_80px_80px]'
+    : 'grid-cols-[1fr_100px]'
 
   return (
     <div className="space-y-4">
 
       {/* Estimate / Final toggle */}
       <div className="flex items-center gap-1 bg-stone-100 rounded-lg p-1 self-start w-fit">
-        <button
-          type="button"
-          onClick={() => switchMode(true)}
-          className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-            isEstimated ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-700'
-          }`}
-        >
-          Estimate
-        </button>
-        <button
-          type="button"
-          onClick={() => switchMode(false)}
-          className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-            !isEstimated ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-700'
-          }`}
-        >
-          Final
-        </button>
+        {(['Estimate', 'Final'] as const).map((label) => {
+          const est = label === 'Estimate'
+          return (
+            <button
+              key={label}
+              type="button"
+              onClick={() => switchMode(est)}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                isEstimated === est
+                  ? 'bg-white text-stone-900 shadow-sm'
+                  : 'text-stone-500 hover:text-stone-700'
+              }`}
+            >
+              {label}
+            </button>
+          )
+        })}
       </div>
 
       {/* Status badge */}
       {activeQuote && (
-        <div className="flex items-center gap-2">
-          <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+        <div>
+          <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
             currentStatus === 'approved'  ? 'bg-green-100 text-green-700' :
             currentStatus === 'submitted' ? 'bg-blue-100 text-blue-700'   :
             'bg-stone-100 text-stone-600'
           }`}>
-            {currentStatus === 'approved' ? 'Approved' : currentStatus === 'submitted' ? 'Submitted' : 'Draft'}
+            {currentStatus === 'approved' ? 'Approved' :
+             currentStatus === 'submitted' ? 'Submitted' : 'Draft'}
           </span>
         </div>
       )}
@@ -209,13 +250,14 @@ export default function LotQuantities({
       {/* Sections */}
       {sections.map((section) => (
         <div key={section.id} className="rounded-xl border border-stone-200 bg-white overflow-hidden">
+
           {/* Section header */}
           <div className="px-4 py-2.5 bg-stone-50 border-b border-stone-200">
             <h3 className="text-sm font-semibold text-stone-700">{section.name}</h3>
           </div>
 
-          {/* Column headers — admin sees extra price columns */}
-          <div className={`grid gap-3 px-4 py-2 border-b border-stone-100 text-xs font-medium text-stone-400 ${isAdmin ? 'grid-cols-[1fr_80px_80px_80px]' : 'grid-cols-[1fr_80px]'}`}>
+          {/* Column headers */}
+          <div className={`grid gap-3 px-4 py-2 border-b border-stone-100 text-xs font-medium text-stone-400 ${colClass}`}>
             <span>Item</span>
             <span className="text-right">Qty</span>
             {isAdmin && <><span className="text-right">$/unit</span><span className="text-right">Total</span></>}
@@ -223,81 +265,190 @@ export default function LotQuantities({
 
           {/* Items */}
           {section.items.map((item) => {
-            const isToggle   = item.unit === 'toggle'
-            const isAutoCalc = item.is_auto_calculated
-            const isCornerYes = quantities[item.id] === '1'
+            // Skip secondary variant items (rendered as part of the primary)
+            if (secondaryIds.has(item.id)) return null
 
-            // Resolved quantity for display / price calc
-            const resolvedQty = isAutoCalc
-              ? (autoCalcValues[item.id] ?? 0)
-              : isToggle
-                ? (isCornerYes ? 1 : 0)
-                : parseFloat(quantities[item.id] || '0') || 0
+            const formula    = item.auto_calc_formula
+            const variantM   = formula?.match(/^variant_group:(.+)$/)
+            const groupName  = variantM?.[1]
 
-            const lineTotal = isAdmin && item.unit_price != null
+            // Hide show_if_corner_lot items when corner lot is NO
+            if (formula === 'show_if_corner_lot' && !isCornerLot) return null
+
+            // ── Variant group ────────────────────────────────────────────────
+            if (groupName) {
+              const group      = variantGroups.get(groupName) ?? []
+              const prefix     = commonPrefix(group.map((i) => i.name))
+              const selectedId = variantSel[groupName] ?? group[0]?.id
+              const selItem    = group.find((i) => i.id === selectedId) ?? group[0]
+              const qtyVal     = values[selectedId] ?? ''
+              const resolvedQty = parseFloat(qtyVal || '0') || 0
+              const lineTotal  = isAdmin && selItem?.unit_price != null
+                ? resolvedQty * selItem.unit_price
+                : null
+
+              return (
+                <div key={item.id} className={`grid gap-3 px-4 py-3 border-b border-stone-100 items-start ${colClass}`}>
+                  <div className="min-w-0 space-y-1.5">
+                    <span className="text-sm text-stone-800">{prefix || item.name}</span>
+                    <div className="flex flex-wrap gap-1">
+                      {group.map((gi) => {
+                        const label = prefix ? gi.name.slice(prefix.length).trim() : gi.name
+                        return (
+                          <button
+                            key={gi.id}
+                            type="button"
+                            onClick={() => selectVariant(groupName, gi.id)}
+                            disabled={disabled}
+                            className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${
+                              selectedId === gi.id
+                                ? 'bg-green-700 text-white'
+                                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                            } disabled:opacity-50`}
+                          >
+                            {label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end items-center gap-1 pt-0.5">
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={qtyVal}
+                      onChange={(e) => setVal(selectedId, e.target.value)}
+                      disabled={disabled}
+                      placeholder="0"
+                      className="w-16 rounded-lg border border-stone-300 px-2 py-2 text-sm text-right tabular-nums focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 disabled:bg-stone-50 disabled:text-stone-400"
+                    />
+                    <span className="text-xs text-stone-400 shrink-0">No.</span>
+                  </div>
+
+                  {isAdmin && (
+                    <>
+                      <div className="text-right text-sm text-stone-500 tabular-nums pt-0.5">
+                        {selItem?.unit_price != null
+                          ? `$${selItem.unit_price.toFixed(2)}`
+                          : <span className="text-stone-300">—</span>}
+                      </div>
+                      <div className="text-right text-sm font-medium text-stone-700 tabular-nums pt-0.5">
+                        {lineTotal != null
+                          ? `$${lineTotal.toFixed(2)}`
+                          : <span className="text-stone-300">—</span>}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )
+            }
+
+            // ── ITEM (always included, no input) ────────────────────────────
+            if (item.unit === 'ITEM') {
+              const lineTotal = isAdmin && item.unit_price != null ? item.unit_price : null
+              return (
+                <div key={item.id} className={`grid gap-3 px-4 py-3 border-b border-stone-100 items-center ${colClass}`}>
+                  <span className="text-sm text-stone-800">{item.name}</span>
+                  <div className="flex justify-end">
+                    <span className="text-xs font-medium text-green-600">✓ Included</span>
+                  </div>
+                  {isAdmin && (
+                    <>
+                      <div className="text-right text-sm text-stone-500 tabular-nums">
+                        {item.unit_price != null
+                          ? `$${item.unit_price.toFixed(2)}`
+                          : <span className="text-stone-300">—</span>}
+                      </div>
+                      <div className="text-right text-sm font-medium text-stone-700 tabular-nums">
+                        {lineTotal != null
+                          ? `$${lineTotal.toFixed(2)}`
+                          : <span className="text-stone-300">—</span>}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )
+            }
+
+            // ── Toggle (YES / NO) ───────────────────────────────────────────
+            if (item.unit === 'toggle') {
+              const isYes    = values[item.id] === '1'
+              const lineTotal = isAdmin && isYes && item.unit_price != null && item.unit_price > 0
+                ? item.unit_price
+                : null
+              return (
+                <div key={item.id} className={`grid gap-3 px-4 py-3 border-b border-stone-100 items-center ${colClass}`}>
+                  <div className="min-w-0">
+                    <span className="text-sm text-stone-800">{item.name}</span>
+                    {formula === 'corner_lot_flag' && (
+                      <span className="ml-1.5 text-xs text-stone-400">— controls corner lot items</span>
+                    )}
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => toggle(item.id)}
+                      disabled={disabled}
+                      className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                        isYes ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-500'
+                      } disabled:opacity-50`}
+                    >
+                      {isYes ? 'YES' : 'NO'}
+                    </button>
+                  </div>
+                  {isAdmin && (
+                    <>
+                      <div className="text-right text-sm text-stone-500 tabular-nums">
+                        {item.unit_price != null && item.unit_price > 0
+                          ? `$${item.unit_price.toFixed(2)}`
+                          : <span className="text-stone-300">—</span>}
+                      </div>
+                      <div className="text-right text-sm font-medium text-stone-700 tabular-nums">
+                        {lineTotal != null
+                          ? `$${lineTotal.toFixed(2)}`
+                          : <span className="text-stone-300">—</span>}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )
+            }
+
+            // ── Numeric input ───────────────────────────────────────────────
+            const resolvedQty = parseFloat(values[item.id] || '0') || 0
+            const lineTotal   = isAdmin && item.unit_price != null
               ? resolvedQty * item.unit_price
               : null
 
             return (
-              <div
-                key={item.id}
-                className={`grid gap-3 px-4 py-3 border-b border-stone-100 items-center ${
-                  isAdmin ? 'grid-cols-[1fr_80px_80px_80px]' : 'grid-cols-[1fr_80px]'
-                }`}
-              >
-                {/* Name */}
-                <div className="min-w-0">
-                  <span className="text-sm text-stone-800">{item.name}</span>
-                  {isAutoCalc && (
-                    <span className="ml-1.5 text-xs text-blue-500">auto</span>
-                  )}
+              <div key={item.id} className={`grid gap-3 px-4 py-3 border-b border-stone-100 items-center ${colClass}`}>
+                <span className="text-sm text-stone-800">{item.name}</span>
+                <div className="flex justify-end items-center gap-1">
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={values[item.id] ?? ''}
+                    onChange={(e) => setVal(item.id, e.target.value)}
+                    disabled={disabled}
+                    placeholder="0"
+                    className="w-16 rounded-lg border border-stone-300 px-2 py-2 text-sm text-right tabular-nums focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 disabled:bg-stone-50 disabled:text-stone-400"
+                  />
+                  <span className="text-xs text-stone-400 shrink-0">{item.unit}</span>
                 </div>
-
-                {/* Quantity input / display */}
-                <div className="flex justify-end">
-                  {isAutoCalc ? (
-                    <span className="text-sm font-medium text-stone-700 tabular-nums">
-                      {fmt(autoCalcValues[item.id] ?? 0, item.unit)}
-                      <span className="ml-1 text-xs text-stone-400">{item.unit}</span>
-                    </span>
-                  ) : isToggle ? (
-                    <button
-                      type="button"
-                      onClick={() => toggleCornerLot(item.id)}
-                      disabled={isApproved || !canManage}
-                      className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                        isCornerYes
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-stone-100 text-stone-500'
-                      } disabled:opacity-50`}
-                    >
-                      {isCornerYes ? 'YES' : 'NO'}
-                    </button>
-                  ) : (
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={quantities[item.id] ?? ''}
-                        onChange={(e) => setQty(item.id, e.target.value)}
-                        disabled={isApproved || !canManage}
-                        placeholder="0"
-                        className="w-16 rounded-lg border border-stone-300 px-2 py-2 text-sm text-right tabular-nums focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 disabled:bg-stone-50 disabled:text-stone-400"
-                      />
-                      <span className="text-xs text-stone-400 shrink-0">{item.unit}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Admin: unit price + line total */}
                 {isAdmin && (
                   <>
                     <div className="text-right text-sm text-stone-500 tabular-nums">
-                      {item.unit_price != null ? `$${item.unit_price.toFixed(2)}` : <span className="text-stone-300">—</span>}
+                      {item.unit_price != null
+                        ? `$${item.unit_price.toFixed(2)}`
+                        : <span className="text-stone-300">—</span>}
                     </div>
                     <div className="text-right text-sm font-medium text-stone-700 tabular-nums">
-                      {lineTotal != null ? `$${lineTotal.toFixed(2)}` : <span className="text-stone-300">—</span>}
+                      {lineTotal != null && lineTotal > 0
+                        ? `$${lineTotal.toFixed(2)}`
+                        : <span className="text-stone-300">—</span>}
                     </div>
                   </>
                 )}
@@ -309,13 +460,13 @@ export default function LotQuantities({
 
       {/* Admin: grand total */}
       {isAdmin && (() => {
-        const grandTotal = allItems.reduce((sum, item) => {
-          if (item.unit_price == null) return sum
-          const qty = item.is_auto_calculated
-            ? (autoCalcValues[item.id] ?? 0)
-            : parseFloat(quantities[item.id] || '0') || 0
-          return sum + qty * item.unit_price
-        }, 0)
+        let grandTotal = 0
+        for (const item of allItems) {
+          if (item.unit_price == null) continue
+          const qty = getItemQty(item)
+          if (qty == null || isNaN(qty)) continue
+          grandTotal += qty * item.unit_price
+        }
         return grandTotal > 0 ? (
           <div className="rounded-xl border border-stone-200 bg-white px-4 py-3 flex items-center justify-between">
             <span className="text-sm font-medium text-stone-700">Estimated total</span>
@@ -338,7 +489,6 @@ export default function LotQuantities({
         </div>
       )}
 
-      {/* Feedback */}
       {error && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
       )}

@@ -70,7 +70,7 @@ export default async function LotPage({ params }: Props) {
       ? supabase
           .from('quote_template_sections')
           .select(`
-            id, name, order_index,
+            id, name, order_index, admin_only,
             quote_template_items (
               id, name, unit, ${isAdmin ? 'unit_price,' : ''}
               is_auto_calculated, auto_calc_formula, plant_category, order_index
@@ -131,22 +131,25 @@ export default async function LotPage({ params }: Props) {
   }
 
   // Template sections (shape items for client component, strip unit_price for non-admin)
+  // Filter admin_only sections for non-admins
   const sections = showQty
-    ? (sectionsData ?? []).map((s) => ({
-        id:          s.id,
-        name:        s.name,
-        order_index: s.order_index,
-        items: [...((s.quote_template_items as unknown[]) as {
-          id: string; name: string; unit: string; unit_price?: number | null;
-          is_auto_calculated: boolean; auto_calc_formula: string | null;
-          plant_category: 'front' | 'rear' | null; order_index: number
-        }[] ?? [])]
-          .sort((a, b) => a.order_index - b.order_index)
-          .map((i) => ({
-            ...i,
-            unit_price: isAdmin ? (i.unit_price ?? null) : null,
-          })),
-      }))
+    ? (sectionsData ?? [])
+        .filter((s) => !(s as { admin_only?: boolean }).admin_only || isAdmin)
+        .map((s) => ({
+          id:          s.id,
+          name:        s.name,
+          order_index: s.order_index,
+          items: [...((s.quote_template_items as unknown[]) as {
+            id: string; name: string; unit: string; unit_price?: number | null;
+            is_auto_calculated: boolean; auto_calc_formula: string | null;
+            plant_category: 'front' | 'rear' | null; order_index: number
+          }[] ?? [])]
+            .sort((a, b) => a.order_index - b.order_index)
+            .map((i) => ({
+              ...i,
+              unit_price: isAdmin ? (i.unit_price ?? null) : null,
+            })),
+        }))
     : []
 
   // Quotes

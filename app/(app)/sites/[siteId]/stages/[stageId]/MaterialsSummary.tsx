@@ -13,9 +13,10 @@ export default async function MaterialsSummary({ stageId, siteId, isAdmin }: Pro
     supabase
       .from('quote_template_sections')
       .select(`
-        id, name, order_index,
+        id, name, order_index, admin_only,
         quote_template_items (
-          id, name, unit, unit_price, order_index, is_active, is_auto_calculated
+          id, name, unit, unit_price, plant_category,
+          order_index, is_active, is_auto_calculated, auto_calc_formula
         )
       `)
       .eq('is_active', true)
@@ -34,41 +35,56 @@ export default async function MaterialsSummary({ stageId, siteId, isAdmin }: Pro
       .order('lot_number', { ascending: true }),
   ])
 
+  type RawItem = {
+    id: string; name: string; unit: string; unit_price: number | null
+    plant_category: string | null; order_index: number
+    is_active: boolean; is_auto_calculated: boolean; auto_calc_formula: string | null
+  }
+
   const sections = (sectionsData ?? []).map((s) => ({
-    ...s,
-    quote_template_items: [...((s.quote_template_items ?? []) as {
-      id: string; name: string; unit: string; unit_price: number | null;
-      order_index: number; is_active: boolean; is_auto_calculated: boolean
-    }[])].sort((a, b) => a.order_index - b.order_index),
+    id:          s.id,
+    name:        s.name,
+    order_index: s.order_index,
+    admin_only:  (s as { admin_only?: boolean }).admin_only ?? false,
+    items: [...((s.quote_template_items ?? []) as RawItem[])]
+      .sort((a, b) => a.order_index - b.order_index),
   }))
+
+  // Build item lookup
+  const itemById = new Map<string, RawItem>()
+  for (const s of sections) {
+    for (const i of s.items) itemById.set(i.id, i)
+  }
 
   const lots = lotsData ?? []
   const totalLots = lots.length
 
-  // For each lot, pick the most relevant quote:
-  // prefer submitted/approved over draft; prefer final (is_estimated=false) over estimate
-  function bestQuote(lotQuotes: { status: string; is_estimated: boolean; lot_quote_items: { template_item_id: string; quantity: number | null; unit_price_snapshot: number | null }[] }[]) {
+  type LotQuote = {
+    status: string; is_estimated: boolean
+    lot_quote_items: { template_item_id: string; quantity: number | null; unit_price_snapshot: number | null }[]
+  }
+
+  function bestQuote(lotQuotes: LotQuote[]) {
     if (!lotQuotes || lotQuotes.length === 0) return null
-    const priority = (q: typeof lotQuotes[0]) => {
-      const statusScore = q.status === 'approved' ? 3 : q.status === 'submitted' ? 2 : 1
-      const typeScore   = q.is_estimated ? 0 : 1
-      return statusScore * 10 + typeScore
+    const priority = (q: LotQuote) => {
+      const s = q.status === 'approved' ? 3 : q.status === 'submitted' ? 2 : 1
+      return s * 10 + (q.is_estimated ? 0 : 1)
     }
     return [...lotQuotes].sort((a, b) => priority(b) - priority(a))[0]
   }
 
-  // Aggregate: template_item_id -> { total_qty, total_cost, lot_count }
+  // Aggregate: template_item_id → { total_qty, total_cost, lot_count }
   const agg = new Map<string, { total_qty: number; total_cost: number; lot_count: number }>()
   let quotedLots = 0
 
   for (const lot of lots) {
-    const quote = bestQuote(lot.lot_quotes as Parameters<typeof bestQuote>[0])
+    const quote = bestQuote(lot.lot_quotes as LotQuote[])
     if (!quote) continue
     quotedLots++
     for (const qi of quote.lot_quote_items) {
       if (qi.quantity === null || qi.template_item_id === null) continue
       const existing = agg.get(qi.template_item_id) ?? { total_qty: 0, total_cost: 0, lot_count: 0 }
-      const price = qi.unit_price_snapshot ?? null
+      const price    = qi.unit_price_snapshot ?? null
       agg.set(qi.template_item_id, {
         total_qty:  existing.total_qty + qi.quantity,
         total_cost: existing.total_cost + (price != null ? qi.quantity * price : 0),
@@ -77,20 +93,47 @@ export default async function MaterialsSummary({ stageId, siteId, isAdmin }: Pro
     }
   }
 
-  // Grand total cost (admin only)
   const grandTotal = isAdmin
     ? [...agg.values()].reduce((s, v) => s + v.total_cost, 0)
     : 0
 
-  // Filter to sections/items that have any quantities
+  // Filter sections with data (skip admin_only sections in summary unless admin)
   const sectionsWithData = sections
+    .filter((s) => isAdmin || !s.admin_only)
     .map((s) => ({
       ...s,
-      quote_template_items: s.quote_template_items.filter((i) => i.is_active && agg.has(i.id)),
+      items: s.items.filter((i) => {
+        if (!i.is_active) return false
+        // Skip variant secondary items (auto_calc_formula = variant_group:X but not first in group)
+        // We still want to show them aggregated, but check agg
+        return agg.has(i.id)
+      }),
     }))
-    .filter((s) => s.quote_template_items.length > 0)
+    .filter((s) => s.items.length > 0)
 
-  if (sectionsWithData.length === 0) {
+  // ── Derived totals ─────────────────────────────────────────────────────────
+  // Sum all plant quantities (items with plant_category set)
+  let totalFrontPlants = 0
+  let totalRearPlants  = 0
+  for (const [id, data] of agg) {
+    const item = itemById.get(id)
+    if (!item) continue
+    if (item.plant_category === 'front') totalFrontPlants += data.total_qty
+    if (item.plant_category === 'rear')  totalRearPlants  += data.total_qty
+  }
+  const totalPlants = totalFrontPlants + totalRearPlants
+
+  // Turf: m² items with "turf" in name
+  let totalTurf = 0
+  for (const [id, data] of agg) {
+    const item = itemById.get(id)
+    if (!item) continue
+    if (item.unit === 'm²' && /turf/i.test(item.name)) totalTurf += data.total_qty
+  }
+
+  const hasDerivedData = totalPlants > 0 || totalTurf > 0
+
+  if (sectionsWithData.length === 0 && !hasDerivedData) {
     return (
       <div className="rounded-xl border border-stone-200 bg-white px-4 py-8 text-center">
         <p className="text-sm text-stone-500">No quantities submitted yet.</p>
@@ -101,8 +144,16 @@ export default async function MaterialsSummary({ stageId, siteId, isAdmin }: Pro
     )
   }
 
+  function fmtQty(qty: number, unit: string) {
+    if (unit === 'm²' || unit === 'm³' || unit === 'Lm') {
+      return qty % 1 === 0 ? String(qty) : qty.toFixed(1)
+    }
+    return String(Math.round(qty))
+  }
+
   return (
     <div className="space-y-3">
+
       {/* Header stats */}
       <div className="flex items-center gap-3 flex-wrap">
         <span className="text-sm text-stone-500">
@@ -118,11 +169,13 @@ export default async function MaterialsSummary({ stageId, siteId, isAdmin }: Pro
       {/* Sections */}
       {sectionsWithData.map((section) => (
         <div key={section.id} className="rounded-xl border border-stone-200 bg-white overflow-hidden">
-          <div className="px-4 py-2.5 bg-stone-50 border-b border-stone-200">
+          <div className="px-4 py-2.5 bg-stone-50 border-b border-stone-200 flex items-center gap-2">
             <h3 className="text-sm font-semibold text-stone-700">{section.name}</h3>
+            {section.admin_only && (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Admin only</span>
+            )}
           </div>
 
-          {/* Column headers */}
           <div className={`grid px-4 py-2 border-b border-stone-100 text-xs font-medium text-stone-400 ${isAdmin ? 'grid-cols-[1fr_80px_60px_90px]' : 'grid-cols-[1fr_80px_60px]'}`}>
             <span>Item</span>
             <span className="text-right">Total qty</span>
@@ -130,14 +183,9 @@ export default async function MaterialsSummary({ stageId, siteId, isAdmin }: Pro
             {isAdmin && <span className="text-right">Total cost</span>}
           </div>
 
-          {section.quote_template_items.map((item) => {
+          {section.items.map((item) => {
             const data = agg.get(item.id)
             if (!data) return null
-            const qty = data.total_qty
-            const displayQty = item.unit === 'Lin M' || item.unit === 'm²' || item.unit === 'm³'
-              ? qty % 1 === 0 ? String(qty) : qty.toFixed(1)
-              : String(Math.round(qty))
-
             return (
               <div
                 key={item.id}
@@ -145,7 +193,8 @@ export default async function MaterialsSummary({ stageId, siteId, isAdmin }: Pro
               >
                 <span className="text-stone-800 truncate pr-2">{item.name}</span>
                 <span className="text-right font-medium text-stone-900 tabular-nums">
-                  {displayQty} <span className="text-xs font-normal text-stone-400">{item.unit}</span>
+                  {fmtQty(data.total_qty, item.unit)}{' '}
+                  <span className="text-xs font-normal text-stone-400">{item.unit !== 'ITEM' ? item.unit : ''}</span>
                 </span>
                 <span className="text-right text-stone-500 tabular-nums">
                   {data.lot_count}/{totalLots}
@@ -164,9 +213,33 @@ export default async function MaterialsSummary({ stageId, siteId, isAdmin }: Pro
         </div>
       ))}
 
+      {/* ── Derived totals ────────────────────────────────────────────────────── */}
+      {hasDerivedData && (
+        <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
+          <div className="px-4 py-2.5 bg-stone-50 border-b border-stone-200">
+            <h3 className="text-sm font-semibold text-stone-700">Derived totals</h3>
+          </div>
+
+          {totalPlants > 0 && (
+            <>
+              <DerivedRow label="Front plants" value={String(Math.round(totalFrontPlants))} unit="No." />
+              <DerivedRow label="Rear plants"  value={String(Math.round(totalRearPlants))}  unit="No." />
+              <DerivedRow label="Total plants" value={String(Math.round(totalPlants))}      unit="No." bold />
+              <DerivedRow label="Drippers required"  value={String(Math.round(totalPlants))}                          unit="No." />
+              <DerivedRow label="Jabs required"      value={String(Math.round(totalPlants))}                          unit="No." />
+              <DerivedRow label="Dripper tube"       value={(Math.round(totalPlants * 0.5 * 10) / 10).toFixed(1)}    unit="Lm"  />
+            </>
+          )}
+
+          {totalTurf > 0 && (
+            <DerivedRow label="Total turf" value={totalTurf % 1 === 0 ? String(totalTurf) : totalTurf.toFixed(1)} unit="m²" />
+          )}
+        </div>
+      )}
+
       {/* Lots with no quote */}
       {(() => {
-        const unquoted = lots.filter((l) => !bestQuote(l.lot_quotes as Parameters<typeof bestQuote>[0]))
+        const unquoted = lots.filter((l) => !bestQuote(l.lot_quotes as LotQuote[]))
         if (unquoted.length === 0) return null
         return (
           <div className="rounded-xl border border-stone-200 bg-white px-4 py-3">
@@ -185,6 +258,19 @@ export default async function MaterialsSummary({ stageId, siteId, isAdmin }: Pro
           </div>
         )
       })()}
+    </div>
+  )
+}
+
+function DerivedRow({ label, value, unit, bold }: {
+  label: string; value: string; unit: string; bold?: boolean
+}) {
+  return (
+    <div className="flex items-center justify-between px-4 py-2.5 border-b border-stone-100">
+      <span className={`text-sm ${bold ? 'font-semibold text-stone-800' : 'text-stone-600'}`}>{label}</span>
+      <span className={`text-sm tabular-nums ${bold ? 'font-bold text-stone-900' : 'font-medium text-stone-700'}`}>
+        {value} <span className="text-xs font-normal text-stone-400">{unit}</span>
+      </span>
     </div>
   )
 }

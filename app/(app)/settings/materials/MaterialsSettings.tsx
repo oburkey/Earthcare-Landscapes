@@ -2,7 +2,9 @@
 
 import { useActionState, useState, useTransition } from 'react'
 import {
-  createSection, updateSectionName, toggleSectionActive, moveSectionUp, moveSectionDown,
+  createSection, updateSectionName,
+  toggleSectionActive, toggleSectionAdminOnly,
+  moveSectionUp, moveSectionDown,
   createItem, updateItem, toggleItemActive, moveItemUp, moveItemDown,
 } from './actions'
 
@@ -11,6 +13,7 @@ type Section = {
   name: string
   order_index: number
   is_active: boolean
+  admin_only: boolean
   quote_template_items: Item[]
 }
 
@@ -26,7 +29,7 @@ type Item = {
   is_active: boolean
 }
 
-const UNIT_OPTIONS = ['No.', 'm²', 'm³', 'Lin M', 'toggle']
+const UNIT_OPTIONS = ['No.', 'm²', 'm³', 'Lm', 'tonne', 'ITEM', 'toggle']
 
 // ── Subcomponent: single item row ─────────────────────────────────────────────
 
@@ -263,8 +266,9 @@ function SectionCard({ section, isFirst, isLast }: {
 }) {
   const [editingName, setEditingName] = useState(false)
   const [nameState, nameAction, namePending] = useActionState(updateSectionName, null)
-  const [, startToggle] = useTransition()
-  const [, startMove] = useTransition()
+  const [, startToggle]       = useTransition()
+  const [, startAdminToggle]  = useTransition()
+  const [, startMove]         = useTransition()
 
   return (
     <div className={`rounded-xl border border-stone-200 bg-white overflow-hidden ${!section.is_active ? 'opacity-60' : ''}`}>
@@ -326,6 +330,24 @@ function SectionCard({ section, isFirst, isLast }: {
             {section.name}
           </button>
         )}
+
+        {/* Admin-only badge + toggle */}
+        {section.admin_only && (
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 shrink-0">
+            Admin only
+          </span>
+        )}
+        <form action={toggleSectionAdminOnly}>
+          <input type="hidden" name="section_id"  value={section.id} />
+          <input type="hidden" name="admin_only"   value={String(section.admin_only)} />
+          <button
+            type="submit"
+            onClick={(e) => { e.preventDefault(); startAdminToggle(async () => { const fd = new FormData(e.currentTarget.closest('form')!); await toggleSectionAdminOnly(fd) }) }}
+            className="rounded px-2.5 py-1 text-xs font-medium text-stone-500 hover:bg-stone-200"
+          >
+            {section.admin_only ? 'Make public' : 'Admin only'}
+          </button>
+        </form>
 
         {/* Toggle active */}
         <form action={toggleSectionActive}>
