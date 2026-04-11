@@ -4,6 +4,7 @@
 // The actual sign-in call goes through a Server Action.
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { login } from './actions'
 
 export default function LoginForm() {
@@ -42,16 +43,21 @@ export default function LoginForm() {
       </div>
 
       <div>
-        <label htmlFor="password" className="block text-sm font-medium text-stone-700">
-          Password
-        </label>
+        <div className="flex items-center justify-between mb-1">
+          <label htmlFor="password" className="block text-sm font-medium text-stone-700">
+            Password
+          </label>
+          <Link href="/forgot-password" className="text-xs text-stone-500 hover:text-stone-700">
+            Forgot password?
+          </Link>
+        </div>
         <input
           id="password"
           name="password"
           type="password"
           required
           autoComplete="current-password"
-          className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+          className="block w-full rounded-lg border border-stone-300 px-3 py-2 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
         />
       </div>
 
