@@ -152,7 +152,7 @@ export default function AppNav({ role, name }: Props) {
         </button>
         <div className="flex-1 flex justify-center">
           <Link href="/dashboard" className="text-sm font-bold text-green-700 tracking-tight">
-            Earthcare
+            Earthcare Landscapes
           </Link>
         </div>
         {/* Spacer to keep logo visually centred */}
