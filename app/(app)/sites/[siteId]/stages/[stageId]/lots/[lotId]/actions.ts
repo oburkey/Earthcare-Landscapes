@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { uploadToR2, deleteFromR2 } from '@/lib/r2'
 import type { ActionState } from '@/types/actions'
 
@@ -137,5 +137,8 @@ export async function updateLot(
 
   revalidatePath(`/sites/${siteId}/stages/${stageId}/lots/${lotId}`)
   revalidatePath(`/sites/${siteId}/stages/${stageId}`)
+  revalidateTag('stages')
+  revalidateTag('dashboard')
+  revalidateTag('schedule')
   redirect(`/sites/${siteId}/stages/${stageId}/lots/${lotId}`)
 }

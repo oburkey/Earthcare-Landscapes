@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { uploadToR2, deleteFromR2 } from '@/lib/r2'
 
 import type { EditState, UploadActionState } from '@/types/actions'
@@ -32,6 +32,8 @@ export async function updateStage(
 
   revalidatePath(`/sites/${siteId}/stages/${stageId}`)
   revalidatePath(`/sites/${siteId}`)
+  revalidateTag('stages')
+  revalidateTag('sites')
   return { success: true }
 }
 
@@ -79,5 +81,6 @@ export async function uploadStagePlan(
   if (dbError) return { error: dbError.message }
 
   revalidatePath(`/sites/${siteId}/stages/${stageId}`)
+  revalidateTag('stages')
   return null
 }

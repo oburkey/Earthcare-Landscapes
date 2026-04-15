@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireAuth } from '@/lib/auth'
-import { createClient } from '@/lib/supabase/server'
+import { getCachedStage } from '@/lib/data'
+import { PrefetchLink } from '@/app/_components/PrefetchLink'
 import { STATUS_CONFIG, EXTRA_JOB_STATUS_CONFIG, formatDate } from '@/lib/lotStatus'
 import type { LotStatus, ExtraJobStatus } from '@/types/database'
 import { uploadStagePlan } from './actions'
@@ -16,15 +17,10 @@ interface Props {
 
 export async function generateMetadata({ params }: Props) {
   const { stageId } = await params
-  const supabase = await createClient()
-  const { data } = await supabase
-    .from('stages')
-    .select('name, sites(name)')
-    .eq('id', stageId)
-    .single()
-  const siteName = Array.isArray(data?.sites) ? data.sites[0]?.name : (data?.sites as unknown as { name: string } | null)?.name
+  const { stage } = await getCachedStage(stageId)
+  const site = stage ? (Array.isArray(stage.sites) ? stage.sites[0] : stage.sites as unknown as { name: string } | null) : null
   return {
-    title: data ? `${data.name} — ${siteName} — Earthcare Landscapes` : 'Stage',
+    title: stage ? `${stage.name} — ${site?.name ?? ''} — Earthcare Landscapes` : 'Stage',
   }
 }
 
@@ -42,26 +38,7 @@ export default async function StagePage({ params }: Props) {
   const isAdmin            = profile.role === 'admin'
   const showSummary        = profile.role === 'supervisor' || profile.role === 'admin'
 
-  const supabase = await createClient()
-
-  const [{ data: stage }, { data: extraJobs }] = await Promise.all([
-    supabase
-      .from('stages')
-      .select(`
-        id, name, site_plan_path,
-        sites!inner(id, name),
-        lots(
-          id, lot_number, status, due_date, scheduled_date
-        )
-      `)
-      .eq('id', stageId)
-      .single(),
-    supabase
-      .from('extra_jobs')
-      .select('id, title, status, description')
-      .eq('stage_id', stageId)
-      .order('created_at', { ascending: true }),
-  ])
+  const { stage, extraJobs } = await getCachedStage(stageId)
 
   if (!stage) notFound()
 
@@ -196,7 +173,7 @@ export default async function StagePage({ params }: Props) {
                 const status = lot.status as LotStatus
                 const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.not_started
                 return (
-                  <Link
+                  <PrefetchLink
                     key={lot.id}
                     href={`/sites/${siteId}/stages/${stageId}/lots/${lot.id}`}
                     className="flex items-center gap-3 px-4 py-3.5 hover:bg-stone-50 active:bg-stone-100 transition-colors"
@@ -219,7 +196,7 @@ export default async function StagePage({ params }: Props) {
                     <svg className="h-4 w-4 shrink-0 text-stone-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                     </svg>
-                  </Link>
+                  </PrefetchLink>
                 )
               })}
             </div>

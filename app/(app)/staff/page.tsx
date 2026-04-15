@@ -1,5 +1,5 @@
 import { requireAuth, requireRole } from '@/lib/auth'
-import { createClient } from '@/lib/supabase/server'
+import { getCachedStaff } from '@/lib/data'
 import StaffManagement from './StaffManagement'
 import type { Role } from '@/types/database'
 
@@ -9,12 +9,7 @@ export default async function StaffPage() {
   const profile = await requireAuth()
   requireRole(profile, 'supervisor')
 
-  const supabase = await createClient()
-
-  const { data: staffData } = await supabase
-    .from('staff_members')
-    .select('id, full_name, phone_number, credentials, role')
-    .order('full_name', { ascending: true })
+  const staffData = await getCachedStaff()
 
   const staff = (staffData ?? []).map((s) => ({
     id:           s.id as string,

@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import type { MutationState } from '@/types/actions'
 
 export async function createStaffMember(
@@ -43,6 +43,7 @@ export async function createStaffMember(
   if (error) return { error: error.message }
 
   revalidatePath('/staff')
+  revalidateTag('staff')
   return { success: 'Staff member added.' }
 }
 
@@ -83,6 +84,7 @@ export async function updateStaffMember(
   if (error) return { error: error.message }
 
   revalidatePath('/staff')
+  revalidateTag('staff')
   return { success: 'Staff member updated.' }
 }
 
@@ -104,5 +106,6 @@ export async function deleteStaffMember(
   if (error) return { error: error.message }
 
   revalidatePath('/staff')
+  revalidateTag('staff')
   return { success: 'Staff member removed.' }
 }

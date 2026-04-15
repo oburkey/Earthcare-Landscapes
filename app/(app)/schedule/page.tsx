@@ -1,5 +1,5 @@
 import { requireAuth } from '@/lib/auth'
-import { createClient } from '@/lib/supabase/server'
+import { getCachedScheduleData } from '@/lib/data'
 import { STATUS_CONFIG, EXTRA_JOB_STATUS_CONFIG } from '@/lib/lotStatus'
 import Link from 'next/link'
 import type { LotStatus, ExtraJobStatus } from '@/types/database'
@@ -57,33 +57,7 @@ type ScheduleItem =
 export default async function SchedulePage() {
   await requireAuth()
 
-  const supabase = await createClient()
-
-  const { data: lots } = await supabase
-    .from('lots')
-    .select(`
-      id, lot_number, status, due_date,
-      stages!inner(
-        id, name,
-        sites!inner(id, name)
-      )
-    `)
-    .not('due_date', 'is', null)
-    .neq('status', 'complete')
-    .order('due_date', { ascending: true })
-
-  const { data: jobs } = await supabase
-    .from('extra_jobs')
-    .select(`
-      id, title, status, due_date,
-      stages!inner(
-        id, name,
-        sites!inner(id, name)
-      )
-    `)
-    .not('due_date', 'is', null)
-    .neq('status', 'complete')
-    .order('due_date', { ascending: true })
+  const { lots, jobs } = await getCachedScheduleData()
 
   const items: ScheduleItem[] = []
 

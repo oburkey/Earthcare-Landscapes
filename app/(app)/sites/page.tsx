@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { requireAuth } from '@/lib/auth'
-import { createClient } from '@/lib/supabase/server'
+import { getCachedSitesList } from '@/lib/data'
+import { PrefetchLink } from '@/app/_components/PrefetchLink'
 
 export const metadata = { title: 'Sites & Lots — Earthcare Landscapes' }
 
@@ -8,17 +9,7 @@ export default async function SitesPage() {
   const profile = await requireAuth()
   const canManage = profile.role === 'supervisor' || profile.role === 'admin'
 
-  const supabase = await createClient()
-  const { data: sites } = await supabase
-    .from('sites')
-    .select(`
-      id, name, address,
-      stages(
-        id,
-        lots(id, status)
-      )
-    `)
-    .order('name', { ascending: true })
+  const sites = await getCachedSitesList()
 
   type SiteRow = NonNullable<typeof sites>[number]
 
@@ -67,7 +58,7 @@ export default async function SitesPage() {
               const pct = total > 0 ? Math.round((completed / total) * 100) : 0
 
               return (
-                <Link
+                <PrefetchLink
                   key={site.id}
                   href={`/sites/${site.id}`}
                   className="flex items-center gap-4 px-4 py-4 hover:bg-stone-50 active:bg-stone-100 transition-colors"
@@ -117,7 +108,7 @@ export default async function SitesPage() {
                   >
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                   </svg>
-                </Link>
+                </PrefetchLink>
               )
             })}
           </div>

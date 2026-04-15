@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { requireAuth } from '@/lib/auth'
-import { createClient } from '@/lib/supabase/server'
+import { getCachedDashboardData } from '@/lib/data'
 import Greeting from './Greeting'
 
 export const metadata = { title: 'Dashboard — Earthcare Landscapes' }
@@ -84,44 +84,16 @@ export default async function DashboardPage() {
   fortnight.setDate(fortnight.getDate() + 14)
   const fortnightStr = fortnight.toISOString().split('T')[0]
 
-  // ── Fetch upcoming & overdue lots ──────────────────────────────────────────
-  // Shows everything not complete with a due date on or before fortnight end.
+  // ── Fetch upcoming & overdue lots (cached) ─────────────────────────────────
   let upcomingLots: UpcomingLot[] = []
   let sitesData: SiteRow[] = []
 
   try {
-    const supabase = await createClient()
-
-    const { data: lotsData } = await supabase
-      .from('lots')
-      .select(`
-        id, lot_number, due_date,
-        stages!inner(
-          id, name,
-          sites!inner(id, name)
-        )
-      `)
-      .neq('status', 'complete')
-      .not('due_date', 'is', null)
-      .lte('due_date', fortnightStr)
-      .order('due_date', { ascending: true })
-
-    if (lotsData) upcomingLots = lotsData as unknown as UpcomingLot[]
-
-    // ── Fetch sites with lot counts for progress bars ──────────────────────
-    const { data: sites } = await supabase
-      .from('sites')
-      .select(`
-        id, name,
-        stages(
-          lots(id, status)
-        )
-      `)
-      .order('name', { ascending: true })
-
-    if (sites) sitesData = sites as unknown as SiteRow[]
+    const { lotsData, sitesData: sites } = await getCachedDashboardData(fortnightStr)
+    upcomingLots = lotsData as unknown as UpcomingLot[]
+    sitesData = sites as unknown as SiteRow[]
   } catch {
-    // Supabase not configured — renders with empty data
+    // Supabase not configured or service key missing — renders with empty data
   }
 
   // ── Derive metrics ────────────────────────────────────────────────────────

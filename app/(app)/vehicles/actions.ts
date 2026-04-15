@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import type { MutationState } from '@/types/actions'
 
 function parseFields(formData: FormData) {
@@ -67,6 +67,7 @@ export async function createVehicle(
   if (error) return { error: error.message }
 
   revalidatePath('/vehicles')
+  revalidateTag('vehicles')
   return { success: 'Vehicle added.' }
 }
 
@@ -92,6 +93,7 @@ export async function updateVehicle(
   if (error) return { error: error.message }
 
   revalidatePath('/vehicles')
+  revalidateTag('vehicles')
   return { success: 'Saved.' }
 }
 
@@ -110,5 +112,6 @@ export async function deleteVehicle(
   if (error) return { error: error.message }
 
   revalidatePath('/vehicles')
+  revalidateTag('vehicles')
   return { success: 'Vehicle removed.' }
 }

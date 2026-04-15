@@ -1,21 +1,10 @@
-import { createClient } from '@/lib/supabase/server'
+import { getCachedMaterialsTemplate } from '@/lib/data'
 import MaterialsSettings from './MaterialsSettings'
 
 export const metadata = { title: 'Materials Template — Earthcare Landscapes' }
 
 export default async function MaterialsSettingsPage() {
-  const supabase = await createClient()
-
-  const { data: sectionsData } = await supabase
-    .from('quote_template_sections')
-    .select(`
-      id, name, order_index, is_active, admin_only,
-      quote_template_items (
-        id, name, unit, unit_price, is_auto_calculated, auto_calc_formula,
-        plant_category, order_index, is_active
-      )
-    `)
-    .order('order_index', { ascending: true })
+  const sectionsData = await getCachedMaterialsTemplate()
 
   const sections = (sectionsData ?? []).map((s) => ({
     ...s,

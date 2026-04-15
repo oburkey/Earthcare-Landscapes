@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import type { MutationState } from '@/types/actions'
 
 export async function createContact(
@@ -31,6 +31,7 @@ export async function createContact(
   if (error) return { error: error.message }
 
   revalidatePath('/contacts')
+  revalidateTag('contacts')
   return { success: 'Contact added.' }
 }
 
@@ -64,6 +65,7 @@ export async function updateContact(
   if (error) return { error: error.message }
 
   revalidatePath('/contacts')
+  revalidateTag('contacts')
   return { success: 'Contact updated.' }
 }
 
@@ -85,5 +87,6 @@ export async function deleteContact(
   if (error) return { error: error.message }
 
   revalidatePath('/contacts')
+  revalidateTag('contacts')
   return { success: 'Contact deleted.' }
 }

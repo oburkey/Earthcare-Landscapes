@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireAuth } from '@/lib/auth'
-import { createClient } from '@/lib/supabase/server'
+import { getCachedSite } from '@/lib/data'
+import { PrefetchLink } from '@/app/_components/PrefetchLink'
 import { uploadSitePlan } from './actions'
 import PlanPhotoUpload from './PlanPhotoUpload'
 import EditSiteForm from './EditSiteForm'
@@ -13,12 +14,7 @@ interface Props {
 
 export async function generateMetadata({ params }: Props) {
   const { siteId } = await params
-  const supabase = await createClient()
-  const { data } = await supabase
-    .from('sites')
-    .select('name')
-    .eq('id', siteId)
-    .single()
+  const data = await getCachedSite(siteId)
   return { title: data ? `${data.name} — Earthcare Landscapes` : 'Site' }
 }
 
@@ -33,18 +29,7 @@ export default async function SitePage({ params }: Props) {
   const canManage = profile.role === 'supervisor' || profile.role === 'admin'
   const isAdmin = profile.role === 'admin'
 
-  const supabase = await createClient()
-  const { data: site } = await supabase
-    .from('sites')
-    .select(`
-      id, name, address, client_contact, site_plan_path,
-      stages(
-        id, name, order,
-        lots(id, status)
-      )
-    `)
-    .eq('id', siteId)
-    .single()
+  const site = await getCachedSite(siteId)
 
   if (!site) notFound()
 
@@ -206,7 +191,7 @@ export default async function SitePage({ params }: Props) {
                 const pct = total > 0 ? Math.round((completed / total) * 100) : 0
 
                 return (
-                  <Link
+                  <PrefetchLink
                     key={stage.id}
                     href={`/sites/${siteId}/stages/${stage.id}`}
                     className="flex items-center gap-4 px-4 py-4 hover:bg-stone-50 active:bg-stone-100 transition-colors"
@@ -267,7 +252,7 @@ export default async function SitePage({ params }: Props) {
                     >
                       <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                     </svg>
-                  </Link>
+                  </PrefetchLink>
                 )
               })}
             </div>

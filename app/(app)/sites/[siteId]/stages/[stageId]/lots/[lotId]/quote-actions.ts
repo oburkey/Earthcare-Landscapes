@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import type { ActionState } from '@/types/actions'
 
 export type QuoteItemPayload = {
@@ -98,5 +98,6 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
 
   revalidatePath(`/sites/${siteId}/stages/${stageId}/lots/${lotId}`)
   revalidatePath(`/sites/${siteId}/stages/${stageId}`)
+  revalidateTag('stages')
   return null
 }

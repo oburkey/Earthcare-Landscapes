@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import type { ActionState } from '@/types/actions'
 
 async function requireAdmin(): Promise<ActionState | null> {
@@ -37,6 +37,7 @@ export async function createSection(
 
   if (error) return { error: error.message }
   revalidatePath('/settings/materials')
+  revalidateTag('template')
   return null
 }
 
@@ -58,6 +59,7 @@ export async function updateSectionName(
 
   if (error) return { error: error.message }
   revalidatePath('/settings/materials')
+  revalidateTag('template')
   return null
 }
 
@@ -74,6 +76,7 @@ export async function toggleSectionAdminOnly(formData: FormData): Promise<void> 
     .eq('id', id)
 
   revalidatePath('/settings/materials')
+  revalidateTag('template')
 }
 
 export async function toggleSectionActive(formData: FormData): Promise<void> {
@@ -89,18 +92,21 @@ export async function toggleSectionActive(formData: FormData): Promise<void> {
     .eq('id', id)
 
   revalidatePath('/settings/materials')
+  revalidateTag('template')
 }
 
 export async function moveSectionUp(formData: FormData): Promise<void> {
   const err = await requireAdmin(); if (err) return
   await swapSectionOrder(formData.get('section_id') as string, 'up')
   revalidatePath('/settings/materials')
+  revalidateTag('template')
 }
 
 export async function moveSectionDown(formData: FormData): Promise<void> {
   const err = await requireAdmin(); if (err) return
   await swapSectionOrder(formData.get('section_id') as string, 'down')
   revalidatePath('/settings/materials')
+  revalidateTag('template')
 }
 
 async function swapSectionOrder(id: string, direction: 'up' | 'down') {
@@ -154,6 +160,7 @@ export async function createItem(
 
   if (error) return { error: error.message }
   revalidatePath('/settings/materials')
+  revalidateTag('template')
   return null
 }
 
@@ -182,6 +189,7 @@ export async function updateItem(
 
   if (error) return { error: error.message }
   revalidatePath('/settings/materials')
+  revalidateTag('template')
   return null
 }
 
@@ -198,6 +206,7 @@ export async function toggleItemActive(formData: FormData): Promise<void> {
     .eq('id', id)
 
   revalidatePath('/settings/materials')
+  revalidateTag('template')
 }
 
 export async function moveItemUp(formData: FormData): Promise<void> {
@@ -208,6 +217,7 @@ export async function moveItemUp(formData: FormData): Promise<void> {
     'up'
   )
   revalidatePath('/settings/materials')
+  revalidateTag('template')
 }
 
 export async function moveItemDown(formData: FormData): Promise<void> {
@@ -218,6 +228,7 @@ export async function moveItemDown(formData: FormData): Promise<void> {
     'down'
   )
   revalidatePath('/settings/materials')
+  revalidateTag('template')
 }
 
 async function swapItemOrder(id: string, sectionId: string, direction: 'up' | 'down') {

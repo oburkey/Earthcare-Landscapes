@@ -1,5 +1,5 @@
 import { requireAuth, requireRole } from '@/lib/auth'
-import { createClient } from '@/lib/supabase/server'
+import { getCachedContacts } from '@/lib/data'
 import ContactsView from './ContactsView'
 import type { Contact } from '@/types/database'
 
@@ -11,12 +11,7 @@ export default async function ContactsPage() {
 
   const canManage = profile.role === 'supervisor' || profile.role === 'admin'
 
-  const supabase = await createClient()
-
-  const { data } = await supabase
-    .from('contacts')
-    .select('id, name, company, phone, email, category, notes, created_at, updated_at')
-    .order('name', { ascending: true })
+  const data = await getCachedContacts()
 
   const contacts: Contact[] = (data ?? []).map((c) => ({
     id:         c.id as string,

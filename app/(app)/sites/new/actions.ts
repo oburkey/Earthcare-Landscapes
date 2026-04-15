@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import type { ActionState } from '@/types/actions'
 
 export async function createSite(
@@ -33,5 +33,6 @@ export async function createSite(
   if (error) return { error: error.message }
 
   revalidatePath('/sites')
+  revalidateTag('sites')
   redirect(`/sites/${data.id}`)
 }
