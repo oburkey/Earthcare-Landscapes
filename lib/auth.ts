@@ -1,6 +1,7 @@
 // Server-side auth helpers used in layouts and server components.
 
 import { redirect } from 'next/navigation'
+import { isRedirectError } from 'next/dist/client/components/redirect-error'
 import { createClient } from '@/lib/supabase/server'
 import type { Profile, Role } from '@/types/database'
 
@@ -22,24 +23,31 @@ export async function requireAuth(): Promise<Profile> {
     }
   }
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user) {
+    if (!user) {
+      redirect('/login')
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+
+    if (!profile) {
+      redirect('/login')
+    }
+
+    return profile as Profile
+  } catch (err) {
+    // redirect() throws internally — let it propagate
+    if (isRedirectError(err)) throw err
+    // Any other error (network, auth) → send to login rather than crash
     redirect('/login')
   }
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile) {
-    redirect('/login')
-  }
-
-  return profile as Profile
 }
 
 // Call this at the top of a Server Component/layout to enforce a minimum role.
