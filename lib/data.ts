@@ -10,12 +10,19 @@ import { createServiceClient } from './supabase/service'
 
 export const getCachedSitesList = unstable_cache(
   async () => {
-    const supabase = createServiceClient()
-    const { data } = await supabase
-      .from('sites')
-      .select('id, name, address, stages(id, lots(id, status))')
-      .order('name', { ascending: true })
-    return data ?? []
+    console.log('[getCachedSitesList] fetching')
+    try {
+      const supabase = createServiceClient()
+      const { data, error } = await supabase
+        .from('sites')
+        .select('id, name, address, stages(id, lots(id, status))')
+        .order('name', { ascending: true })
+      console.log('[getCachedSitesList] rows:', data?.length ?? 0, '| error:', error?.message ?? 'none')
+      return data ?? []
+    } catch (err) {
+      console.error('[getCachedSitesList] threw:', err)
+      throw err
+    }
   },
   ['sites-list'],
   { tags: ['sites'] }
@@ -74,8 +81,10 @@ export const getCachedStage = unstable_cache(
 
 export const getCachedDashboardData = unstable_cache(
   async (fortnightStr: string) => {
+    console.log('[getCachedDashboardData] fetching, fortnightStr:', fortnightStr)
+    try {
     const supabase = createServiceClient()
-    const [{ data: lotsData }, { data: sitesData }] = await Promise.all([
+    const [{ data: lotsData, error: lotsError }, { data: sitesData, error: sitesError }] = await Promise.all([
       supabase
         .from('lots')
         .select('id, lot_number, due_date, stages!inner(id, name, sites!inner(id, name))')
@@ -88,7 +97,12 @@ export const getCachedDashboardData = unstable_cache(
         .select('id, name, stages(lots(id, status))')
         .order('name', { ascending: true }),
     ])
+    console.log('[getCachedDashboardData] lots:', lotsData?.length ?? 0, '| lots error:', lotsError?.message ?? 'none', '| sites:', sitesData?.length ?? 0, '| sites error:', sitesError?.message ?? 'none')
     return { lotsData: lotsData ?? [], sitesData: sitesData ?? [] }
+    } catch (err) {
+      console.error('[getCachedDashboardData] threw:', err)
+      throw err
+    }
   },
   ['dashboard'],
   { tags: ['dashboard', 'sites'], revalidate: 300 }

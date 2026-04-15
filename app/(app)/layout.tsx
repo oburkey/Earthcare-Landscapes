@@ -10,7 +10,9 @@ export default async function AppLayout({
 }) {
   // Direct call so Next.js static analysis marks all (app) routes as dynamic.
   await cookies()
+  console.log('[AppLayout] calling requireAuth')
   const profile = await requireAuth()
+  console.log('[AppLayout] requireAuth returned, role:', profile?.role)
 
   return (
     <div className="min-h-screen bg-stone-50">

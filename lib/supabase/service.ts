@@ -8,6 +8,8 @@ export function createServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
 
+  console.log('[createServiceClient] url present:', !!url, '| service key present:', !!key)
+
   if (!url) {
     throw new Error('NEXT_PUBLIC_SUPABASE_URL is required')
   }
@@ -15,6 +17,7 @@ export function createServiceClient() {
   if (!key) {
     // Fall back to publishable key — RLS applies, queries may return limited data.
     // Set SUPABASE_SERVICE_ROLE_KEY in .env.local for full caching behaviour.
+    console.warn('[createServiceClient] SUPABASE_SERVICE_ROLE_KEY not set — falling back to publishable key')
     const fallbackKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
     if (!fallbackKey) throw new Error('No Supabase key available')
     return createClient(url, fallbackKey, { auth: { persistSession: false } })

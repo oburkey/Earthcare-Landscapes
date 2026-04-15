@@ -39,7 +39,10 @@ export async function updateSession(request: NextRequest) {
   // getUser() — a stale token could cause redirect loops.
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser()
+
+  console.log('[updateSession] user:', user?.id ?? 'none', '| auth error:', authError?.message ?? 'none')
 
   const pathname = request.nextUrl.pathname
 
@@ -50,6 +53,7 @@ export async function updateSession(request: NextRequest) {
   )
 
   if (!user && !isPublicRoute) {
+    console.log('[updateSession] no user, redirecting to /login from', pathname)
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
