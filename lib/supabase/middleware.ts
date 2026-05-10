@@ -37,10 +37,7 @@ export async function updateSession(request: NextRequest) {
   // Refresh the session token if it has expired.
   // IMPORTANT: Do not write any logic between createServerClient and
   // getUser() — a stale token could cause redirect loops.
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
 
   const pathname = request.nextUrl.pathname
 

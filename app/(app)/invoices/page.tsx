@@ -28,7 +28,6 @@ export default async function InvoicesPage() {
 
   // Collect qualifying lot IDs (build_complete OR quant_done)
   const qualifyingLotIds: string[] = []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const site of activeSites) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const stage of (site.stages ?? []) as any[]) {
@@ -100,6 +99,7 @@ export default async function InvoicesPage() {
     const sections: LotSection[] = [...sectionMap.values()]
       .sort((a, b) => a.orderIndex - b.orderIndex)
       .map((s) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const sortedItems = [...s.items].sort((a: any, b: any) => a.orderIndex - b.orderIndex)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const subtotal = sortedItems.reduce((sum: number, i: any) => sum + i.total, 0)
