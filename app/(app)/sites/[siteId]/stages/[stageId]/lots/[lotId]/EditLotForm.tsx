@@ -1,11 +1,12 @@
 'use client'
 
-import { useActionState } from 'react'
-import { updateLot } from './actions'
+import { useActionState, useState } from 'react'
+import { updateLot, deleteLot } from './actions'
 import { STATUS_OPTIONS } from '@/lib/lotStatus'
 import type { LotStatus } from '@/types/database'
+import type { ActionState } from '@/types/actions'
 
-type ActionState = { error: string } | null
+type UpdateState = { error: string } | null
 
 interface Props {
   lotId: string
@@ -16,6 +17,7 @@ interface Props {
   currentDueDate: string | null
   currentScheduledDate: string | null
   canManage: boolean
+  isAdmin?: boolean
 }
 
 export default function EditLotForm({
@@ -27,13 +29,14 @@ export default function EditLotForm({
   currentDueDate,
   currentScheduledDate,
   canManage,
+  isAdmin,
 }: Props) {
-  const [state, action, pending] = useActionState<ActionState, FormData>(
-    updateLot,
-    null
-  )
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [state, action, pending] = useActionState<UpdateState, FormData>(updateLot, null)
+  const [deleteState, deleteAction, deletePending] = useActionState<ActionState, FormData>(deleteLot, null)
 
   return (
+    <div className="space-y-4">
     <form action={action} className="space-y-4">
       <input type="hidden" name="lot_id" value={lotId} />
       <input type="hidden" name="site_id" value={siteId} />
@@ -117,5 +120,50 @@ export default function EditLotForm({
         {pending ? 'Saving…' : 'Save changes'}
       </button>
     </form>
+
+    {isAdmin && (
+      <div className="mt-4 pt-3 border-t border-stone-100">
+        {!confirmDelete ? (
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(true)}
+            className="text-sm text-red-500 hover:text-red-700"
+          >
+            Delete lot
+          </button>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-sm text-stone-700">
+              Permanently delete this lot and all its photos, documents, and quantities?
+            </p>
+            <div className="flex items-center gap-3">
+              <form action={deleteAction}>
+                <input type="hidden" name="lot_id"   value={lotId} />
+                <input type="hidden" name="site_id"  value={siteId} />
+                <input type="hidden" name="stage_id" value={stageId} />
+                <button
+                  type="submit"
+                  disabled={deletePending}
+                  className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  {deletePending ? 'Deleting…' : 'Yes, delete lot'}
+                </button>
+              </form>
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(false)}
+                className="text-sm text-stone-500 hover:text-stone-700"
+              >
+                Cancel
+              </button>
+            </div>
+            {deleteState?.error && (
+              <p className="text-sm text-red-600">{deleteState.error}</p>
+            )}
+          </div>
+        )}
+      </div>
+    )}
+    </div>
   )
 }

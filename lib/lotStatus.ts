@@ -40,6 +40,10 @@ export const EXTRA_JOB_STATUS_CONFIG: Record<
   complete:    { label: 'Complete',    badge: 'bg-green-100 text-green-700' },
 }
 
+export const EXTRA_JOB_STATUS_OPTIONS = (
+  Object.entries(EXTRA_JOB_STATUS_CONFIG) as [ExtraJobStatus, { label: string; badge: string }][]
+).map(([value, { label }]) => ({ value, label }))
+
 export const PHOTO_TYPE_LABELS: Record<string, string> = {
   before: 'Before',
   during: 'During',

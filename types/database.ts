@@ -27,6 +27,16 @@ export interface Profile {
   created_at: string
 }
 
+// ── Site plan documents ────────────────────────────────────────────────────────
+export interface SitePlanDocument {
+  id: string
+  site_id: string
+  storage_path: string
+  label: string | null
+  uploaded_by: string
+  created_at: string
+}
+
 // ── Sites ─────────────────────────────────────────────────────────────────────
 export interface Site {
   id: string
@@ -34,6 +44,7 @@ export interface Site {
   address: string | null
   client_contact: string | null
   site_plan_path: string | null  // path in 'site-plans' storage bucket
+  completed_at: string | null    // null = active, timestamptz = marked complete
   created_at: string
 }
 
@@ -44,6 +55,7 @@ export interface Stage {
   name: string
   order: number
   site_plan_path: string | null  // path in 'site-plans' storage bucket
+  completed_at: string | null    // null = active, timestamptz = marked complete
   created_at: string
 }
 
@@ -156,6 +168,7 @@ export interface Vehicle {
   next_service_km: number | null
   next_service_hours: number | null
   notes: string | null
+  vehicle_type: string | null
   created_at: string
 }
 
@@ -177,6 +190,7 @@ export interface QuoteTemplateSection {
   name: string
   order_index: number
   is_active: boolean
+  is_client_extra: boolean
   created_at: string
 }
 

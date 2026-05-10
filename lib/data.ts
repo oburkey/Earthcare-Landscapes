@@ -29,7 +29,6 @@ function withCache<TArgs extends unknown[], TReturn>(
   key: string[],
   options: { tags: string[]; revalidate?: number }
 ): (...args: TArgs) => Promise<TReturn> {
-  console.log('[data] HAS_SERVICE_KEY:', HAS_SERVICE_KEY, '| registering:', key[0])
   return HAS_SERVICE_KEY
     ? (unstable_cache(serviceImpl, key, options) as (...args: TArgs) => Promise<TReturn>)
     : cache(clientImpl)
@@ -38,26 +37,24 @@ function withCache<TArgs extends unknown[], TReturn>(
 // ── Query implementations ─────────────────────────────────────────────────────
 
 async function _sitesList(db: Db) {
-  const { data, error } = await db
+  const { data } = await db
     .from('sites')
-    .select('id, name, address, stages(id, lots(id, status))')
+    .select('id, name, address, completed_at, stages(id, lots(id, status))')
     .order('name', { ascending: true })
-  console.log('[_sitesList] rows:', data?.length ?? 0, '| error:', error?.message ?? 'none')
   return data ?? []
 }
 
 async function _site(db: Db, siteId: string) {
-  const { data, error } = await db
+  const { data } = await db
     .from('sites')
-    .select('id, name, address, client_contact, site_plan_path, stages(id, name, order, lots(id, status))')
+    .select('id, name, address, client_contact, site_plan_path, stages(id, name, order, completed_at, lots(id, status))')
     .eq('id', siteId)
     .single()
-  console.log('[_site]', siteId, '| error:', error?.message ?? 'none')
   return data
 }
 
 async function _stage(db: Db, stageId: string) {
-  const [{ data: stage, error: stageError }, { data: extraJobs, error: jobsError }] = await Promise.all([
+  const [{ data: stage }, { data: extraJobs }] = await Promise.all([
     db
       .from('stages')
       .select(`
@@ -73,15 +70,14 @@ async function _stage(db: Db, stageId: string) {
       .eq('stage_id', stageId)
       .order('created_at', { ascending: true }),
   ])
-  console.log('[_stage]', stageId, '| stage error:', stageError?.message ?? 'none', '| jobs error:', jobsError?.message ?? 'none')
   return { stage, extraJobs: extraJobs ?? [] }
 }
 
 async function _dashboardData(db: Db, fortnightStr: string) {
-  const [{ data: lotsData, error: lotsError }, { data: sitesData, error: sitesError }] = await Promise.all([
+  const [{ data: lotsRaw }, { data: sitesData }] = await Promise.all([
     db
       .from('lots')
-      .select('id, lot_number, due_date, stages!inner(id, name, sites!inner(id, name))')
+      .select('id, lot_number, due_date, stages!inner(id, name, sites!inner(id, name, completed_at))')
       .neq('status', 'complete')
       .not('due_date', 'is', null)
       .lte('due_date', fortnightStr)
@@ -89,10 +85,15 @@ async function _dashboardData(db: Db, fortnightStr: string) {
     db
       .from('sites')
       .select('id, name, stages(lots(id, status))')
+      .is('completed_at', null)
       .order('name', { ascending: true }),
   ])
-  console.log('[_dashboardData] lots:', lotsData?.length ?? 0, '| lots error:', lotsError?.message ?? 'none', '| sites:', sitesData?.length ?? 0, '| sites error:', sitesError?.message ?? 'none')
-  return { lotsData: lotsData ?? [], sitesData: sitesData ?? [] }
+
+  // Exclude lots from sites that have been marked complete
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const lotsData = (lotsRaw ?? []).filter((lot) => !(lot.stages as any)?.sites?.completed_at)
+
+  return { lotsData, sitesData: sitesData ?? [] }
 }
 
 async function _scheduleData(db: Db) {
@@ -137,7 +138,7 @@ async function _vehicles(db: Db) {
       rego_expiry_date, insurance_expiry_date,
       last_service_date, last_service_hours, last_service_odometer,
       next_service_due_date, next_service_km, next_service_hours,
-      notes, created_at
+      notes, vehicle_type, created_at
     `)
     .order('make', { ascending: true })
   return data ?? []

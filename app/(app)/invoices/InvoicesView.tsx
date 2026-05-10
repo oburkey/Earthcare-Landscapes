@@ -1,0 +1,638 @@
+'use client'
+
+import { useState, useTransition } from 'react'
+import { toggleInvoiced } from './actions'
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export type LotLineItem = {
+  name: string
+  quantity: number
+  unit: string
+  rate: number
+  total: number
+}
+
+export type LotSection = {
+  id: string
+  name: string
+  isClientExtra: boolean
+  orderIndex: number
+  items: LotLineItem[]
+  subtotal: number
+}
+
+export type LotRow = {
+  id: string
+  lotNumber: string
+  buildComplete: boolean
+  quantDone: boolean
+  invoiced: boolean
+  standardAmount: number
+  clientExtrasAmount: number
+  sections: LotSection[]
+}
+
+export type StageData = {
+  id: string
+  name: string
+  lots: LotRow[]
+}
+
+export type SiteData = {
+  id: string
+  name: string
+  clientContact: string | null
+  stages: StageData[]
+}
+
+// ── Formatting helpers ────────────────────────────────────────────────────────
+
+function fmt(n: number): string {
+  return '$' + n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+function fmtQty(n: number): string {
+  return parseFloat(n.toFixed(3)).toString()
+}
+
+function stageTotal(lots: LotRow[], key: keyof LotRow): number {
+  return lots.reduce((sum, l) => sum + (l[key] as number), 0)
+}
+
+function slug(...parts: (string | number | null | undefined)[]): string {
+  return parts
+    .filter((p) => p != null && p !== '')
+    .map((p) => String(p).trim().replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, ''))
+    .join('-')
+}
+
+// ── PDF: Claim sheet styles + body builder ────────────────────────────────────
+
+// All selectors are scoped to .html2pdf__container — the class html2pdf puts on its
+// own rendering container — so styles never leak to the live page.
+const CLAIM_STYLES = `
+<style>
+.html2pdf__container * { box-sizing: border-box; margin: 0; padding: 0; }
+.html2pdf__container { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #111; background: white; }
+.html2pdf__container .invoice-page { padding: 24px 28px; }
+.html2pdf__container .page-break { page-break-before: always; break-before: page; }
+.html2pdf__container .hdr { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid #111; }
+.html2pdf__container .hdr-left h1 { font-size: 14px; font-weight: bold; margin-bottom: 3px; }
+.html2pdf__container .hdr-left .lbl { font-size: 11px; font-weight: bold; color: #222; margin: 3px 0; }
+.html2pdf__container .hdr-left .sub { font-size: 10px; color: #555; margin-top: 2px; }
+.html2pdf__container .hdr-right img { max-width: 130px; max-height: 55px; object-fit: contain; display: block; }
+.html2pdf__container .meta { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 14px; font-size: 10px; color: #555; }
+.html2pdf__container .meta strong { color: #111; }
+.html2pdf__container table { width: 100%; border-collapse: collapse; }
+.html2pdf__container thead th { font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: #555; padding: 5px 6px; border-bottom: 2px solid #bbb; text-align: left; white-space: nowrap; }
+.html2pdf__container thead th.r { text-align: right; }
+.html2pdf__container td { padding: 4px 6px; border-bottom: 1px solid #eee; vertical-align: top; }
+.html2pdf__container td.code { color: #888; white-space: nowrap; font-size: 10px; }
+.html2pdf__container td.r    { text-align: right; white-space: nowrap; }
+.html2pdf__container td.u    { color: #666; white-space: nowrap; }
+.html2pdf__container tr.sec td { background: #efefef; font-weight: bold; font-size: 10px; padding: 5px 6px; border-top: 1px solid #ccc; border-bottom: 1px solid #ccc; }
+.html2pdf__container tr.sub td { background: #f9f9f9; font-weight: 600; border-top: 1px solid #ddd; border-bottom: 2px solid #ccc; }
+.html2pdf__container tr.grand td { background: #f0f0f0; font-weight: bold; font-size: 12px; border-top: 3px solid #999; padding: 7px 6px; }
+.html2pdf__container .note { margin-top: 14px; font-size: 9px; color: #999; }
+</style>`
+
+function claimSheetBody(
+  site: SiteData,
+  stageName: string,
+  lot: LotRow,
+  invoiced: boolean,
+  logoSrc: string
+): string {
+  const date = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
+  const standard = lot.sections.filter((s) => !s.isClientExtra)
+  const extras   = lot.sections.filter((s) =>  s.isClientExtra)
+
+  let secIdx = 0
+  const sectionRows = [...standard, ...extras].map((section) => {
+    secIdx++
+    const prefix = section.isClientExtra ? 'E' : String(secIdx)
+    const items = section.items.map((item, i) => `
+      <tr>
+        <td class="code">${prefix}.${i + 1}</td>
+        <td>${item.name}</td>
+        <td class="r">${fmtQty(item.quantity)}</td>
+        <td class="u">${item.unit}</td>
+        <td class="r">${item.rate > 0 ? fmt(item.rate) : '—'}</td>
+        <td class="r">${item.rate > 0 ? fmt(item.total) : '—'}</td>
+      </tr>`).join('')
+    return `
+      <tr class="sec"><td colspan="6">${section.name}</td></tr>
+      ${items}
+      <tr class="sub">
+        <td colspan="5">Subtotal — ${section.name}</td>
+        <td class="r">${fmt(section.subtotal)}</td>
+      </tr>`
+  }).join('')
+
+  const grand = lot.standardAmount + lot.clientExtrasAmount
+
+  return `
+<div class="invoice-page">
+  <div class="hdr">
+    <div class="hdr-left">
+      <h1>${site.name} — Lot ${lot.lotNumber}</h1>
+      <div class="lbl">Final Price — ACTUAL</div>
+      ${site.clientContact ? `<div class="sub">Developer: ${site.clientContact}</div>` : ''}
+      <div class="sub">Stage: ${stageName}</div>
+      <div class="sub">${date}</div>
+    </div>
+    <div class="hdr-right">
+      ${logoSrc ? `<img src="${logoSrc}" alt="Earthcare Landscapes" style="max-width:130px;max-height:55px;object-fit:contain;display:block;" />` : ''}
+    </div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Code</th><th>Description</th>
+        <th class="r">Qty</th><th>Unit</th>
+        <th class="r">Rate</th><th class="r">Total (ex GST)</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${sectionRows}
+      <tr class="grand">
+        <td colspan="5">Grand Total (ex GST)</td>
+        <td class="r">${fmt(grand)}</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="note">All amounts are exclusive of GST. GST of 10% applies.</div>
+</div>`
+}
+
+// ── PDF: Stage summary styles + body builder ──────────────────────────────────
+
+const SUMMARY_STYLES = `
+<style>
+.html2pdf__container * { box-sizing: border-box; margin: 0; padding: 0; }
+.html2pdf__container { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #111; background: white; }
+.html2pdf__container .summary-page { padding: 24px 28px; }
+.html2pdf__container .hdr { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid #111; }
+.html2pdf__container .hdr-left h1 { font-size: 16px; font-weight: bold; }
+.html2pdf__container .hdr-left h2 { font-size: 13px; color: #444; margin-top: 3px; }
+.html2pdf__container .hdr-left .dt { font-size: 10px; color: #888; margin-top: 5px; }
+.html2pdf__container .hdr-right img { max-width: 130px; max-height: 55px; object-fit: contain; display: block; }
+.html2pdf__container table { width: 100%; border-collapse: collapse; }
+.html2pdf__container th { font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: #555; border-bottom: 1px solid #bbb; padding: 5px 8px; text-align: left; white-space: nowrap; }
+.html2pdf__container td { padding: 5px 8px; border-bottom: 1px solid #eee; }
+.html2pdf__container tr.tot td { border-top: 2px solid #aaa; border-bottom: none; background: #f7f7f7; font-weight: bold; }
+.html2pdf__container .r { text-align: right; }
+.html2pdf__container .c { text-align: center; }
+</style>`
+
+function stageSummaryBody(
+  site: SiteData,
+  stage: StageData,
+  invoicedMap: Record<string, boolean>,
+  logoSrc: string
+): string {
+  const date     = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
+  const totStd   = stageTotal(stage.lots, 'standardAmount')
+  const totExtra = stageTotal(stage.lots, 'clientExtrasAmount')
+  const totAmt   = totStd + totExtra
+
+  const rows = stage.lots.map((lot) => {
+    const inv   = invoicedMap[lot.id] ?? lot.invoiced
+    const total = lot.standardAmount + lot.clientExtrasAmount
+    return `<tr>
+      <td>Lot ${lot.lotNumber}</td>
+      <td class="c">${lot.buildComplete ? '✓' : '—'}</td>
+      <td class="c">${lot.quantDone ? '✓' : '—'}</td>
+      <td class="r">${fmt(lot.standardAmount)}</td>
+      <td class="r">${lot.clientExtrasAmount > 0 ? fmt(lot.clientExtrasAmount) : '—'}</td>
+      <td class="r" style="font-weight:600">${fmt(total)}</td>
+      <td class="c">${inv ? '✓' : ''}</td>
+    </tr>`
+  }).join('')
+
+  return `
+<div class="summary-page">
+  <div class="hdr">
+    <div class="hdr-left">
+      <h1>${site.name}</h1>
+      <h2>${stage.name} — Stage Summary</h2>
+      <div class="dt">${date}</div>
+    </div>
+    <div class="hdr-right">
+      ${logoSrc ? `<img src="${logoSrc}" alt="Earthcare Landscapes" style="max-width:130px;max-height:55px;object-fit:contain;display:block;" />` : ''}
+    </div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Lot</th>
+        <th class="c">Build Complete</th>
+        <th class="c">Quant Done</th>
+        <th class="r">Standard Amount</th>
+        <th class="r">Client Extras</th>
+        <th class="r">Total (ex GST)</th>
+        <th class="c">Invoiced</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows}
+      <tr class="tot">
+        <td colspan="3">Stage Total</td>
+        <td class="r">${fmt(totStd)}</td>
+        <td class="r">${totExtra > 0 ? fmt(totExtra) : '—'}</td>
+        <td class="r">${fmt(totAmt)}</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+</div>`
+}
+
+// Logo embedded as base64 so html2pdf never needs to fetch it at runtime.
+const LOGO_DATA_URL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABBoAAAEECAIAAAAJWsBEAAAQAElEQVR4AeydXYwVx5n3e305Y8leyTO+nBnujNeyV2IYrjxgX2Fi4pWRFSKFjwQkT2ICuybGi2UwRBDjQDIEOxMJEj5WCpFfojjYmCvbM7kyBilEWeM7Zrj0TKS1JZ+59fsbGp8czmdVdXV3dfcfFWf6dFc99Ty/qq5+nqruPvd8rX/eCczPfv3pR19/8qev/9/+pXT0218fGF9Kex79+juRUpkJ0NBnd349+1fvfUoCRUAEREAEREAERCBMAvdE+peQwI3paOZMdOG16ODq6OXHoo3/Ev14JPrpmugX/xH98cBSuvbn6LOZpXTrbwmrUvHQCdDQl49H//3v0Y7hpV7hX11JFAEREAEREAEREIGwCCicsG8P4geCh2PPLLmMBA9EDr/ZuhQ24EoqYLDHWc4S/7gV0SsIL+eul9NAWSUCItCbgHKIgAiIQCUIKJwwaObaF9HVd6Jzu+4sPhA/sOzAmgMuo0FpZakuAcJLVipmzlSXgCwXAREQAREQgWIQkJbuBBROdGZXDyG2/evSnUuXj0d4h52z64gItCfAMgWxaPtj2isCIiACIiACIiACxSagcOLu9mMhgrnkY88sPQLxi/+IFELcjcfPtwpKoSPRrypouEwWAREQAREQAREoOwGFE7dbeGEuen9y6V4mFiKYS77259t79SEC/gjQr25M+xMnSSKQFQHVIwIiIAIiIAJdCVQ7nKivRfx4JPqf/9S9TF27ig4mJjC1JaLLJRYjASIgAiIgAiLQnoD2ikAeBKoaTjBPjG/34+Gl1+9oLSKPnlfFOv9xK7o8WUXDZbMIiIAIiIAIiEB5CVQsnGBu+P3JpRe8/nRN9Jez0eKXzi2rgiLgQoBwgk7oUlJlREAEREAEREAERCBEApUJJxbmong54n/+M2KSOMS2kE4VIEAEe+2dCtgZnIlSSAREQAREQAREICUCFQgnbkxHB1dHPx7RckRKfUhi7QgonLDjpdwiIAKVIyCDRUAEikWg1OHEzJmllzX9dE302UyxWkXalpmAntUpc+vKNhEQAREQARGoFgGsLWk4MXNm6QGJ32zVy5poY6XgCLBiFpxOUkgEREAEREAEREAEXAiULpy4+s6dQEIPSLj0B5UJmYB0EwEREAEREAEREIHgCJQonGDG9+Dq6Bf/oSetg+tlUqiJwNz1ph36KgIiUDoCMkgEREAEqkKgFOHEwlx07JlIz0hUpdMW387FL4pvgywQAREQAREQgdIQkCGJCBQ8nKh9EV14bemtTXq8NVE3UGEREAEREAEREAEREAERcCFQ5HBi5kz04+Hojwdc7FaZvAioXhEQAREQAREQAREQgRIRKGY4sTC39FMSv9kaLX5ZoraQKSIgAiIQGAGpIwIiIAIiIAK9CBQwnIjvbtJPSfRqWh0XAREQAREQARGoEAGZKgI5EShUODF3feln6XR3U059RdWKgAiIgAiIgAiIgAiIQBOB4oQTLEr8978H8rN0TRD1VQREQAREQAREQAREQASqSaAI4cTCnBYlqtk7ZbUIeCEgISIgAiIgAiIgAukRCD6cmDmzFEvc+lt6CCRZBERABERABEQgEAJSQwREoHAEAg4nal9EU1sivb6pcH1KCouACIiACIiACIiACFSAQGxiqOHE3PXop6ujv5yNtdSnCIiACIiACIiACIiACIhAgASCDCdmzizFErrBKcD+IpVyI6CKRUAEREAEREAERCBEAuGFE+d26QanEHuKdBIBERABETAloHwiIAIiUCECIYUTtS+ig6ujy8crhF+mioAIiIAIiIAIiIAI5ElAdSclEEw4ET8s8dlMUoNUXgREQAREQAREQAREQAREICsCYYQTcSyhhyWyavXc6lHFIiACIiACIiACIiAC5SIQQDgxcyb673+PFr8sF1hZIwIiIAIFJyD1RUAEREAERMCAQN7hBLHEb7Ya6KksIiACIiACIiACIiACHQhotwjkRyDXcCJ+iVN+xqtmERABERABERABERABERCBJATyCyemthT0JU5JcKusCIiACIiACIiACIiACJSJQE7hBLGEfvG6TP1ItohAqASklwiIgAiIgAiIQKoE8ggnFEuk2qQSLgIiIAIiIALFJCCtRUAEikgg83BCsUQRu4l0FgEREAEREAEREAEREIEGAvXNbMMJxRJ18NoQAREQAREQAREQAREQgeITyDCcUCxR/O4iC3IioGpFQAREQAREQAREIFACWYUT53ZFevY60D4gtURABERABDwSkCgREAERqBaBTMKJmTN6J2y1upWsFQEREAEREAEREIECEJCKHgikH04QS/xmqwdNJUIEREAEREAEREAEREAERCAwAimHE3PX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IiACIiACIlBsAgonit1++WtfRA3W7tR7nIrYbtJZBERABERABEQgQAIKJwJsFKmUJoHnT0ebJtOsQLJFIGACUk0EREAEREAEfBNQOOGbqOQFS6Dvvui//hSNbwlWQSkmAiIgAiIgAv8koC0RKAgBhRMFaSipmZAAscSr09HoMwnFqLgIiIAIiIAIiIAIiEAjAYUTSzT0v+QEhh6NfjUXDT9WcjNlngiIgAiIgAiIgAhkTkDhRObIVWHGBB7Xj0tkTDz16lSBCIiACIiACIhAOAQUToTTFtIkBQLPn9ZLnFLAKpEiIAIiYEpA+URABEpPQOFE6Zu4qgY+MBT97K968LqqzS+7RUAEREAEREAErAm4FVA44cZNpcImsOLb0evX9bBE2I0k7URABERABERABMpAQOFEGVpRNvyTQN990fd+Gb34TtR//z93hrglnURABERABERABESgDAQUTpShFWXDHQJDj0avTkdP7brzVX9EQAREwA8BSREBERABEehIQOFERzQ6UDACz+7XDU4FazKpKwIiIAIiIAL+CUhi1gQUTmRNXPX5J8CixM/+Gm14zb9kSRQBERABERABERABEehKQOFEVzw62J1ACEe1KBFCK0gHERABERABERCBqhJQOFHVli+B3Q+NR7+a1aJECVpSJmREQNWIgAiIgAiIQAoEFE6kAFUi0ybQd1/0/Olo33Q0MJx2VZIvAiIgAiIgAjkQUJUiUBwCCieK01bSNCbw7P7oV3P6fboYhj5FQAREQAREQAREIF8CCieifBtAtVsQWPHtO3c36TclLKgpqwiIgAiIgAiIgAikSEDhRIpwJdobgYfGo1c/WvpxOt3d5I1pUQVJbxEQAREQAREQgaAIKJwIqjmkTAuBB4aWAol909Hy1S3HtEMEREAERCBoAlJOBESgCgTuiXDXqmCobCwcAXrm86ejE3MKJArXdFJYBERABERABESgcAScFb4nGn7MubAKikAqBOJbmwgkxrekIl9CRUAEREAEREAEREAEPKHawvMAAAJ8SURBVBG4J1rxjCdREiMCiQms+HY1bm1KDEoCREAEREAEREAERCAMAgonwmiHimvRd1+0dufSW5tefEe3NlW8L8h8EQiPgDQSAREQARHoRuCeqP/+6PHN3bLomAikR2Do0aUfpPvVXLRpUr9Jlx5mSRYBERABERCBahCQlTkQuP1mpw2v5VCzqqwyAZYjCGJ/9tfo9etLP0hHTFtlGrJdBERABERABERABApL4HY4MTC8dKtJYW2Q4vkQcKt1xbej//pT9NsvookzkV4D4MZQpURABERABERABEQgGAK3wwm0efa1aOhR/iqJQCoEiCKePx2d+r+ln6Ib1dP/qTCWUBHoRkDHREAEREAERCAdAt+EE/33L/l5ffelU4ukVpLAA0NLj+WwFnH+66XeNb5l6UGdSP9EQAREQAREQAS6EtBBESgUgW/CCZQeGI5enY4UUYBCKQmBh8aj7/0y+tlfl36BbuJMpLWIJDBVVgREQAREQAREQATCJtAQTqDo8GPRr+YqddcTRislJUAISgjx7P6ln4xgIWLfdPTULj0XkZSqyouACIiACIiACIhAEQjcHU6gcf/9Sy/bwTXER+Srkgi0EqBvED+s3bn0jldWIX77RUQIseE1/WREKyrt8UtA0kRABERABERABEIj0BJOxAriGr5+fel1TziO8R59VpbAA0NRHDwQZL760dKPzcXxw6bJpXe8sqJVWTIyXAREQAREoDMBHREBEagIgQ7hBNYPDC/9shiO43/9aSmuwKHErWS/UpkI0Ka0bD0RMMSJsIF06v+i818vPQLB4gPBA0Hm8tX6sbkytb9sEQEREAEREAEREIEoipJA+P8AAAD//x8WPj8AAAAGSURBVAMAGefbWt6sEWAAAAAASUVORK5CYII=';
+
+// ── PDF download via html2pdf.js ──────────────────────────────────────────────
+
+async function downloadPDF(
+  contentHtml: string,
+  filename: string,
+  onError: (msg: string) => void,
+  onDone: () => void
+) {
+  // Create a plain element with NO inline positioning styles.
+  //
+  // Why: html2pdf deep-clones whatever element we pass and appends the clone
+  // as a child of its own positioned container (.html2pdf__container).
+  // Any inline position/left/top we put on our element is cloned too, and
+  // would displace the content inside html2pdf's container — causing a blank PDF.
+  //
+  // html2pdf's own toContainer() sets position, width, and background on its
+  // wrapper div, and has a built-in 10ms setTimeout before capturing — so we
+  // don't need to manage timing or DOM insertion ourselves.
+  //
+  // Styles are scoped to .html2pdf__container in the <style> tag so they
+  // never leak to the live page (html2pdf puts that class on its own wrapper).
+  const el = document.createElement('div')
+  el.innerHTML = contentHtml
+
+  try {
+    const { default: html2pdf } = await import('html2pdf.js')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (html2pdf() as any)
+      .set({
+        margin: 0,
+        filename,
+        image:       { type: 'jpeg', quality: 0.97 },
+        html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' },
+        jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak:   { mode: ['css', 'legacy'] },
+      })
+      .from(el)
+      .save()
+  } catch {
+    onError('Failed to generate PDF. Please try again.')
+  } finally {
+    onDone()
+  }
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
+export default function InvoicesView({ sites }: { sites: SiteData[] }) {
+  const [expandedSites, setExpandedSites] = useState<Set<string>>(
+    () => new Set(sites.map((s) => s.id))
+  )
+  const [invoicedMap, setInvoicedMap] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(
+      sites.flatMap((s) => s.stages.flatMap((st) => st.lots.map((l) => [l.id, l.invoiced])))
+    )
+  )
+  const [selectedLots, setSelectedLots] = useState<Set<string>>(new Set())
+  const [generating, setGenerating]     = useState<Set<string>>(new Set())
+  const [actionError, setActionError]   = useState<string | null>(null)
+  const [isPending, startTransition]    = useTransition()
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  function startGen(id: string) {
+    setGenerating((prev) => new Set([...prev, id]))
+    setActionError(null)
+  }
+  function endGen(id: string) {
+    setGenerating((prev) => { const n = new Set(prev); n.delete(id); return n })
+  }
+
+  function toggleSite(siteId: string) {
+    setExpandedSites((prev) => {
+      const next = new Set(prev)
+      if (next.has(siteId)) { next.delete(siteId) } else { next.add(siteId) }
+      return next
+    })
+  }
+
+  function toggleLotSelection(lotId: string) {
+    setSelectedLots((prev) => {
+      const next = new Set(prev)
+      if (next.has(lotId)) { next.delete(lotId) } else { next.add(lotId) }
+      return next
+    })
+  }
+
+  function toggleStageSelection(stage: StageData, checked: boolean) {
+    setSelectedLots((prev) => {
+      const next = new Set(prev)
+      stage.lots.forEach((l) => { if (checked) next.add(l.id); else next.delete(l.id) })
+      return next
+    })
+  }
+
+  function handleToggleInvoiced(lotId: string, current: boolean) {
+    const next = !current
+    setInvoicedMap((prev) => ({ ...prev, [lotId]: next }))
+    setActionError(null)
+    startTransition(async () => {
+      const fd = new FormData()
+      fd.set('lot_id', lotId)
+      fd.set('value', String(next))
+      const result = await toggleInvoiced(null, fd)
+      if (result?.error) {
+        setInvoicedMap((prev) => ({ ...prev, [lotId]: current }))
+        setActionError(result.error)
+      }
+    })
+  }
+
+  // ── Export functions ───────────────────────────────────────────────────────
+
+  function exportLotClaimSheet(site: SiteData, stageName: string, lot: LotRow) {
+    const genId    = lot.id
+    const filename = slug(site.name, stageName, 'Lot', lot.lotNumber, 'Claim') + '.pdf'
+    startGen(genId)
+    const logoSrc = LOGO_DATA_URL
+    const content = CLAIM_STYLES + claimSheetBody(site, stageName, lot, invoicedMap[lot.id] ?? lot.invoiced, logoSrc)
+    downloadPDF(content, filename, setActionError, () => endGen(genId))
+  }
+
+  function exportSelectedClaimSheets() {
+    const genId = 'batch'
+    // Collect selected lots in site → stage → lot order
+    type LotCtx = { site: SiteData; stageName: string; lot: LotRow }
+    const selected: LotCtx[] = []
+    for (const site of sites) {
+      for (const stage of site.stages) {
+        for (const lot of stage.lots) {
+          if (selectedLots.has(lot.id)) selected.push({ site, stageName: stage.name, lot })
+        }
+      }
+    }
+    if (selected.length === 0) return
+
+    // Determine filename context
+    const siteNames  = [...new Set(selected.map((x) => x.site.name))]
+    const stageNames = [...new Set(selected.map((x) => x.stageName))]
+    const filename   = siteNames.length === 1 && stageNames.length === 1
+      ? slug(siteNames[0], stageNames[0], 'Claims') + '.pdf'
+      : siteNames.length === 1
+        ? slug(siteNames[0], 'Claims') + '.pdf'
+        : 'Claims.pdf'
+
+    startGen(genId)
+    const logoSrc = LOGO_DATA_URL
+
+    // Build combined content: one lot body per page
+    const bodies = selected.map(({ site, stageName, lot }, i) =>
+      `<div${i > 0 ? ' class="page-break"' : ''}>${claimSheetBody(site, stageName, lot, invoicedMap[lot.id] ?? lot.invoiced, logoSrc)}</div>`
+    )
+    const content = CLAIM_STYLES + bodies.join('')
+
+    downloadPDF(content, filename, setActionError, () => endGen(genId))
+  }
+
+  function exportStageSummary(site: SiteData, stage: StageData) {
+    const genId    = `summary-${stage.id}`
+    const filename = slug(site.name, stage.name, 'Summary') + '.pdf'
+    startGen(genId)
+    const logoSrc = LOGO_DATA_URL
+    const content = SUMMARY_STYLES + stageSummaryBody(site, stage, invoicedMap, logoSrc)
+    downloadPDF(content, filename, setActionError, () => endGen(genId))
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
+  if (sites.length === 0) {
+    return (
+      <div className="rounded-xl border border-stone-200 bg-white px-4 py-16 text-center">
+        <p className="text-sm font-medium text-stone-600">No lots ready for invoicing</p>
+        <p className="mt-1 text-sm text-stone-400">
+          Lots appear here once marked as Build Complete or Quant Done.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+
+      {/* Selection action bar */}
+      {selectedLots.size > 0 && (
+        <div className="sticky top-14 md:top-0 z-10 flex items-center justify-between gap-3 rounded-xl border border-green-200 bg-green-50 px-4 py-2.5">
+          <span className="text-sm font-medium text-green-800">
+            {selectedLots.size} lot{selectedLots.size !== 1 ? 's' : ''} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={exportSelectedClaimSheets}
+              disabled={generating.has('batch')}
+              className="flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-800 disabled:opacity-60 transition-colors"
+            >
+              {generating.has('batch') ? <Spinner /> : <PdfIcon />}
+              {generating.has('batch') ? 'Generating…' : 'Export claim sheets'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedLots(new Set())}
+              className="text-xs text-green-700 hover:text-green-900"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Site cards */}
+      {sites.map((site) => {
+        const isExpanded = expandedSites.has(site.id)
+        const totalLots  = site.stages.reduce((n, st) => n + st.lots.length, 0)
+
+        return (
+          <div key={site.id} className="rounded-xl border border-stone-200 bg-white overflow-hidden">
+
+            <button
+              type="button"
+              onClick={() => toggleSite(site.id)}
+              className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-stone-50 transition-colors"
+            >
+              <svg className={`h-4 w-4 text-stone-400 shrink-0 transition-transform ${isExpanded ? '' : '-rotate-90'}`}
+                fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+              </svg>
+              <span className="text-base font-semibold text-stone-900 flex-1">{site.name}</span>
+              {site.clientContact && (
+                <span className="text-xs text-stone-400 shrink-0 hidden sm:block">{site.clientContact}</span>
+              )}
+              <span className="text-xs text-stone-400 shrink-0">
+                {site.stages.length} stage{site.stages.length !== 1 ? 's' : ''} · {totalLots} lot{totalLots !== 1 ? 's' : ''}
+              </span>
+            </button>
+
+            {isExpanded && (
+              <div className="border-t border-stone-100 divide-y divide-stone-100">
+                {site.stages.map((stage) => {
+                  const totStd    = stageTotal(stage.lots, 'standardAmount')
+                  const totExtra  = stageTotal(stage.lots, 'clientExtrasAmount')
+                  const totAmt    = totStd + totExtra
+                  const allSel    = stage.lots.length > 0 && stage.lots.every((l) => selectedLots.has(l.id))
+                  const someSel   = stage.lots.some((l) => selectedLots.has(l.id))
+                  const summaryId = `summary-${stage.id}`
+
+                  return (
+                    <div key={stage.id} className="px-5 py-4">
+
+                      <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={allSel}
+                            ref={(el) => { if (el) el.indeterminate = someSel && !allSel }}
+                            onChange={(e) => toggleStageSelection(stage, e.target.checked)}
+                            className="h-4 w-4 rounded border-stone-300 text-green-700 focus:ring-green-600 cursor-pointer"
+                          />
+                          <h3 className="text-sm font-semibold text-stone-700">{stage.name}</h3>
+                          <span className="text-xs text-stone-400">{stage.lots.length} lot{stage.lots.length !== 1 ? 's' : ''} · {fmt(totAmt)}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => exportStageSummary(site, stage)}
+                          disabled={generating.has(summaryId)}
+                          className="flex items-center gap-1.5 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 disabled:opacity-60 transition-colors shrink-0"
+                        >
+                          {generating.has(summaryId) ? <Spinner /> : <PdfIcon />}
+                          {generating.has(summaryId) ? 'Generating…' : 'Export stage summary'}
+                        </button>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm border-collapse">
+                          <thead>
+                            <tr className="border-b border-stone-200">
+                              <th className="pb-2 pr-3 w-8"></th>
+                              <th className="text-left text-xs font-semibold text-stone-400 uppercase tracking-wide pb-2 pr-6 whitespace-nowrap">Lot</th>
+                              <th className="text-center text-xs font-semibold text-stone-400 uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Build Complete</th>
+                              <th className="text-center text-xs font-semibold text-stone-400 uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Quant Done</th>
+                              <th className="text-right text-xs font-semibold text-stone-400 uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Standard Amount</th>
+                              <th className="text-right text-xs font-semibold text-stone-400 uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Client Extras</th>
+                              <th className="text-right text-xs font-semibold text-stone-400 uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Total</th>
+                              <th className="text-center text-xs font-semibold text-stone-400 uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Invoiced</th>
+                              <th className="pb-2 pl-2 w-7"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {stage.lots.map((lot) => {
+                              const total    = lot.standardAmount + lot.clientExtrasAmount
+                              const invoiced = invoicedMap[lot.id] ?? lot.invoiced
+                              const selected = selectedLots.has(lot.id)
+                              const genning  = generating.has(lot.id)
+
+                              return (
+                                <tr key={lot.id} className={`border-b border-stone-100 transition-colors ${selected ? 'bg-green-50' : 'hover:bg-stone-50'}`}>
+                                  <td className="py-2.5 pr-3">
+                                    <input
+                                      type="checkbox"
+                                      checked={selected}
+                                      onChange={() => toggleLotSelection(lot.id)}
+                                      className="h-4 w-4 rounded border-stone-300 text-green-700 focus:ring-green-600 cursor-pointer"
+                                    />
+                                  </td>
+                                  <td className="py-2.5 pr-6 font-medium text-stone-900 whitespace-nowrap">Lot {lot.lotNumber}</td>
+                                  <td className="py-2.5 px-3 text-center">
+                                    {lot.buildComplete ? <span className="text-green-600 font-semibold">✓</span> : <span className="text-stone-300">—</span>}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-center">
+                                    {lot.quantDone ? <span className="text-green-600 font-semibold">✓</span> : <span className="text-stone-300">—</span>}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-right tabular-nums text-stone-700">{fmt(lot.standardAmount)}</td>
+                                  <td className="py-2.5 px-3 text-right tabular-nums text-stone-700">
+                                    {lot.clientExtrasAmount > 0 ? fmt(lot.clientExtrasAmount) : <span className="text-stone-300">—</span>}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-stone-900">{fmt(total)}</td>
+                                  <td className="py-2.5 px-3 text-center">
+                                    <button
+                                      type="button"
+                                      disabled={isPending}
+                                      onClick={() => handleToggleInvoiced(lot.id, invoiced)}
+                                      className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60 whitespace-nowrap ${invoiced ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-500 hover:bg-stone-200'}`}
+                                    >
+                                      {invoiced ? 'Invoiced' : 'Invoice'}
+                                    </button>
+                                  </td>
+                                  <td className="py-2.5 pl-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => exportLotClaimSheet(site, stage.name, lot)}
+                                      disabled={genning}
+                                      title="Download claim sheet PDF"
+                                      className="text-stone-300 hover:text-stone-600 disabled:opacity-40 transition-colors"
+                                    >
+                                      {genning ? <Spinner /> : <PdfIcon />}
+                                    </button>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+
+                            <tr className="border-t-2 border-stone-300 bg-stone-50">
+                              <td colSpan={4} className="py-2.5 pr-6 font-semibold text-stone-700">Stage Total</td>
+                              <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-stone-700">{fmt(totStd)}</td>
+                              <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-stone-700">
+                                {totExtra > 0 ? fmt(totExtra) : <span className="text-stone-300">—</span>}
+                              </td>
+                              <td className="py-2.5 px-3 text-right tabular-nums font-bold text-stone-900">{fmt(totAmt)}</td>
+                              <td colSpan={2} />
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })}
+
+      {actionError && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{actionError}</p>
+      )}
+    </div>
+  )
+}
+
+function PdfIcon() {
+  return (
+    <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+    </svg>
+  )
+}
+
+function Spinner() {
+  return (
+    <svg className="h-3.5 w-3.5 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+    </svg>
+  )
+}

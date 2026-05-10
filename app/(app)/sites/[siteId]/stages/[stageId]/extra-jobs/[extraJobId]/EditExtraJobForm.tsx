@@ -3,8 +3,8 @@
 import { useActionState } from 'react'
 import { updateExtraJob } from './actions'
 import type { ExtraJobStatus } from '@/types/database'
-
-type ActionState = { error: string } | null
+import type { ActionState } from '@/types/actions'
+import { EXTRA_JOB_STATUS_OPTIONS } from '@/lib/lotStatus'
 
 interface Props {
   extraJobId: string
@@ -17,11 +17,6 @@ interface Props {
   canManage: boolean
 }
 
-const STATUS_OPTIONS = [
-  { value: 'not_started', label: 'Not started' },
-  { value: 'in_progress', label: 'In progress' },
-  { value: 'complete',    label: 'Complete' },
-]
 
 export default function EditExtraJobForm({
   extraJobId,
@@ -86,7 +81,7 @@ export default function EditExtraJobForm({
           defaultValue={currentStatus}
           className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-white"
         >
-          {STATUS_OPTIONS.map(({ value, label }) => (
+          {EXTRA_JOB_STATUS_OPTIONS.map(({ value, label }) => (
             <option key={value} value={value}>{label}</option>
           ))}
         </select>

@@ -2,10 +2,41 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
+import { redirect } from 'next/navigation'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { uploadToR2, deleteFromR2 } from '@/lib/r2'
 
-import type { EditState, UploadActionState } from '@/types/actions'
+import type { ActionState, EditState, UploadActionState } from '@/types/actions'
+
+export async function deleteStage(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Only admins can delete stages.' }
+
+  const siteId  = formData.get('site_id') as string
+  const stageId = formData.get('stage_id') as string
+  const supabase = await createClient()
+
+  const { data: stage } = await supabase
+    .from('stages')
+    .select('site_plan_path')
+    .eq('id', stageId)
+    .single()
+
+  if (stage?.site_plan_path) {
+    await deleteFromR2(stage.site_plan_path).catch(() => null)
+  }
+
+  const { error } = await supabase.from('stages').delete().eq('id', stageId)
+  if (error) return { error: error.message }
+
+  revalidatePath(`/sites/${siteId}`)
+  revalidateTag('sites')
+  revalidateTag('stages')
+  redirect(`/sites/${siteId}`)
+}
 
 export async function updateStage(
   _prev: EditState,

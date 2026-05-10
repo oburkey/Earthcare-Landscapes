@@ -1,19 +1,22 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { updateSite } from './actions'
-import type { EditState } from '@/types/actions'
+import { updateSite, deleteSite } from './actions'
+import type { ActionState, EditState } from '@/types/actions'
 
 interface Props {
   siteId: string
   name: string
   address: string | null
   clientContact: string | null
+  isAdmin?: boolean
 }
 
-export default function EditSiteForm({ siteId, name, address, clientContact }: Props) {
+export default function EditSiteForm({ siteId, name, address, clientContact, isAdmin }: Props) {
   const [open, setOpen] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [state, action, pending] = useActionState<EditState, FormData>(updateSite, null)
+  const [deleteState, deleteAction, deletePending] = useActionState<ActionState, FormData>(deleteSite, null)
 
   if (!open || state?.success) {
     return (
@@ -94,6 +97,48 @@ export default function EditSiteForm({ siteId, name, address, clientContact }: P
           </button>
         </div>
       </form>
+
+      {isAdmin && (
+        <div className="mt-4 pt-3 border-t border-stone-100">
+          {!confirmDelete ? (
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              className="text-sm text-red-500 hover:text-red-700"
+            >
+              Delete site
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-sm text-stone-700">
+                Permanently delete this site and all its stages, lots, and photos?
+              </p>
+              <div className="flex items-center gap-3">
+                <form action={deleteAction}>
+                  <input type="hidden" name="site_id" value={siteId} />
+                  <button
+                    type="submit"
+                    disabled={deletePending}
+                    className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {deletePending ? 'Deleting…' : 'Yes, delete site'}
+                  </button>
+                </form>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(false)}
+                  className="text-sm text-stone-500 hover:text-stone-700"
+                >
+                  Cancel
+                </button>
+              </div>
+              {deleteState?.error && (
+                <p className="text-sm text-red-600">{deleteState.error}</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

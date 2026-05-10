@@ -24,37 +24,24 @@ export async function requireAuth(): Promise<Profile> {
   }
 
   try {
-    console.log('[requireAuth] creating supabase client')
     const supabase = await createClient()
-    console.log('[requireAuth] calling getUser')
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    console.log('[requireAuth] user:', user?.id ?? 'none', '| error:', userError?.message ?? 'none')
+    const { data: { user } } = await supabase.auth.getUser()
 
-    if (!user) {
-      console.log('[requireAuth] no user — redirecting to /login')
-      redirect('/login')
-    }
+    if (!user) redirect('/login')
 
-    console.log('[requireAuth] fetching profile for', user.id)
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', user.id)
       .single()
-    console.log('[requireAuth] profile:', profile?.id ?? 'none', '| error:', profileError?.message ?? 'none')
 
-    if (!profile) {
-      console.log('[requireAuth] no profile — redirecting to /login')
-      redirect('/login')
-    }
+    if (!profile) redirect('/login')
 
-    console.log('[requireAuth] success, role:', profile.role)
     return profile as Profile
   } catch (err) {
     // redirect() throws internally — let it propagate
     if (isRedirectError(err)) throw err
     // Any other error (network, auth) → send to login rather than crash
-    console.error('[requireAuth] unexpected error:', err)
     redirect('/login')
   }
 }

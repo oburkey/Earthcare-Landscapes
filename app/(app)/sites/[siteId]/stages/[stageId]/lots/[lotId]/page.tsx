@@ -9,7 +9,8 @@ import EditLotForm from './EditLotForm'
 import PhotoUpload from '@/app/_components/PhotoUpload'
 import LotDocumentUpload from './LotDocumentUpload'
 import LotQuantities from './LotQuantities'
-import { getR2SignedUrl } from '@/lib/r2'
+import LotStatusToggles from './LotStatusToggles'
+import { getR2SignedUrlSafe } from '@/lib/r2'
 
 interface Props {
   params: Promise<{ siteId: string; stageId: string; lotId: string }>
@@ -34,14 +35,15 @@ async function uploadLotPhotoAction(formData: FormData) {
 export default async function LotPage({ params }: Props) {
   const { siteId, stageId, lotId } = await params
   const profile = await requireAuth()
-  const canManage = profile.role === 'leading_hand' || profile.role === 'supervisor' || profile.role === 'admin'
-  const isAdmin   = profile.role === 'admin'
-  const showQty   = profile.role !== 'worker' && profile.role !== 'client'
+  const canManage    = profile.role === 'leading_hand' || profile.role === 'supervisor' || profile.role === 'admin'
+  const canSupervise = profile.role === 'supervisor' || profile.role === 'admin'
+  const isAdmin      = profile.role === 'admin'
+  const showQty      = profile.role !== 'worker' && profile.role !== 'client'
 
   const supabase = await createClient()
 
   const [
-    { data: lot },
+    lotResult,
     { data: photoRows },
     { data: docRows },
     { data: sectionsData },
@@ -51,6 +53,7 @@ export default async function LotPage({ params }: Props) {
       .from('lots')
       .select(`
         id, lot_number, status, due_date, scheduled_date, completion_date, notes,
+        build_complete, quant_done, invoiced,
         stages!inner(id, name, sites!inner(id, name))
       `)
       .eq('id', lotId)
@@ -72,7 +75,7 @@ export default async function LotPage({ params }: Props) {
           .select(`
             id, name, order_index, admin_only,
             quote_template_items (
-              id, name, unit, ${isAdmin ? 'unit_price,' : ''}
+              id, name, unit, unit_price,
               is_auto_calculated, auto_calc_formula, plant_category, order_index
             )
           `)
@@ -91,7 +94,27 @@ export default async function LotPage({ params }: Props) {
       : Promise.resolve({ data: null }),
   ])
 
+  // Fall back to query without flag columns if they don't exist yet
+  let lot = lotResult.data
+  if (!lot && lotResult.error) {
+    const { data } = await supabase
+      .from('lots')
+      .select(`
+        id, lot_number, status, due_date, scheduled_date, completion_date, notes,
+        stages!inner(id, name, sites!inner(id, name))
+      `)
+      .eq('id', lotId)
+      .single()
+    lot = data as typeof lotResult.data
+  }
+
   if (!lot) notFound()
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const lotAny        = lot as any
+  const buildComplete = lotAny?.build_complete ?? false
+  const quantDone     = lotAny?.quant_done     ?? false
+  const invoiced      = lotAny?.invoiced        ?? false
 
   const stage = Array.isArray(lot.stages) ? lot.stages[0] : lot.stages as { id: string; name: string; sites: unknown }
   const site  = Array.isArray(stage.sites) ? stage.sites[0] : stage.sites as { id: string; name: string }
@@ -104,10 +127,9 @@ export default async function LotPage({ params }: Props) {
   let photos: PhotoWithUrl[] = []
   if (photoRows && photoRows.length > 0) {
     const signed = await Promise.all(
-      photoRows.map(async (p) => {
-        try   { return { id: p.id, url: await getR2SignedUrl(p.storage_path, 3600), photo_type: p.photo_type } }
-        catch { return { id: p.id, url: '', photo_type: p.photo_type } }
-      })
+      photoRows.map(async (p) => ({
+        id: p.id, url: await getR2SignedUrlSafe(p.storage_path), photo_type: p.photo_type,
+      }))
     )
     photos = signed.filter((p) => p.url)
   }
@@ -122,16 +144,17 @@ export default async function LotPage({ params }: Props) {
   let documents: DocWithUrl[] = []
   if (docRows && docRows.length > 0) {
     const signed = await Promise.all(
-      docRows.map(async (d) => {
-        try   { return { id: d.id, document_name: d.document_name, document_type: d.document_type, url: await getR2SignedUrl(d.storage_path, 3600) } }
-        catch { return { id: d.id, document_name: d.document_name, document_type: d.document_type, url: '' } }
-      })
+      docRows.map(async (d) => ({
+        id: d.id, document_name: d.document_name, document_type: d.document_type,
+        url: await getR2SignedUrlSafe(d.storage_path),
+      }))
     )
     documents = signed.filter((d) => d.url)
   }
 
-  // Template sections (shape items for client component, strip unit_price for non-admin)
-  // Filter admin_only sections for non-admins
+  // Template sections — unit_price is always passed through so it can be
+  // snapshotted when saving quotes. The price *column* is only displayed to admins
+  // (controlled by isAdmin inside LotQuantities). Filter admin_only sections for non-admins.
   const sections = showQty
     ? (sectionsData ?? [])
         .filter((s) => !(s as { admin_only?: boolean }).admin_only || isAdmin)
@@ -147,7 +170,7 @@ export default async function LotPage({ params }: Props) {
             .sort((a, b) => a.order_index - b.order_index)
             .map((i) => ({
               ...i,
-              unit_price: isAdmin ? (i.unit_price ?? null) : null,
+              unit_price: i.unit_price ?? null,
             })),
         }))
     : []
@@ -190,6 +213,20 @@ export default async function LotPage({ params }: Props) {
           <h1 className="text-xl font-semibold text-stone-900">Lot {lot.lot_number}</h1>
           <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${cfg.badge}`}>{cfg.label}</span>
         </div>
+
+        {/* Status toggles — supervisor+ sees Build Complete & Quant Done; admin also sees Invoiced */}
+        {canSupervise && (
+          <LotStatusToggles
+            lotId={lotId}
+            siteId={siteId}
+            stageId={stageId}
+            buildComplete={buildComplete}
+            quantDone={quantDone}
+            invoiced={invoiced}
+            canSupervise={canSupervise}
+            isAdmin={isAdmin}
+          />
+        )}
 
         {/* Info card */}
         <div className="rounded-xl border border-stone-200 bg-white divide-y divide-stone-100 overflow-hidden">
@@ -305,6 +342,7 @@ export default async function LotPage({ params }: Props) {
               currentDueDate={lot.due_date}
               currentScheduledDate={lot.scheduled_date}
               canManage={canManage}
+              isAdmin={isAdmin}
             />
           </div>
         </div>

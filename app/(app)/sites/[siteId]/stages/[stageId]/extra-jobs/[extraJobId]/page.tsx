@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireAuth } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { getR2SignedUrl } from '@/lib/r2'
+import { getR2SignedUrlSafe } from '@/lib/r2'
 import type { ExtraJobStatus } from '@/types/database'
 import { EXTRA_JOB_STATUS_CONFIG, PHOTO_TYPE_LABELS } from '@/lib/lotStatus'
 import { uploadExtraJobPhoto } from './actions'
@@ -71,14 +71,9 @@ export default async function ExtraJobPage({ params }: Props) {
   let photos: PhotoWithUrl[] = []
   if (photoRows && photoRows.length > 0) {
     const signed = await Promise.all(
-      photoRows.map(async (p) => {
-        try {
-          const url = await getR2SignedUrl(p.storage_path, 3600)
-          return { id: p.id, url, photo_type: p.photo_type }
-        } catch {
-          return { id: p.id, url: '', photo_type: p.photo_type }
-        }
-      })
+      photoRows.map(async (p) => ({
+        id: p.id, url: await getR2SignedUrlSafe(p.storage_path), photo_type: p.photo_type,
+      }))
     )
     photos = signed.filter((p) => p.url)
   }

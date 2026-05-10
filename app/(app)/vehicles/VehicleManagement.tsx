@@ -21,6 +21,16 @@ interface Vehicle {
   next_service_km: number | null
   next_service_hours: number | null
   notes: string | null
+  vehicle_type: string | null
+}
+
+const VEHICLE_TYPES = ['Truck', 'Machinery', 'Ute'] as const
+type VehicleType = typeof VEHICLE_TYPES[number]
+
+const TYPE_BADGE: Record<VehicleType, string> = {
+  Truck:    'bg-blue-100 text-blue-700',
+  Machinery:'bg-amber-100 text-amber-700',
+  Ute:      'bg-purple-100 text-purple-700',
 }
 
 interface Props {
@@ -76,6 +86,11 @@ function dateClass(dateStr: string | null | undefined, today: string): string {
 export default function VehicleManagement({ vehicles, today }: Props) {
   const [showAdd, setShowAdd] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [filterType, setFilterType] = useState<VehicleType | ''>('')
+
+  const filtered = filterType
+    ? vehicles.filter((v) => v.vehicle_type === filterType)
+    : vehicles
 
   return (
     <div className="space-y-5">
@@ -88,6 +103,24 @@ export default function VehicleManagement({ vehicles, today }: Props) {
         >
           {showAdd ? 'Cancel' : '+ Add vehicle'}
         </button>
+      </div>
+
+      {/* Type filter chips */}
+      <div className="flex flex-wrap gap-2">
+        {(['', ...VEHICLE_TYPES] as const).map((type) => (
+          <button
+            key={type || 'all'}
+            type="button"
+            onClick={() => setFilterType(type as VehicleType | '')}
+            className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
+              filterType === type
+                ? 'bg-stone-800 text-white'
+                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+            }`}
+          >
+            {type || 'All'}
+          </button>
+        ))}
       </div>
 
       {showAdd && (
@@ -104,9 +137,13 @@ export default function VehicleManagement({ vehicles, today }: Props) {
             Add the first vehicle →
           </button>
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-xl border border-stone-200 bg-white px-4 py-8 text-center">
+          <p className="text-sm text-stone-500">No {filterType} vehicles.</p>
+        </div>
       ) : (
         <div className="space-y-3">
-          {vehicles.map((vehicle) => {
+          {filtered.map((vehicle) => {
             const status = getVehicleStatus(vehicle, today)
             const { dot, label } = STATUS_DOT[status]
             return (
@@ -124,6 +161,11 @@ export default function VehicleManagement({ vehicles, today }: Props) {
                       {vehicle.registration && (
                         <span className="rounded-md bg-stone-100 px-2 py-0.5 text-xs font-mono font-medium text-stone-700">
                           {vehicle.registration}
+                        </span>
+                      )}
+                      {vehicle.vehicle_type && VEHICLE_TYPES.includes(vehicle.vehicle_type as VehicleType) && (
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TYPE_BADGE[vehicle.vehicle_type as VehicleType]}`}>
+                          {vehicle.vehicle_type}
                         </span>
                       )}
                     </div>
@@ -248,6 +290,14 @@ function VehicleFields({ v }: { v?: Vehicle }) {
           </Field>
           <Field label="Registration">
             <input name="registration" type="text" defaultValue={v?.registration ?? ''} placeholder="1ABC 234" className={INPUT} />
+          </Field>
+          <Field label="Type">
+            <select name="vehicle_type" defaultValue={v?.vehicle_type ?? ''} className={INPUT}>
+              <option value="">— Select type —</option>
+              {VEHICLE_TYPES.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
           </Field>
         </div>
         <div className="mt-3">

@@ -957,6 +957,61 @@ CREATE POLICY "client_site_access: clients read own"
   ON client_site_access FOR SELECT USING (client_user_id = auth.uid());
 
 
+-- ── Site completion ───────────────────────────────────────────────────────────
+ALTER TABLE sites ADD COLUMN IF NOT EXISTS completed_at timestamptz;
+
+
+-- ── Stage completion ──────────────────────────────────────────────────────────
+ALTER TABLE stages ADD COLUMN IF NOT EXISTS completed_at timestamptz;
+
+
+-- ── Quote template section type flag ─────────────────────────────────────────
+ALTER TABLE quote_template_sections ADD COLUMN IF NOT EXISTS is_client_extra boolean NOT NULL DEFAULT false;
+UPDATE quote_template_sections SET is_client_extra = true WHERE name = 'Client Extras';
+
+
+-- ── Lot status flags ──────────────────────────────────────────────────────────
+ALTER TABLE lots ADD COLUMN IF NOT EXISTS build_complete boolean NOT NULL DEFAULT false;
+ALTER TABLE lots ADD COLUMN IF NOT EXISTS quant_done     boolean NOT NULL DEFAULT false;
+ALTER TABLE lots ADD COLUMN IF NOT EXISTS invoiced       boolean NOT NULL DEFAULT false;
+
+
+-- ── Vehicle type ──────────────────────────────────────────────────────────────
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS vehicle_type text;
+
+
+-- ── Multiple site plan documents ──────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS site_plan_documents (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  site_id      uuid NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+  storage_path text NOT NULL,
+  label        text,
+  uploaded_by  uuid NOT NULL REFERENCES profiles(id),
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS site_plan_documents_site_id_idx ON site_plan_documents(site_id);
+ALTER TABLE site_plan_documents ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "site_plan_documents: staff read all"      ON site_plan_documents;
+DROP POLICY IF EXISTS "site_plan_documents: admin manage"        ON site_plan_documents;
+DROP POLICY IF EXISTS "site_plan_documents: clients read permitted" ON site_plan_documents;
+
+CREATE POLICY "site_plan_documents: staff read all"
+  ON site_plan_documents FOR SELECT
+  USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
+CREATE POLICY "site_plan_documents: admin manage"
+  ON site_plan_documents FOR ALL
+  USING (current_user_role() = 'admin');
+CREATE POLICY "site_plan_documents: clients read permitted"
+  ON site_plan_documents FOR SELECT
+  USING (
+    current_user_role() = 'client'
+    AND site_id IN (
+      SELECT csa.site_id FROM client_site_access csa WHERE csa.client_user_id = auth.uid()
+    )
+  );
+
+
 -- =============================================================================
 -- END OF SCHEMA
 -- =============================================================================

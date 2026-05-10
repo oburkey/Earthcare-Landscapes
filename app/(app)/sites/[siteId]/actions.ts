@@ -2,10 +2,158 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
+import { redirect } from 'next/navigation'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { uploadToR2, deleteFromR2 } from '@/lib/r2'
 
-import type { EditState, UploadActionState } from '@/types/actions'
+import type { ActionState, EditState, UploadActionState } from '@/types/actions'
+
+export async function setStageComplete(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Only admins can mark stages as complete.' }
+
+  const siteId  = formData.get('site_id')  as string
+  const stageId = formData.get('stage_id') as string
+  if (!stageId) return { error: 'Stage ID is missing.' }
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('stages')
+    .update({ completed_at: new Date().toISOString() })
+    .eq('id', stageId)
+  if (error) return { error: error.message }
+
+  revalidatePath(`/sites/${siteId}`)
+  revalidateTag('sites')
+  revalidateTag('stages')
+  return null
+}
+
+export async function setStageActive(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Only admins can reactivate stages.' }
+
+  const siteId  = formData.get('site_id')  as string
+  const stageId = formData.get('stage_id') as string
+  if (!stageId) return { error: 'Stage ID is missing.' }
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('stages')
+    .update({ completed_at: null })
+    .eq('id', stageId)
+  if (error) return { error: error.message }
+
+  revalidatePath(`/sites/${siteId}`)
+  revalidateTag('sites')
+  revalidateTag('stages')
+  return null
+}
+
+export async function deleteSite(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Only admins can delete sites.' }
+
+  const siteId = formData.get('site_id') as string
+  const supabase = await createClient()
+
+  const { data: site } = await supabase
+    .from('sites')
+    .select('site_plan_path')
+    .eq('id', siteId)
+    .single()
+
+  if (site?.site_plan_path) {
+    await deleteFromR2(site.site_plan_path).catch(() => null)
+  }
+
+  const { error } = await supabase.from('sites').delete().eq('id', siteId)
+  if (error) return { error: error.message }
+
+  revalidatePath('/sites')
+  revalidateTag('sites')
+  redirect('/sites')
+}
+
+export async function uploadSitePlanDoc(
+  _prev: UploadActionState,
+  formData: FormData
+): Promise<UploadActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Only admins can upload site plans.' }
+
+  const siteId = formData.get('site_id') as string
+  const label  = (formData.get('label') as string)?.trim() || null
+  const file   = formData.get('photo') as File
+
+  if (!file || file.size === 0) return { error: 'No file selected.' }
+  if (file.size > 10 * 1024 * 1024) return { error: 'File too large (max 10 MB).' }
+  if (!file.type.startsWith('image/')) return { error: 'File must be an image.' }
+
+  const key = `site-plans/sites/${siteId}/${crypto.randomUUID()}.jpg`
+
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer())
+    await uploadToR2(key, buffer, 'image/jpeg')
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Upload failed.' }
+  }
+
+  const supabase = await createClient()
+  const { error: dbError } = await supabase.from('site_plan_documents').insert({
+    site_id:      siteId,
+    storage_path: key,
+    label,
+    uploaded_by:  profile.id,
+  })
+
+  if (dbError) {
+    await deleteFromR2(key).catch(() => null)
+    return { error: dbError.message }
+  }
+
+  revalidatePath(`/sites/${siteId}`)
+  revalidateTag('sites')
+  return null
+}
+
+export async function deleteSitePlanDoc(
+  _prev: UploadActionState,
+  formData: FormData
+): Promise<UploadActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Only admins can delete site plans.' }
+
+  const siteId = formData.get('site_id') as string
+  const docId  = formData.get('doc_id') as string
+
+  const supabase = await createClient()
+  const { data: doc } = await supabase
+    .from('site_plan_documents')
+    .select('storage_path')
+    .eq('id', docId)
+    .single()
+
+  if (doc?.storage_path) {
+    await deleteFromR2(doc.storage_path).catch(() => null)
+  }
+
+  const { error } = await supabase.from('site_plan_documents').delete().eq('id', docId)
+  if (error) return { error: error.message }
+
+  revalidatePath(`/sites/${siteId}`)
+  revalidateTag('sites')
+  return null
+}
 
 export async function updateSite(
   _prev: EditState,

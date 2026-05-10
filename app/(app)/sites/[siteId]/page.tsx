@@ -2,11 +2,11 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireAuth } from '@/lib/auth'
 import { getCachedSite } from '@/lib/data'
-import { PrefetchLink } from '@/app/_components/PrefetchLink'
-import { uploadSitePlan } from './actions'
-import PlanPhotoUpload from './PlanPhotoUpload'
+import { createClient } from '@/lib/supabase/server'
 import EditSiteForm from './EditSiteForm'
-import { getR2SignedUrl } from '@/lib/r2'
+import SitePlanManager from './SitePlanManager'
+import StageListActions from './StageListActions'
+import { getR2SignedUrlSafe } from '@/lib/r2'
 
 interface Props {
   params: Promise<{ siteId: string }>
@@ -18,38 +18,66 @@ export async function generateMetadata({ params }: Props) {
   return { title: data ? `${data.name} — Earthcare Landscapes` : 'Site' }
 }
 
-async function uploadSitePlanAction(formData: FormData) {
-  'use server'
-  return uploadSitePlan(null, formData)
-}
-
 export default async function SitePage({ params }: Props) {
   const { siteId } = await params
   const profile = await requireAuth()
   const canManage = profile.role === 'supervisor' || profile.role === 'admin'
   const isAdmin = profile.role === 'admin'
 
-  const site = await getCachedSite(siteId)
+  const supabase = await createClient()
+  const [site, { data: planDocsRaw }] = await Promise.all([
+    getCachedSite(siteId),
+    supabase
+      .from('site_plan_documents')
+      .select('id, storage_path, label')
+      .eq('site_id', siteId)
+      .order('created_at', { ascending: true }),
+  ])
 
   if (!site) notFound()
 
-  // Generate R2 signed URL for the site plan if one exists
-  let sitePlanUrl: string | null = null
-  if (site.site_plan_path) {
-    try {
-      sitePlanUrl = await getR2SignedUrl(site.site_plan_path, 3600)
-    } catch {
-      sitePlanUrl = null
-    }
+  // Generate signed URLs for each plan document
+  type PlanWithUrl = { id: string; url: string; label: string | null }
+  const planDocs: PlanWithUrl[] = planDocsRaw
+    ? await Promise.all(
+        planDocsRaw.map(async (d) => ({
+          id: d.id, url: await getR2SignedUrlSafe(d.storage_path), label: d.label,
+        }))
+      ).then((docs) => docs.filter((d) => d.url))
+    : []
+
+  // Legacy single plan URL (shown only if no plan documents exist)
+  let legacyPlanUrl: string | null = null
+  if (planDocs.length === 0 && site.site_plan_path) {
+    legacyPlanUrl = await getR2SignedUrlSafe(site.site_plan_path) || null
   }
 
-  // Sort stages by their order field
+  // Sort all stages by order (used for overall stats and split)
   const stages = [...(site.stages ?? [])].sort((a, b) => a.order - b.order)
 
-  // Overall site stats
+  // Overall site stats — include all stages regardless of completion
   const allLots = stages.flatMap((s) => s.lots ?? [])
   const totalLots = allLots.length
   const completedLots = allLots.filter((l) => l.status === 'complete').length
+
+  type StageRow = (typeof stages)[number]
+
+  function stageStats(s: StageRow) {
+    const lots = s.lots ?? []
+    const total      = lots.length
+    const completed  = lots.filter((l) => l.status === 'complete').length
+    const inProgress = lots.filter((l) => l.status === 'in_progress').length
+    const scheduled  = lots.filter((l) => l.status === 'scheduled').length
+    return { total, completed, inProgress, scheduled }
+  }
+
+  const activeStages = stages
+    .filter((s) => !(s as { completed_at?: string | null }).completed_at)
+    .map((s) => ({ id: s.id, name: s.name, ...stageStats(s) }))
+
+  const completedStages = stages
+    .filter((s) => !!(s as { completed_at?: string | null }).completed_at)
+    .map((s) => ({ id: s.id, name: s.name, ...stageStats(s) }))
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -86,6 +114,7 @@ export default async function SitePage({ params }: Props) {
                 name={site.name}
                 address={site.address ?? null}
                 clientContact={site.client_contact ?? null}
+                isAdmin={isAdmin}
               />
             )}
           </div>
@@ -115,43 +144,13 @@ export default async function SitePage({ params }: Props) {
 
         {/* ── Site plan ──────────────────────────────────────────────────────── */}
         <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-semibold text-stone-800">Site plan</h2>
-          </div>
-
-          {sitePlanUrl ? (
-            <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
-              <a href={sitePlanUrl} target="_blank" rel="noopener noreferrer">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={sitePlanUrl}
-                  alt="Site plan"
-                  className="w-full object-contain max-h-[60vh] hover:opacity-95 transition-opacity"
-                />
-              </a>
-              {isAdmin && (
-                <div className="p-4 border-t border-stone-100">
-                  <PlanPhotoUpload
-                    action={uploadSitePlanAction}
-                    hiddenFields={{ site_id: siteId }}
-                    hasPlan={true}
-                  />
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="rounded-xl border border-stone-200 bg-white p-5">
-              {isAdmin ? (
-                <PlanPhotoUpload
-                  action={uploadSitePlanAction}
-                  hiddenFields={{ site_id: siteId }}
-                  hasPlan={false}
-                />
-              ) : (
-                <p className="text-sm text-stone-400 text-center py-4">No site plan uploaded yet.</p>
-              )}
-            </div>
-          )}
+          <h2 className="text-base font-semibold text-stone-800 mb-3">Site plan</h2>
+          <SitePlanManager
+            siteId={siteId}
+            isAdmin={isAdmin}
+            plans={planDocs}
+            legacyPlanUrl={legacyPlanUrl}
+          />
         </div>
 
         {/* Stages section */}
@@ -167,119 +166,16 @@ export default async function SitePage({ params }: Props) {
               </Link>
             )}
           </div>
-
-          {stages.length === 0 ? (
-            <div className="rounded-xl border border-stone-200 bg-white px-4 py-10 text-center">
-              <p className="text-sm text-stone-500">No stages yet.</p>
-              {canManage && (
-                <Link
-                  href={`/sites/${siteId}/new-stage`}
-                  className="mt-3 inline-block text-sm font-medium text-green-700 hover:underline"
-                >
-                  Add the first stage →
-                </Link>
-              )}
-            </div>
-          ) : (
-            <div className="rounded-xl border border-stone-200 bg-white overflow-hidden divide-y divide-stone-100">
-              {stages.map((stage) => {
-                const lots = stage.lots ?? []
-                const total = lots.length
-                const completed = lots.filter((l) => l.status === 'complete').length
-                const inProgress = lots.filter((l) => l.status === 'in_progress').length
-                const scheduled = lots.filter((l) => l.status === 'scheduled').length
-                const pct = total > 0 ? Math.round((completed / total) * 100) : 0
-
-                return (
-                  <PrefetchLink
-                    key={stage.id}
-                    href={`/sites/${siteId}/stages/${stage.id}`}
-                    className="flex items-center gap-4 px-4 py-4 hover:bg-stone-50 active:bg-stone-100 transition-colors"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-stone-900">
-                        {stage.name}
-                      </p>
-
-                      {/* Status pills */}
-                      {total > 0 && (
-                        <div className="mt-1.5 flex flex-wrap gap-1.5">
-                          {completed > 0 && (
-                            <StatusPill label={`${completed} complete`} color="green" />
-                          )}
-                          {inProgress > 0 && (
-                            <StatusPill label={`${inProgress} in progress`} color="blue" />
-                          )}
-                          {scheduled > 0 && (
-                            <StatusPill label={`${scheduled} scheduled`} color="amber" />
-                          )}
-                          {total - completed - inProgress - scheduled > 0 && (
-                            <StatusPill
-                              label={`${total - completed - inProgress - scheduled} not started`}
-                              color="stone"
-                            />
-                          )}
-                        </div>
-                      )}
-
-                      {/* Progress bar */}
-                      {total > 0 && (
-                        <div className="mt-2.5 flex items-center gap-2">
-                          <div className="flex-1 h-1.5 rounded-full bg-stone-100">
-                            <div
-                              className="h-1.5 rounded-full bg-green-600"
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                          <span className="text-xs text-stone-400 shrink-0">
-                            {pct}%
-                          </span>
-                        </div>
-                      )}
-
-                      {total === 0 && (
-                        <p className="mt-0.5 text-xs text-stone-400">No lots yet</p>
-                      )}
-                    </div>
-
-                    {/* Chevron */}
-                    <svg
-                      className="h-4 w-4 shrink-0 text-stone-400"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      strokeWidth={2}
-                      stroke="currentColor"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                    </svg>
-                  </PrefetchLink>
-                )
-              })}
-            </div>
-          )}
+          <StageListActions
+            siteId={siteId}
+            activeStages={activeStages}
+            completedStages={completedStages}
+            isAdmin={isAdmin}
+            canManage={canManage}
+          />
         </div>
 
       </div>
     </div>
-  )
-}
-
-function StatusPill({
-  label,
-  color,
-}: {
-  label: string
-  color: 'green' | 'blue' | 'amber' | 'stone'
-}) {
-  const styles = {
-    green: 'bg-green-100 text-green-700',
-    blue:  'bg-blue-100 text-blue-700',
-    amber: 'bg-amber-100 text-amber-700',
-    stone: 'bg-stone-100 text-stone-500',
-  }
-  return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${styles[color]}`}>
-      {label}
-    </span>
   )
 }

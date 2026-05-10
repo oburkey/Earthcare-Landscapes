@@ -110,6 +110,7 @@ export default function LotQuantities({
   isAdmin, canManage,
   sections, estimatedQuote, finalQuote,
 }: Props) {
+  const [open, setOpen] = useState(false)
   const [isEstimated, setIsEstimated] = useState(true)
   const activeQuote = isEstimated ? estimatedQuote : finalQuote
 
@@ -185,7 +186,7 @@ export default function LotQuantities({
         item_name:           item.name,
         unit:                item.unit,
         quantity:            qty === null || isNaN(qty) ? null : qty,
-        unit_price_snapshot: isAdmin ? item.unit_price : null,
+        unit_price_snapshot: item.unit_price ?? null,
       }
     })
 
@@ -211,6 +212,23 @@ export default function LotQuantities({
 
   return (
     <div className="space-y-4">
+
+      {/* Outer show/hide toggle */}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50 transition-colors"
+      >
+        <svg
+          className={`h-4 w-4 text-stone-400 transition-transform ${open ? '' : '-rotate-90'}`}
+          fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+        </svg>
+        {open ? 'Hide Quantities' : 'Show Quantities'}
+      </button>
+
+      {open && (<>
 
       {/* Estimate / Final toggle */}
       <div className="flex items-center gap-1 bg-stone-100 rounded-lg p-1 self-start w-fit">
@@ -517,6 +535,8 @@ export default function LotQuantities({
           </button>
         </div>
       )}
+
+      </>)}
     </div>
   )
 }

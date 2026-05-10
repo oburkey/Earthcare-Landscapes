@@ -120,7 +120,8 @@ export default function AppNav({ role, name }: Props) {
         {/* Logo */}
         <div className="flex items-center h-14 px-5 border-b border-stone-200 shrink-0">
           <Link href="/dashboard" className="text-sm font-bold text-green-700 tracking-tight">
-            Earthcare Landscapes
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/earthcare-logo.png" alt="Earthcare Landscapes" className="h-8 w-auto" />
           </Link>
         </div>
 
@@ -152,7 +153,8 @@ export default function AppNav({ role, name }: Props) {
         </button>
         <div className="flex-1 flex justify-center">
           <Link href="/dashboard" className="text-sm font-bold text-green-700 tracking-tight">
-            Earthcare Landscapes
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/earthcare-logo.png" alt="Earthcare Landscapes" className="h-8 w-auto" />
           </Link>
         </div>
         {/* Spacer to keep logo visually centred */}
@@ -176,7 +178,8 @@ export default function AppNav({ role, name }: Props) {
       >
         <div className="flex items-center justify-between h-14 px-4 border-b border-stone-200 shrink-0">
           <Link href="/dashboard" className="text-sm font-bold text-green-700 tracking-tight">
-            Earthcare Landscapes
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/earthcare-logo.png" alt="Earthcare Landscapes" className="h-8 w-auto" />
           </Link>
           <button
             onClick={() => setMobileOpen(false)}

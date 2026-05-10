@@ -7,12 +7,14 @@
 -- ── 1. quote_template_sections ────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS quote_template_sections (
-  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name        text NOT NULL,
-  order_index integer NOT NULL DEFAULT 0,
-  is_active   boolean NOT NULL DEFAULT true,
-  created_at  timestamptz NOT NULL DEFAULT now()
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name            text NOT NULL,
+  order_index     integer NOT NULL DEFAULT 0,
+  is_active       boolean NOT NULL DEFAULT true,
+  is_client_extra boolean NOT NULL DEFAULT false,
+  created_at      timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE quote_template_sections ADD COLUMN IF NOT EXISTS is_client_extra boolean NOT NULL DEFAULT false;
 
 ALTER TABLE quote_template_sections ENABLE ROW LEVEL SECURITY;
 
@@ -147,7 +149,7 @@ BEGIN
   INSERT INTO quote_template_sections (name, order_index) VALUES ('Softscape Front', 2)         RETURNING id INTO s_softscape_front;
   INSERT INTO quote_template_sections (name, order_index) VALUES ('Softscape Rear & Side', 3)   RETURNING id INTO s_softscape_rear;
   INSERT INTO quote_template_sections (name, order_index) VALUES ('Irrigation', 4)              RETURNING id INTO s_irrigation;
-  INSERT INTO quote_template_sections (name, order_index) VALUES ('Client Extras', 5)           RETURNING id INTO s_client_extras;
+  INSERT INTO quote_template_sections (name, order_index, is_client_extra) VALUES ('Client Extras', 5, true) RETURNING id INTO s_client_extras;
 
   -- Earthworks
   INSERT INTO quote_template_items (section_id, name, unit, order_index) VALUES

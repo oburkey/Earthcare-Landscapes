@@ -56,6 +56,17 @@ export async function deleteFromR2(key: string): Promise<void> {
   )
 }
 
+export async function getR2SignedUrlSafe(
+  key: string,
+  expiresInSeconds = 3600
+): Promise<string> {
+  try {
+    return await getR2SignedUrl(key, expiresInSeconds)
+  } catch {
+    return ''
+  }
+}
+
 export async function getR2SignedUrl(
   key: string,
   expiresInSeconds = 3600

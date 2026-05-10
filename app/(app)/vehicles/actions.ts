@@ -39,6 +39,7 @@ function parseFields(formData: FormData) {
     next_service_km:        int('next_service_km'),
     next_service_hours:     num('next_service_hours'),
     notes:                  str('notes'),
+    vehicle_type:           str('vehicle_type'),
   }
 }
 

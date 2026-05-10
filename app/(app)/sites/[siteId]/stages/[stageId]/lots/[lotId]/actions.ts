@@ -7,6 +7,44 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { uploadToR2, deleteFromR2 } from '@/lib/r2'
 import type { ActionState } from '@/types/actions'
 
+const SUPERVISOR_FLAGS = ['build_complete', 'quant_done'] as const
+const ADMIN_FLAGS      = ['invoiced'] as const
+type LotFlag = typeof SUPERVISOR_FLAGS[number] | typeof ADMIN_FLAGS[number]
+
+export async function toggleLotFlag(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireAuth()
+
+  const lotId   = formData.get('lot_id')   as string
+  const siteId  = formData.get('site_id')  as string
+  const stageId = formData.get('stage_id') as string
+  const flag    = formData.get('flag')     as string
+  const value   = formData.get('value') === 'true'
+
+  const allFlags: string[] = [...SUPERVISOR_FLAGS, ...ADMIN_FLAGS]
+  if (!allFlags.includes(flag)) return { error: 'Invalid flag.' }
+
+  if ((ADMIN_FLAGS as readonly string[]).includes(flag)) {
+    if (profile.role !== 'admin') return { error: 'Only admins can toggle Invoiced.' }
+  } else {
+    if (profile.role !== 'supervisor' && profile.role !== 'admin') {
+      return { error: 'Only supervisors and admins can toggle this.' }
+    }
+  }
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('lots')
+    .update({ [flag as LotFlag]: value })
+    .eq('id', lotId)
+  if (error) return { error: error.message }
+
+  revalidatePath(`/sites/${siteId}/stages/${stageId}/lots/${lotId}`)
+  return null
+}
+
 export async function uploadLotDocument(
   _prev: ActionState,
   formData: FormData
@@ -99,6 +137,38 @@ export async function uploadLotPhoto(
 
   revalidatePath(`/sites/${siteId}/stages/${stageId}/lots/${lotId}`)
   return null
+}
+
+export async function deleteLot(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Only admins can delete lots.' }
+
+  const lotId   = formData.get('lot_id') as string
+  const siteId  = formData.get('site_id') as string
+  const stageId = formData.get('stage_id') as string
+  const supabase = await createClient()
+
+  // Clean up R2 files before deleting DB row
+  const [{ data: photos }, { data: docs }] = await Promise.all([
+    supabase.from('lot_photos').select('storage_path').eq('lot_id', lotId),
+    supabase.from('lot_documents').select('storage_path').eq('lot_id', lotId),
+  ])
+  await Promise.all([
+    ...(photos ?? []).map((p) => deleteFromR2(p.storage_path).catch(() => null)),
+    ...(docs ?? []).map((d) => deleteFromR2(d.storage_path).catch(() => null)),
+  ])
+
+  const { error } = await supabase.from('lots').delete().eq('id', lotId)
+  if (error) return { error: error.message }
+
+  revalidatePath(`/sites/${siteId}/stages/${stageId}`)
+  revalidatePath(`/sites/${siteId}`)
+  revalidateTag('stages')
+  revalidateTag('sites')
+  redirect(`/sites/${siteId}/stages/${stageId}`)
 }
 
 export async function updateLot(

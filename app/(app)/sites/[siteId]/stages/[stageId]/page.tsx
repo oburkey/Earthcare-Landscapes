@@ -81,7 +81,7 @@ export default async function StagePage({ params }: Props) {
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-xl font-semibold text-stone-900">{stage.name}</h1>
               {canManageStage && (
-                <EditStageForm siteId={siteId} stageId={stageId} name={stage.name} />
+                <EditStageForm siteId={siteId} stageId={stageId} name={stage.name} isAdmin={isAdmin} />
               )}
             </div>
             {total > 0 && (
