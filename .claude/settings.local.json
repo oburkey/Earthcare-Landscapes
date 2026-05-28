@@ -23,7 +23,10 @@
       "Read(//tmp/**)",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Ollie\\\\desktop\\\\earthcare\" -Force)",
       "Bash(Select-Object Name)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
     ]
   }
 }

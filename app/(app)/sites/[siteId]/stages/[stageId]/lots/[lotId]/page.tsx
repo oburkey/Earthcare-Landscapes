@@ -53,8 +53,8 @@ export default async function LotPage({ params }: Props) {
       .from('lots')
       .select(`
         id, lot_number, status, due_date, scheduled_date, completion_date, notes,
-        build_complete, quant_done, invoiced,
-        stages!inner(id, name, sites!inner(id, name))
+        build_complete, quant_done, invoiced, has_client_extras,
+        stages!inner(id, name, sites!inner(id, name, has_client_extras))
       `)
       .eq('id', lotId)
       .single(),
@@ -73,7 +73,7 @@ export default async function LotPage({ params }: Props) {
       ? supabase
           .from('quote_template_sections')
           .select(`
-            id, name, order_index, admin_only,
+            id, name, order_index, admin_only, is_client_extra,
             quote_template_items (
               id, name, unit, unit_price,
               is_auto_calculated, auto_calc_formula, plant_category, order_index
@@ -111,13 +111,17 @@ export default async function LotPage({ params }: Props) {
   if (!lot) notFound()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const lotAny        = lot as any
-  const buildComplete = lotAny?.build_complete ?? false
-  const quantDone     = lotAny?.quant_done     ?? false
-  const invoiced      = lotAny?.invoiced        ?? false
+  const lotAny          = lot as any
+  const buildComplete   = lotAny?.build_complete   ?? false
+  const quantDone       = lotAny?.quant_done       ?? false
+  const invoiced        = lotAny?.invoiced          ?? false
+  const lotClientExtras = lotAny?.has_client_extras ?? true
 
   const stage = Array.isArray(lot.stages) ? lot.stages[0] : lot.stages as { id: string; name: string; sites: unknown }
-  const site  = Array.isArray(stage.sites) ? stage.sites[0] : stage.sites as { id: string; name: string }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const site             = Array.isArray(stage.sites) ? stage.sites[0] : stage.sites as { id: string; name: string; has_client_extras?: boolean }
+  const siteClientExtras = (site as { has_client_extras?: boolean }).has_client_extras ?? true
+  const showClientExtras = siteClientExtras && lotClientExtras
 
   const status = lot.status as LotStatus
   const cfg    = STATUS_CONFIG[status] ?? STATUS_CONFIG.not_started
@@ -158,21 +162,26 @@ export default async function LotPage({ params }: Props) {
   const sections = showQty
     ? (sectionsData ?? [])
         .filter((s) => !(s as { admin_only?: boolean }).admin_only || isAdmin)
-        .map((s) => ({
-          id:          s.id,
-          name:        s.name,
-          order_index: s.order_index,
-          items: [...((s.quote_template_items as unknown[]) as {
-            id: string; name: string; unit: string; unit_price?: number | null;
-            is_auto_calculated: boolean; auto_calc_formula: string | null;
-            plant_category: 'front' | 'rear' | null; order_index: number
-          }[] ?? [])]
-            .sort((a, b) => a.order_index - b.order_index)
-            .map((i) => ({
-              ...i,
-              unit_price: i.unit_price ?? null,
-            })),
-        }))
+        .map((s) => {
+          const isClientExtra = (s as { is_client_extra?: boolean }).is_client_extra ?? false
+          return {
+            id:             s.id,
+            name:           s.name,
+            order_index:    s.order_index,
+            isClientExtra,
+            items: [...((s.quote_template_items as unknown[]) as {
+              id: string; name: string; unit: string; unit_price?: number | null;
+              is_auto_calculated: boolean; auto_calc_formula: string | null;
+              plant_category: 'front' | 'rear' | null; order_index: number
+            }[] ?? [])]
+              .sort((a, b) => a.order_index - b.order_index)
+              .map((i) => ({
+                ...i,
+                unit_price:     i.unit_price ?? null,
+                isClientExtra,
+              })),
+          }
+        })
     : []
 
   // Quotes
@@ -223,6 +232,8 @@ export default async function LotPage({ params }: Props) {
             buildComplete={buildComplete}
             quantDone={quantDone}
             invoiced={invoiced}
+            hasClientExtras={lotClientExtras}
+            siteHasClientExtras={siteClientExtras}
             canSupervise={canSupervise}
             isAdmin={isAdmin}
           />
@@ -256,6 +267,7 @@ export default async function LotPage({ params }: Props) {
               sections={sections}
               estimatedQuote={shapeQuote(estimatedQuote)}
               finalQuote={shapeQuote(finalQuote)}
+              showClientExtras={showClientExtras}
             />
           </div>
         )}

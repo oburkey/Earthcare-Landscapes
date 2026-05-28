@@ -8,7 +8,7 @@ import { uploadToR2, deleteFromR2 } from '@/lib/r2'
 import type { ActionState } from '@/types/actions'
 
 const SUPERVISOR_FLAGS = ['build_complete', 'quant_done'] as const
-const ADMIN_FLAGS      = ['invoiced'] as const
+const ADMIN_FLAGS      = ['invoiced', 'has_client_extras'] as const
 type LotFlag = typeof SUPERVISOR_FLAGS[number] | typeof ADMIN_FLAGS[number]
 
 export async function toggleLotFlag(

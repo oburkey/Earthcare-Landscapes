@@ -9,10 +9,11 @@ interface Props {
   name: string
   address: string | null
   clientContact: string | null
+  hasClientExtras: boolean
   isAdmin?: boolean
 }
 
-export default function EditSiteForm({ siteId, name, address, clientContact, isAdmin }: Props) {
+export default function EditSiteForm({ siteId, name, address, clientContact, hasClientExtras, isAdmin }: Props) {
   const [open, setOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [state, action, pending] = useActionState<EditState, FormData>(updateSite, null)
@@ -75,6 +76,22 @@ export default function EditSiteForm({ siteId, name, address, clientContact, isA
             className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
           />
         </div>
+
+        {isAdmin && (
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-stone-700">Client extras</span>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                name="has_client_extras"
+                value="true"
+                defaultChecked={hasClientExtras}
+                className="h-4 w-4 rounded border-stone-300 text-green-700 focus:ring-green-600"
+              />
+              <span className="text-xs text-stone-500">Show in quant &amp; invoices</span>
+            </label>
+          </div>
+        )}
 
         {state?.error && (
           <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{state.error}</p>

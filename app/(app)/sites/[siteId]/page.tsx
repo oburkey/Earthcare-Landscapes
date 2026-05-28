@@ -114,6 +114,7 @@ export default async function SitePage({ params }: Props) {
                 name={site.name}
                 address={site.address ?? null}
                 clientContact={site.client_contact ?? null}
+                hasClientExtras={(site as { has_client_extras?: boolean }).has_client_extras ?? true}
                 isAdmin={isAdmin}
               />
             )}

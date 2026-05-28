@@ -45,6 +45,7 @@ export interface Site {
   client_contact: string | null
   site_plan_path: string | null  // path in 'site-plans' storage bucket
   completed_at: string | null    // null = active, timestamptz = marked complete
+  has_client_extras: boolean
   created_at: string
 }
 
@@ -70,6 +71,7 @@ export interface Lot {
   scheduled_date: string | null
   completion_date: string | null
   notes: string | null
+  has_client_extras: boolean
   created_at: string
   updated_at: string
 }

@@ -15,6 +15,7 @@ type TemplateItem = {
   auto_calc_formula: string | null
   plant_category: 'front' | 'rear' | null
   order_index: number
+  isClientExtra?: boolean
 }
 
 type TemplateSection = {
@@ -22,6 +23,7 @@ type TemplateSection = {
   name: string
   order_index: number
   items: TemplateItem[]
+  isClientExtra?: boolean
 }
 
 type QuoteData = {
@@ -40,6 +42,7 @@ type Props = {
   sections: TemplateSection[]
   estimatedQuote: QuoteData
   finalQuote: QuoteData
+  showClientExtras?: boolean
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -117,12 +120,16 @@ export default function LotQuantities({
   lotId, siteId, stageId,
   isAdmin, canManage,
   sections, estimatedQuote, finalQuote,
+  showClientExtras = true,
 }: Props) {
   const [open, setOpen] = useState(false)
   const [isEstimated, setIsEstimated] = useState(true)
   const activeQuote = isEstimated ? estimatedQuote : finalQuote
 
-  const allItems = useMemo(() => sections.flatMap((s) => s.items), [sections])
+  const allItems = useMemo(
+    () => sections.flatMap((s) => s.items.map((item) => ({ ...item, isClientExtra: s.isClientExtra ?? false }))),
+    [sections]
+  )
   const { variantGroups, secondaryIds } = useMemo(
     () => buildVariantGroups(allItems),
     [allItems]
@@ -281,7 +288,9 @@ export default function LotQuantities({
       )}
 
       {/* Sections */}
-      {sections.map((section) => (
+      {sections.map((section) => {
+        if (!showClientExtras && section.isClientExtra) return null
+        return (
         <div key={section.id} className="rounded-xl border border-stone-200 bg-white overflow-hidden">
 
           {/* Section header */}
@@ -489,12 +498,14 @@ export default function LotQuantities({
             )
           })}
         </div>
-      ))}
+        )
+      })}
 
       {/* Admin: grand total */}
       {isAdmin && (() => {
         let grandTotal = 0
         for (const item of allItems) {
+          if (!showClientExtras && item.isClientExtra) continue
           if (item.unit_price == null) continue
           const qty = getItemQty(item)
           if (qty == null || isNaN(qty)) continue

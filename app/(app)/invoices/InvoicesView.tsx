@@ -31,6 +31,7 @@ export type LotRow = {
   standardAmount: number
   clientExtrasAmount: number
   sections: LotSection[]
+  showClientExtras: boolean
 }
 
 export type StageData = {
@@ -106,7 +107,7 @@ function claimSheetBody(
 ): string {
   const date = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
   const standard = lot.sections.filter((s) => !s.isClientExtra)
-  const extras   = lot.sections.filter((s) =>  s.isClientExtra)
+  const extras   = lot.showClientExtras ? lot.sections.filter((s) => s.isClientExtra) : []
 
   let secIdx = 0
   const sectionRows = [...standard, ...extras].map((section) => {

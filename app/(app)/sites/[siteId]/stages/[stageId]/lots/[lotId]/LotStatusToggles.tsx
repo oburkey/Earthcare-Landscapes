@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { toggleLotFlag } from './actions'
 
-type Flag = 'build_complete' | 'quant_done' | 'invoiced'
+type Flag = 'build_complete' | 'quant_done' | 'invoiced' | 'has_client_extras'
 
 interface Props {
   lotId: string
@@ -12,6 +13,8 @@ interface Props {
   buildComplete: boolean
   quantDone: boolean
   invoiced: boolean
+  hasClientExtras: boolean
+  siteHasClientExtras: boolean
   canSupervise: boolean
   isAdmin: boolean
 }
@@ -21,18 +24,22 @@ export default function LotStatusToggles({
   buildComplete: initBuild,
   quantDone: initQuant,
   invoiced: initInvoiced,
+  hasClientExtras: initClientExtras,
+  siteHasClientExtras,
   canSupervise,
   isAdmin,
 }: Props) {
-  const [buildComplete, setBuildComplete] = useState(initBuild)
-  const [quantDone,     setQuantDone]     = useState(initQuant)
-  const [invoiced,      setInvoiced]      = useState(initInvoiced)
-  const [error, setError]                 = useState<string | null>(null)
-  const [isPending, startTransition]      = useTransition()
+  const router = useRouter()
+  const [buildComplete,   setBuildComplete]   = useState(initBuild)
+  const [quantDone,       setQuantDone]       = useState(initQuant)
+  const [invoiced,        setInvoiced]        = useState(initInvoiced)
+  const [hasClientExtras, setHasClientExtras] = useState(initClientExtras)
+  const [error, setError]                     = useState<string | null>(null)
+  const [isPending, startTransition]          = useTransition()
 
-  function toggle(flag: Flag, current: boolean, set: (v: boolean) => void) {
+  function toggle(flag: Flag, current: boolean, set: (v: boolean) => void, refresh = false) {
     const next = !current
-    set(next)        // optimistic
+    set(next)
     setError(null)
     startTransition(async () => {
       const fd = new FormData()
@@ -43,8 +50,10 @@ export default function LotStatusToggles({
       fd.set('value',    String(next))
       const result = await toggleLotFlag(null, fd)
       if (result?.error) {
-        set(current)        // revert on failure
+        set(current)
         setError(result.error)
+      } else if (refresh) {
+        router.refresh()
       }
     })
   }
@@ -78,14 +87,25 @@ export default function LotStatusToggles({
           </>
         )}
         {isAdmin && (
-          <button
-            type="button"
-            disabled={isPending}
-            onClick={() => toggle('invoiced', invoiced, setInvoiced)}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors disabled:opacity-60 ${pill(invoiced)}`}
-          >
-            Invoiced
-          </button>
+          <>
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => toggle('invoiced', invoiced, setInvoiced)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors disabled:opacity-60 ${pill(invoiced)}`}
+            >
+              Invoiced
+            </button>
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => toggle('has_client_extras', hasClientExtras, setHasClientExtras, true)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors disabled:opacity-60 ${pill(hasClientExtras && siteHasClientExtras)}`}
+              title={!siteHasClientExtras ? 'Disabled at site level' : undefined}
+            >
+              Client Extras
+            </button>
+          </>
         )}
       </div>
       {error && <p className="text-xs text-red-600">{error}</p>}

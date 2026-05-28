@@ -164,17 +164,23 @@ export async function updateSite(
     return { error: 'Only supervisors and admins can edit sites.' }
   }
 
-  const siteId       = formData.get('site_id') as string
-  const name         = (formData.get('name') as string)?.trim()
-  const address      = (formData.get('address') as string)?.trim() || null
+  const siteId        = formData.get('site_id') as string
+  const name          = (formData.get('name') as string)?.trim()
+  const address       = (formData.get('address') as string)?.trim() || null
   const clientContact = (formData.get('client_contact') as string)?.trim() || null
 
   if (!name) return { error: 'Site name is required.' }
 
+  const updates: Record<string, unknown> = { name, address, client_contact: clientContact }
+  // Checkbox: present = 'true', absent = unchecked = false. Admin-only.
+  if (profile.role === 'admin') {
+    updates.has_client_extras = formData.get('has_client_extras') === 'true'
+  }
+
   const supabase = await createClient()
   const { error } = await supabase
     .from('sites')
-    .update({ name, address, client_contact: clientContact })
+    .update(updates)
     .eq('id', siteId)
 
   if (error) return { error: error.message }

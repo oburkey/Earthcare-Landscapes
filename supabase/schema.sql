@@ -961,6 +961,11 @@ CREATE POLICY "client_site_access: clients read own"
 ALTER TABLE sites ADD COLUMN IF NOT EXISTS completed_at timestamptz;
 
 
+-- ── Client extras toggles ─────────────────────────────────────────────────────
+ALTER TABLE sites ADD COLUMN IF NOT EXISTS has_client_extras boolean NOT NULL DEFAULT true;
+ALTER TABLE lots  ADD COLUMN IF NOT EXISTS has_client_extras boolean NOT NULL DEFAULT true;
+
+
 -- ── Stage completion ──────────────────────────────────────────────────────────
 ALTER TABLE stages ADD COLUMN IF NOT EXISTS completed_at timestamptz;
 

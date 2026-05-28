@@ -15,9 +15,9 @@ export default async function InvoicesPage() {
   const { data: sitesRaw } = await supabase
     .from('sites')
     .select(`
-      id, name, client_contact, completed_at,
+      id, name, client_contact, completed_at, has_client_extras,
       stages(id, name, order,
-        lots(id, lot_number, build_complete, quant_done, invoiced)
+        lots(id, lot_number, build_complete, quant_done, invoiced, has_client_extras)
       )
     `)
     .order('name')
@@ -163,10 +163,12 @@ export default async function InvoicesPage() {
         .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
         .map((stage): StageData => {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const siteShowClientExtras = (site as any).has_client_extras ?? true
           const lots: LotRow[] = ((stage.lots ?? []) as any[])
             .filter((l) => l.build_complete || l.quant_done)
             .map((lot): LotRow => {
-              const amounts = amountByLot.get(lot.id) ?? { standard: 0, extras: 0, sections: [] }
+              const amounts          = amountByLot.get(lot.id) ?? { standard: 0, extras: 0, sections: [] }
+              const showClientExtras = siteShowClientExtras && (lot.has_client_extras ?? true)
               return {
                 id:                 lot.id,
                 lotNumber:          lot.lot_number,
@@ -174,8 +176,9 @@ export default async function InvoicesPage() {
                 quantDone:          lot.quant_done     ?? false,
                 invoiced:           lot.invoiced        ?? false,
                 standardAmount:     amounts.standard,
-                clientExtrasAmount: amounts.extras,
+                clientExtrasAmount: showClientExtras ? amounts.extras : 0,
                 sections:           amounts.sections,
+                showClientExtras,
               }
             })
             .sort((a, b) =>

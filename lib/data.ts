@@ -47,7 +47,7 @@ async function _sitesList(db: Db) {
 async function _site(db: Db, siteId: string) {
   const { data } = await db
     .from('sites')
-    .select('id, name, address, client_contact, site_plan_path, stages(id, name, order, completed_at, lots(id, status))')
+    .select('id, name, address, client_contact, site_plan_path, has_client_extras, stages(id, name, order, completed_at, lots(id, status))')
     .eq('id', siteId)
     .single()
   return data
