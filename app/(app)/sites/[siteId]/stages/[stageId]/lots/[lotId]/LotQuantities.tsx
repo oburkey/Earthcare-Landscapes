@@ -103,6 +103,14 @@ function commonPrefix(strings: string[]): string {
   return prefix.trimEnd()
 }
 
+// Toggle items that should default to YES on a fresh (unsaved) lot
+const DEFAULT_YES_TOGGLES = new Set([
+  'Dripper Irrigation front',
+  'Solenoid / Plumber cut in',
+  'Pre-lay and cables',
+  'Controller and cables',
+])
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function LotQuantities({
@@ -120,9 +128,16 @@ export default function LotQuantities({
     [allItems]
   )
 
-  const [values, setValues] = useState<Record<string, string>>(
-    () => initValues(estimatedQuote)
-  )
+  const [values, setValues] = useState<Record<string, string>>(() => {
+    const base = initValues(estimatedQuote)
+    // Seed the four irrigation toggles to YES when there is no saved value for them
+    for (const item of allItems) {
+      if (item.unit === 'toggle' && DEFAULT_YES_TOGGLES.has(item.name) && !(item.id in base)) {
+        base[item.id] = '1'
+      }
+    }
+    return base
+  })
   const [variantSel, setVariantSel] = useState<Record<string, string>>(
     () => initVariantSel(estimatedQuote, variantGroups)
   )
