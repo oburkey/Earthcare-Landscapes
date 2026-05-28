@@ -118,7 +118,6 @@ export default async function LotPage({ params }: Props) {
   const lotClientExtras = lotAny?.has_client_extras ?? true
 
   const stage = Array.isArray(lot.stages) ? lot.stages[0] : lot.stages as { id: string; name: string; sites: unknown }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const site             = Array.isArray(stage.sites) ? stage.sites[0] : stage.sites as { id: string; name: string; has_client_extras?: boolean }
   const siteClientExtras = (site as { has_client_extras?: boolean }).has_client_extras ?? true
   const showClientExtras = siteClientExtras && lotClientExtras

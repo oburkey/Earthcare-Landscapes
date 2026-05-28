@@ -164,6 +164,7 @@ export default async function InvoicesPage() {
         .map((stage): StageData => {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const siteShowClientExtras = (site as any).has_client_extras ?? true
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const lots: LotRow[] = ((stage.lots ?? []) as any[])
             .filter((l) => l.build_complete || l.quant_done)
             .map((lot): LotRow => {
