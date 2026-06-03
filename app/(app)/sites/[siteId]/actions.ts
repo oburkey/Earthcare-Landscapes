@@ -126,6 +126,29 @@ export async function uploadSitePlanDoc(
   return null
 }
 
+export async function renameSitePlanDoc(
+  _prev: UploadActionState,
+  formData: FormData
+): Promise<UploadActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Only admins can rename site plans.' }
+
+  const siteId = formData.get('site_id') as string
+  const docId  = formData.get('doc_id') as string
+  const label  = (formData.get('label') as string)?.trim() || null
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('site_plan_documents')
+    .update({ label })
+    .eq('id', docId)
+  if (error) return { error: error.message }
+
+  revalidatePath(`/sites/${siteId}`)
+  revalidateTag('sites')
+  return null
+}
+
 export async function deleteSitePlanDoc(
   _prev: UploadActionState,
   formData: FormData

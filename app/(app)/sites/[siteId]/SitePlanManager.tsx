@@ -3,7 +3,7 @@
 import { useActionState, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { compressImage } from '@/lib/compressImage'
-import { deleteSitePlanDoc, uploadSitePlanDoc } from './actions'
+import { deleteSitePlanDoc, renameSitePlanDoc, uploadSitePlanDoc } from './actions'
 import type { UploadActionState } from '@/types/actions'
 
 interface Plan {
@@ -56,14 +56,38 @@ export default function SitePlanManager({ siteId, isAdmin, plans, legacyPlanUrl 
 
 // ── Plan card ──────────────────────────────────────────────────────────────────
 
+type CardMode = 'view' | 'editing' | 'deleting'
+
 function PlanCard({ plan, siteId, isAdmin, isLegacy }: { plan: Plan; siteId: string; isAdmin: boolean; isLegacy: boolean }) {
-  const [confirmDelete, setConfirmDelete] = useState(false)
+  const router = useRouter()
+  const [mode, setMode]               = useState<CardMode>('view')
+  const [labelInput, setLabelInput]   = useState(plan.label ?? '')
+  const [renameError, setRenameError] = useState<string | null>(null)
+  const [isPending, startTransition]  = useTransition()
+
   const [deleteState, deleteAction, deletePending] = useActionState<UploadActionState, FormData>(
     deleteSitePlanDoc,
     null
   )
 
-  const showFooter = plan.label || (isAdmin && !isLegacy)
+  function handleRename() {
+    setRenameError(null)
+    const fd = new FormData()
+    fd.set('site_id', siteId)
+    fd.set('doc_id',  plan.id)
+    fd.set('label',   labelInput)
+    startTransition(async () => {
+      const result = await renameSitePlanDoc(null, fd)
+      if (result?.error) {
+        setRenameError(result.error)
+      } else {
+        setMode('view')
+        router.refresh()
+      }
+    })
+  }
+
+  const showAdminControls = isAdmin && !isLegacy
 
   return (
     <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
@@ -76,50 +100,124 @@ function PlanCard({ plan, siteId, isAdmin, isLegacy }: { plan: Plan; siteId: str
         />
       </a>
 
-      {showFooter && (
-        <div className="px-4 py-3 border-t border-stone-100 flex items-center justify-between gap-3">
-          <span className="text-sm text-stone-600">{plan.label ?? ''}</span>
+      {/* Footer — always shown for admin non-legacy plans; shown for labelled plans otherwise */}
+      {(plan.label || showAdminControls) && (
+        <div className="px-4 py-3 border-t border-stone-100">
 
-          {isAdmin && !isLegacy && (
-            <div className="shrink-0">
-              {!confirmDelete ? (
+          {/* ── Editing mode ── */}
+          {mode === 'editing' && showAdminControls ? (
+            <div className="space-y-2">
+              <input
+                type="text"
+                value={labelInput}
+                onChange={(e) => setLabelInput(e.target.value)}
+                placeholder="Label (optional)"
+                autoFocus
+                className="block w-full rounded-lg border border-stone-300 px-3 py-1.5 text-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+              />
+              {renameError && <p className="text-xs text-red-600">{renameError}</p>}
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setConfirmDelete(true)}
-                  className="text-xs text-red-500 hover:text-red-700"
+                  onClick={handleRename}
+                  disabled={isPending}
+                  className="rounded-lg bg-green-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-800 disabled:opacity-50"
                 >
-                  Remove
+                  {isPending ? 'Saving…' : 'Save'}
                 </button>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <form action={deleteAction}>
-                    <input type="hidden" name="site_id" value={siteId} />
-                    <input type="hidden" name="doc_id"  value={plan.id} />
+                <button
+                  type="button"
+                  onClick={() => { setMode('view'); setLabelInput(plan.label ?? ''); setRenameError(null) }}
+                  disabled={isPending}
+                  className="text-xs text-stone-500 hover:text-stone-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+
+          ) : mode === 'deleting' && showAdminControls ? (
+            /* ── Delete confirmation mode ── */
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-xs text-stone-600">Delete this plan?</span>
+              <form action={deleteAction} className="flex items-center gap-2">
+                <input type="hidden" name="site_id" value={siteId} />
+                <input type="hidden" name="doc_id"  value={plan.id} />
+                <button
+                  type="submit"
+                  disabled={deletePending}
+                  className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  {deletePending ? 'Deleting…' : 'Yes, delete'}
+                </button>
+              </form>
+              <button
+                type="button"
+                onClick={() => setMode('view')}
+                disabled={deletePending}
+                className="text-xs text-stone-500 hover:text-stone-700"
+              >
+                Cancel
+              </button>
+              {deleteState?.error && <span className="text-xs text-red-600">{deleteState.error}</span>}
+            </div>
+
+          ) : (
+            /* ── View mode ── */
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-stone-600 truncate">{plan.label ?? ''}</span>
+              <div className="flex items-center gap-1 shrink-0">
+                <a
+                  href={plan.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded border border-stone-200 px-2.5 py-1 text-xs font-medium text-stone-600 hover:bg-stone-50 transition-colors"
+                >
+                  View
+                </a>
+                {showAdminControls && (
+                  <>
                     <button
-                      type="submit"
-                      disabled={deletePending}
-                      className="rounded bg-red-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                      type="button"
+                      onClick={() => setMode('editing')}
+                      title="Edit label"
+                      className="rounded p-1.5 text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors"
                     >
-                      {deletePending ? 'Removing…' : 'Yes, remove'}
+                      <PencilIcon />
                     </button>
-                  </form>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmDelete(false)}
-                    className="text-xs text-stone-500 hover:text-stone-700"
-                  >
-                    Cancel
-                  </button>
-                  {deleteState?.error && (
-                    <span className="text-xs text-red-600">{deleteState.error}</span>
-                  )}
-                </div>
-              )}
+                    <button
+                      type="button"
+                      onClick={() => setMode('deleting')}
+                      title="Delete plan"
+                      className="rounded p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      <TrashIcon />
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           )}
+
         </div>
       )}
     </div>
+  )
+}
+
+function PencilIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+    </svg>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+    </svg>
   )
 }
 

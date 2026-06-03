@@ -17,3 +17,6 @@
 - Role hierarchy: worker → leading_hand → supervisor → admin → client (separate)
 - All data fetching via lib/data.ts with unstable_cache / React cache pattern
 - Mutations must call revalidatePath() or revalidateTag() after changes
+## UI Defaults
+- All collapsible/expandable sections must default to CLOSED unless there is a strong reason to default open
+- Never default a section to open without explicitly confirming this is the right behaviour

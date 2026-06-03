@@ -1,7 +1,8 @@
 import { requireAuth, requireRole } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import InvoicesView from './InvoicesView'
-import type { SiteData, StageData, LotRow, LotSection } from './InvoicesView'
+import type { SiteData, StageData, LotRow, LotSection, ExtraJobRow } from './InvoicesView'
+import { getExtraJobsPricing } from '@/app/(app)/sites/[siteId]/stages/[stageId]/extra-jobs/[extraJobId]/pricing-actions'
 
 export const metadata = { title: 'Invoices — Earthcare Landscapes' }
 
@@ -17,7 +18,8 @@ export default async function InvoicesPage() {
     .select(`
       id, name, client_contact, completed_at, has_client_extras,
       stages(id, name, order,
-        lots(id, lot_number, build_complete, quant_done, invoiced, has_client_extras)
+        lots(id, lot_number, build_complete, quant_done, invoiced, has_client_extras),
+        extra_jobs(id, title, status)
       )
     `)
     .order('name')
@@ -39,6 +41,24 @@ export default async function InvoicesPage() {
       }
     }
   }
+
+  // Collect all extra job IDs (from all active stages, regardless of lot status)
+  const allExtraJobIds: string[] = []
+  for (const site of activeSites) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const stage of (site.stages ?? []) as any[]) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const job of (stage.extra_jobs ?? []) as any[]) {
+        allExtraJobIds.push(job.id)
+      }
+    }
+  }
+
+  // Fetch extra job pricing totals (server action callable from server component)
+  const extraJobPricingData = allExtraJobIds.length > 0
+    ? await getExtraJobsPricing(allExtraJobIds)
+    : []
+  const extraJobTotalById = new Map(extraJobPricingData.map((d) => [d.id, d.total]))
 
   // ── Query 2: All quotes for qualifying lots (best quote per lot selected in JS) ──
   // Scoring: approved > submitted > draft; final > estimated (matching MaterialsSummary logic)
@@ -185,9 +205,16 @@ export default async function InvoicesPage() {
             .sort((a, b) =>
               a.lotNumber.localeCompare(b.lotNumber, undefined, { numeric: true })
             )
-          return { id: stage.id, name: stage.name, lots }
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const extraJobs: ExtraJobRow[] = ((stage.extra_jobs ?? []) as any[]).map((j): ExtraJobRow => ({
+            id:     j.id,
+            title:  j.title,
+            status: j.status,
+            total:  extraJobTotalById.get(j.id) ?? 0,
+          }))
+          return { id: stage.id, name: stage.name, lots, extraJobs }
         })
-        .filter((st) => st.lots.length > 0)
+        .filter((st) => st.lots.length > 0 || st.extraJobs.length > 0)
       return { id: site.id, name: site.name, clientContact: site.client_contact ?? null, stages }
     })
     .filter((s) => s.stages.length > 0)
