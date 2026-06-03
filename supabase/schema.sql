@@ -966,6 +966,33 @@ ALTER TABLE sites ADD COLUMN IF NOT EXISTS has_client_extras boolean NOT NULL DE
 ALTER TABLE lots  ADD COLUMN IF NOT EXISTS has_client_extras boolean NOT NULL DEFAULT true;
 
 
+-- ── Extra job pricing ─────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS extra_job_quote_items (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  extra_job_id     uuid NOT NULL REFERENCES extra_jobs(id) ON DELETE CASCADE,
+  template_item_id uuid REFERENCES quote_template_items(id),
+  description      text,
+  unit             text NOT NULL DEFAULT 'hr',
+  quantity         numeric(10,3),
+  unit_price       numeric(10,2),
+  item_type        text NOT NULL DEFAULT 'template',
+  sort_order       integer NOT NULL DEFAULT 0,
+  created_at       timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS extra_job_quote_items_extra_job_id_idx ON extra_job_quote_items(extra_job_id);
+ALTER TABLE extra_job_quote_items ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "ejqi: leading_hand+ access" ON extra_job_quote_items;
+DROP POLICY IF EXISTS "ejqi: workers read"          ON extra_job_quote_items;
+
+CREATE POLICY "ejqi: leading_hand+ access"
+  ON extra_job_quote_items FOR ALL
+  USING (current_user_role() IN ('leading_hand', 'supervisor', 'admin'));
+CREATE POLICY "ejqi: workers read"
+  ON extra_job_quote_items FOR SELECT
+  USING (current_user_role() = 'worker');
+
+
 -- ── Stage completion ──────────────────────────────────────────────────────────
 ALTER TABLE stages ADD COLUMN IF NOT EXISTS completed_at timestamptz;
 

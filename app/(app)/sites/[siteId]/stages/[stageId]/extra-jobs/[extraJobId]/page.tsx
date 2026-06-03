@@ -7,6 +7,7 @@ import type { ExtraJobStatus } from '@/types/database'
 import { EXTRA_JOB_STATUS_CONFIG, PHOTO_TYPE_LABELS } from '@/lib/lotStatus'
 import { uploadExtraJobPhoto } from './actions'
 import EditExtraJobForm from './EditExtraJobForm'
+import ExtraJobPricing from './ExtraJobPricing'
 import PhotoUpload from '@/app/_components/PhotoUpload'
 
 interface Props {
@@ -36,7 +37,12 @@ export default async function ExtraJobPage({ params }: Props) {
 
   const supabase = await createClient()
 
-  const [{ data: job }, { data: photoRows }] = await Promise.all([
+  const [
+    { data: job },
+    { data: photoRows },
+    { data: sectionsData },
+    { data: existingItems },
+  ] = await Promise.all([
     supabase
       .from('extra_jobs')
       .select(`
@@ -53,6 +59,20 @@ export default async function ExtraJobPage({ params }: Props) {
       .select('id, storage_path, photo_type, created_at')
       .eq('extra_job_id', extraJobId)
       .order('created_at', { ascending: true }),
+    supabase
+      .from('quote_template_sections')
+      .select(`
+        id, name, order_index,
+        quote_template_items(id, name, unit, unit_price, is_auto_calculated, order_index)
+      `)
+      .eq('is_active', true)
+      .eq('is_client_extra', false)
+      .order('order_index', { ascending: true }),
+    supabase
+      .from('extra_job_quote_items')
+      .select('template_item_id, description, unit, quantity, unit_price, item_type, sort_order')
+      .eq('extra_job_id', extraJobId)
+      .order('sort_order', { ascending: true }),
   ])
 
   if (!job) notFound()
@@ -169,6 +189,35 @@ export default async function ExtraJobPage({ params }: Props) {
           ) : (
             <p className="text-sm text-stone-400 text-center py-4">No photos yet.</p>
           )}
+        </div>
+
+        {/* Pricing */}
+        <div>
+          <h2 className="text-base font-semibold text-stone-800 mb-3">Pricing</h2>
+          <ExtraJobPricing
+            extraJobId={extraJobId}
+            siteId={siteId}
+            stageId={stageId}
+            sections={(sectionsData ?? []).map((s) => ({
+              id:          s.id,
+              name:        s.name,
+              order_index: s.order_index,
+              items: [...((s.quote_template_items as unknown[]) as {
+                id: string; name: string; unit: string; unit_price: number | null;
+                is_auto_calculated: boolean; order_index: number
+              }[] ?? [])]
+                .sort((a, b) => a.order_index - b.order_index),
+            }))}
+            existingItems={(existingItems ?? []).map((i) => ({
+              template_item_id: i.template_item_id ?? null,
+              description:      i.description ?? null,
+              unit:             i.unit,
+              quantity:         i.quantity !== null ? Number(i.quantity) : null,
+              unit_price:       i.unit_price !== null ? Number(i.unit_price) : null,
+              item_type:        i.item_type,
+            }))}
+            canManage={canManage}
+          />
         </div>
 
         {/* Edit section */}

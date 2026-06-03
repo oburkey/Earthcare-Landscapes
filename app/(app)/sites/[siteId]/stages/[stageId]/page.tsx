@@ -3,12 +3,13 @@ import { notFound } from 'next/navigation'
 import { requireAuth } from '@/lib/auth'
 import { getCachedStage } from '@/lib/data'
 import { PrefetchLink } from '@/app/_components/PrefetchLink'
-import { STATUS_CONFIG, EXTRA_JOB_STATUS_CONFIG, formatDate } from '@/lib/lotStatus'
-import type { LotStatus, ExtraJobStatus } from '@/types/database'
+import { STATUS_CONFIG, formatDate } from '@/lib/lotStatus'
+import type { LotStatus } from '@/types/database'
 import { uploadStagePlan } from './actions'
 import PlanPhotoUpload from '../../PlanPhotoUpload'
 import EditStageForm from './EditStageForm'
 import MaterialsSummary from './MaterialsSummary'
+import ExtraJobsExport from './ExtraJobsExport'
 import { getR2SignedUrl } from '@/lib/r2'
 
 interface Props {
@@ -217,48 +218,19 @@ export default async function StagePage({ params }: Props) {
             )}
           </div>
 
-          {!extraJobs || extraJobs.length === 0 ? (
-            <div className="rounded-xl border border-stone-200 bg-white px-4 py-10 text-center">
-              <p className="text-sm text-stone-500">No extra jobs yet.</p>
-              {canManageExtraJobs && (
-                <Link
-                  href={`/sites/${siteId}/stages/${stageId}/extra-jobs/new`}
-                  className="mt-3 inline-block text-sm font-medium text-green-700 hover:underline"
-                >
-                  Add the first extra job →
-                </Link>
-              )}
-            </div>
-          ) : (
-            <div className="rounded-xl border border-stone-200 bg-white overflow-hidden divide-y divide-stone-100">
-              {extraJobs.map((job) => {
-                const jobStatus = job.status as ExtraJobStatus
-                const cfg = EXTRA_JOB_STATUS_CONFIG[jobStatus] ?? EXTRA_JOB_STATUS_CONFIG.not_started
-                return (
-                  <Link
-                    key={job.id}
-                    href={`/sites/${siteId}/stages/${stageId}/extra-jobs/${job.id}`}
-                    className="flex items-center gap-3 px-4 py-3.5 hover:bg-stone-50 active:bg-stone-100 transition-colors"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-stone-900">{job.title}</span>
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cfg.badge}`}>
-                          {cfg.label}
-                        </span>
-                      </div>
-                      {job.description && (
-                        <p className="mt-0.5 text-xs text-stone-500 truncate">{job.description}</p>
-                      )}
-                    </div>
-                    <svg className="h-4 w-4 shrink-0 text-stone-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                    </svg>
-                  </Link>
-                )
-              })}
-            </div>
-          )}
+          <ExtraJobsExport
+            extraJobs={(extraJobs ?? []).map((j) => ({
+              id:          j.id,
+              title:       j.title,
+              description: j.description ?? null,
+              status:      j.status,
+            }))}
+            siteId={siteId}
+            stageId={stageId}
+            siteName={site.name}
+            stageName={stage.name}
+            canManage={canManageExtraJobs}
+          />
         </div>
 
         {/* ── Materials Summary ────────────────────────────────────────────── */}
