@@ -88,7 +88,7 @@ export async function uploadLotDocument(
   })
 
   if (dbError) {
-    await deleteFromR2(key)
+    await deleteFromR2(key).catch(() => null)
     return { error: dbError.message }
   }
 
@@ -131,7 +131,7 @@ export async function uploadLotPhoto(
   })
 
   if (dbError) {
-    await deleteFromR2(key)
+    await deleteFromR2(key).catch(() => null)
     return { error: dbError.message }
   }
 
