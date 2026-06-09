@@ -171,6 +171,8 @@ export interface Vehicle {
   next_service_hours: number | null
   notes: string | null
   vehicle_type: string | null
+  current_hours: number | null
+  current_hours_updated_at: string | null
   created_at: string
 }
 
@@ -232,6 +234,42 @@ export interface LotQuoteItem {
   unit_price_snapshot: number | null
   notes: string | null
   created_at: string
+}
+
+// ── Safety ────────────────────────────────────────────────────────────────────
+
+export interface PreStart {
+  id: string
+  site_id: string
+  submitted_by: string
+  date: string
+  crew_present: string[]
+  weather: string[]
+  site_hazards: string | null
+  ppe_confirmed: boolean
+  fit_for_work: boolean
+  using_machinery: boolean
+  machinery_checks: Record<string, string> | null
+  machine_id: string | null
+  notes: string | null
+  created_at: string
+}
+
+export interface SafetyDocument {
+  id: string
+  title: string
+  description: string | null
+  file_path: string
+  uploaded_by: string
+  created_at: string
+}
+
+export interface DocumentSignoff {
+  id: string
+  document_id: string
+  signed_by: string
+  signed_at: string
+  signature_notes: string | null
 }
 
 // ── Joined types (useful for queries that join tables) ────────────────────────

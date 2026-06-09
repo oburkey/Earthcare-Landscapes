@@ -22,6 +22,8 @@ interface Vehicle {
   next_service_hours: number | null
   notes: string | null
   vehicle_type: string | null
+  current_hours: number | null
+  current_hours_updated_at: string | null
 }
 
 const VEHICLE_TYPES = ['Truck', 'Machinery', 'Ute'] as const
@@ -215,6 +217,25 @@ export default function VehicleManagement({ vehicles, today }: Props) {
                       )}
                     </div>
                   </div>
+
+                  {/* Current hours — machinery only */}
+                  {vehicle.vehicle_type === 'Machinery' && (
+                    <div className="px-4 py-3">
+                      <p className="text-xs font-medium text-stone-400 mb-0.5">Current hours</p>
+                      {vehicle.current_hours !== null ? (
+                        <>
+                          <p className="text-sm text-stone-800">{vehicle.current_hours.toLocaleString()} hrs</p>
+                          {vehicle.current_hours_updated_at && (
+                            <p className="text-xs text-stone-400 mt-0.5">
+                              Last updated {new Date(vehicle.current_hours_updated_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-sm text-stone-400 italic">No hours recorded</p>
+                      )}
+                    </div>
+                  )}
 
                   {/* Rego + insurance */}
                   <div className="grid grid-cols-2 divide-x divide-stone-100">

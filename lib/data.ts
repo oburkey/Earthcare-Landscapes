@@ -138,7 +138,7 @@ async function _vehicles(db: Db) {
       rego_expiry_date, insurance_expiry_date,
       last_service_date, last_service_hours, last_service_odometer,
       next_service_due_date, next_service_km, next_service_hours,
-      notes, vehicle_type, created_at
+      notes, vehicle_type, current_hours, current_hours_updated_at, created_at
     `)
     .order('make', { ascending: true })
   return data ?? []
