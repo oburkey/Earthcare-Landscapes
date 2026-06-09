@@ -3,7 +3,7 @@
   "short_name": "Earthcare",
   "icons": [
     {
-      "src": "/earthcare-logo.png",
+      "src": "/earthcare-icon.png",
       "sizes": "any",
       "type": "image/png"
     }

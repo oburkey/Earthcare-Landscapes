@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: "Landscaping project management for Earthcare Landscapes",
   manifest: "/manifest.webmanifest",
   icons: {
-    apple: "/earthcare-logo.png",
+    apple: "/earthcare-icon.png",
   },
 };
 
