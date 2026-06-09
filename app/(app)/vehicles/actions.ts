@@ -86,10 +86,15 @@ export async function updateVehicle(
   const err = validate(fields)
   if (err) return { error: err }
 
+  const currentHoursRaw = ((formData.get('current_hours') as string | null) ?? '').trim()
+  const currentHoursUpdate = currentHoursRaw !== ''
+    ? { current_hours: parseFloat(currentHoursRaw) || 0, current_hours_updated_at: new Date().toISOString() }
+    : {}
+
   const supabase = await createClient()
   const { error } = await supabase
     .from('vehicles')
-    .update(fields)
+    .update({ ...fields, ...currentHoursUpdate })
     .eq('id', vehicleId)
   if (error) return { error: error.message }
 

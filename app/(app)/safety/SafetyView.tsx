@@ -19,6 +19,7 @@ export type VehicleOption = {
   registration:  string | null
   vehicle_type:  string | null
   current_hours: number | null
+  assigned_to:   string | null
 }
 
 export type PreStartRow = {

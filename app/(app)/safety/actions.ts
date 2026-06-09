@@ -27,7 +27,8 @@ export async function submitPreStart(formData: FormData) {
   const fitForWork     = formData.get('fit_for_work') === 'true'
   const usingMachinery = formData.get('using_machinery') === 'true'
   const machineId      = (formData.get('machine_id') as string) || null
-  const hoursToday     = parseFloat((formData.get('hours_today') as string) || '0') || 0
+  const hoursRaw       = (formData.get('hours_today') as string)?.trim()
+  const hoursToday     = hoursRaw ? (parseFloat(hoursRaw) ?? null) : null
   const machineryChecks = usingMachinery
     ? JSON.parse((formData.get('machinery_checks') as string) || 'null')
     : null
@@ -57,19 +58,13 @@ export async function submitPreStart(formData: FormData) {
 
   if (error) return { error: error.message }
 
-  // Update vehicle's cumulative hours
-  if (usingMachinery && machineId && hoursToday > 0) {
+  // Set vehicle meter reading (replaces stored value — number entered IS the current reading)
+  if (usingMachinery && machineId && hoursToday !== null) {
     try {
-      const { data: vehicle } = await supabase
-        .from('vehicles')
-        .select('current_hours')
-        .eq('id', machineId)
-        .single()
-      const existing = (vehicle?.current_hours as number | null) ?? 0
       await supabase
         .from('vehicles')
         .update({
-          current_hours: existing + hoursToday,
+          current_hours: hoursToday,
           current_hours_updated_at: new Date().toISOString(),
         })
         .eq('id', machineId)

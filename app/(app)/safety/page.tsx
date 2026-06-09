@@ -34,7 +34,7 @@ export default async function SafetyPage() {
   // Vehicles (for machinery selector — all types passed, filtered to Machinery in the form)
   const { data: vehiclesRaw } = await supabase
     .from('vehicles')
-    .select('id, make, model, registration, vehicle_type, current_hours')
+    .select('id, make, model, registration, vehicle_type, current_hours, assigned_to')
     .order('make')
   const vehicles: VehicleOption[] = (vehiclesRaw ?? []) as VehicleOption[]
 

@@ -4,6 +4,10 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Earthcare Landscapes",
   description: "Landscaping project management for Earthcare Landscapes",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    apple: "/earthcare-logo.png",
+  },
 };
 
 export default function RootLayout({

@@ -428,6 +428,23 @@ function EditForm({ vehicle, onSuccess }: { vehicle: Vehicle; onSuccess: () => v
         <input type="hidden" name="vehicle_id" value={vehicle.id} />
         <VehicleFields v={vehicle} />
 
+        {vehicle.vehicle_type === 'Machinery' && (
+          <div>
+            <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-3">Meter reading</p>
+            <Field label="Current hours">
+              <input
+                name="current_hours"
+                type="number"
+                min={0}
+                step={0.1}
+                defaultValue={vehicle.current_hours ?? ''}
+                placeholder="e.g. 1250"
+                className={INPUT}
+              />
+            </Field>
+          </div>
+        )}
+
         {updateState?.error && (
           <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{updateState.error}</p>
         )}

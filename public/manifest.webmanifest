@@ -1,0 +1,14 @@
+{
+  "name": "Earthcare Landscapes",
+  "short_name": "Earthcare",
+  "icons": [
+    {
+      "src": "/earthcare-logo.png",
+      "sizes": "any",
+      "type": "image/png"
+    }
+  ],
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1a6b3c"
+}

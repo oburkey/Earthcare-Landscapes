@@ -38,6 +38,13 @@ function defaultChecks(): Record<CheckKey, CheckVal> {
   }
 }
 
+function pdfCheckVal(val: string | undefined, inverted = false): string {
+  if (val === 'yes') return inverted ? '<span style="color:#dc2626;font-weight:bold">Yes</span>' : '<span style="color:#16a34a;font-weight:bold">Yes</span>'
+  if (val === 'no')  return inverted ? '<span style="color:#16a34a;font-weight:bold">No</span>'  : '<span style="color:#dc2626;font-weight:bold">No</span>'
+  if (val === 'na')  return '<span style="color:#999">N/A</span>'
+  return '<span style="color:#ccc">—</span>'
+}
+
 // ── PDF ───────────────────────────────────────────────────────────────────────
 
 const PDF_STYLES = `<style>
@@ -59,6 +66,7 @@ const PDF_STYLES = `<style>
 
 async function downloadPreStartsPdf(
   preStarts: PreStartRow[],
+  vehicles: VehicleOption[],
   siteFilter: string,
   siteLabel: string,
   dateFrom: string,
@@ -75,7 +83,7 @@ async function downloadPreStartsPdf(
 
   const rows = preStarts.map(ps => {
     const hazard = ps.siteHazards ? `<span class="warn">Yes</span>` : 'No'
-    return `<tr>
+    const summaryRow = `<tr>
       <td>${ps.date}</td>
       <td>${ps.siteName}</td>
       <td>${ps.submitterName}</td>
@@ -86,6 +94,57 @@ async function downloadPreStartsPdf(
       <td class="${ps.fitForWork ? 'ok' : 'bad'}">${ps.fitForWork ? '✓' : '✗'}</td>
       <td>${ps.usingMachinery ? 'Yes' : 'No'}</td>
     </tr>`
+
+    if (!ps.usingMachinery || !ps.machineryChecks) return summaryRow
+
+    const mc = ps.machineryChecks
+    const machine = ps.machineId ? vehicles.find(v => v.id === ps.machineId) : null
+
+    const machineName = machine ? `${machine.make} ${machine.model}` : '—'
+    const machineRego = machine?.registration ?? null
+    const machineLocation = machine?.assigned_to ?? null
+
+    const checklistRows = CHECKLIST_ITEMS.map(item => {
+      const val = mc[item.key] ?? ''
+      const inverted = item.key === 'faults_concerns'
+      return `<tr>
+        <td style="padding:1.5px 6px 1.5px 0;font-size:7.5px;color:#444;border-bottom:1px solid #f0f0f0;">${item.label}</td>
+        <td style="padding:1.5px 0;font-size:7.5px;white-space:nowrap;border-bottom:1px solid #f0f0f0;text-align:right;">${pdfCheckVal(val, inverted)}</td>
+      </tr>`
+    }).join('')
+
+    const faultNotes = [
+      mc.damage_description ? `<div style="margin-top:4px;font-size:7.5px;"><span style="font-weight:bold;color:#dc2626;">Damage noted: </span><span style="color:#7f1d1d;">${mc.damage_description}</span></div>` : '',
+      mc.greased_why_not    ? `<div style="margin-top:3px;font-size:7.5px;"><span style="font-weight:bold;color:#d97706;">Not greased: </span><span style="color:#78350f;">${mc.greased_why_not}</span></div>` : '',
+    ].filter(Boolean).join('')
+
+    const photosLine = ps.photoPaths.length > 0
+      ? `<div style="margin-top:4px;font-size:7.5px;color:#6b7280;">${ps.photoPaths.length} photo${ps.photoPaths.length !== 1 ? 's' : ''} attached</div>`
+      : ''
+
+    const detailRow = `<tr>
+      <td colspan="9" style="padding:5px 8px 7px 8px;background:#fffbeb;border-bottom:2px solid #fde68a;">
+        <div style="display:flex;gap:16px;align-items:flex-start;">
+          <div style="min-width:160px;max-width:200px;flex-shrink:0;">
+            <div style="font-size:7px;font-weight:bold;text-transform:uppercase;color:#92400e;margin-bottom:3px;letter-spacing:0.05em;">Machine</div>
+            <div style="font-size:8.5px;font-weight:bold;color:#111;">${machineName}</div>
+            ${machineRego     ? `<div style="font-size:7.5px;color:#555;margin-top:1px;">${machineRego}</div>` : ''}
+            ${machineLocation ? `<div style="font-size:7.5px;color:#555;">Location: ${machineLocation}</div>` : ''}
+            ${mc.hours_today  ? `<div style="font-size:7.5px;color:#555;margin-top:3px;">Meter reading: <strong>${mc.hours_today} hrs</strong></div>` : ''}
+            ${photosLine}
+            ${faultNotes}
+          </div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:7px;font-weight:bold;text-transform:uppercase;color:#92400e;margin-bottom:3px;letter-spacing:0.05em;">Pre-Start Checklist</div>
+            <table style="width:100%;border-collapse:collapse;">
+              <tbody>${checklistRows}</tbody>
+            </table>
+          </div>
+        </div>
+      </td>
+    </tr>`
+
+    return summaryRow + detailRow
   }).join('')
 
   const html = `${PDF_STYLES}
@@ -399,6 +458,7 @@ export default function PreStartsTab({
     setPdfError(null)
     downloadPreStartsPdf(
       filteredPreStarts,
+      vehicles,
       filterSite,
       siteLabel,
       filterFrom,
@@ -487,12 +547,20 @@ export default function PreStartsTab({
             <div className="space-y-3">
               <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Machinery Pre-Start</p>
 
-              {mc.hours_today && (
-                <div className="rounded-lg bg-stone-50 border border-stone-200 px-3 py-2 text-sm">
-                  <span className="text-stone-500">Hours on machine today: </span>
-                  <span className="font-semibold text-stone-900">{mc.hours_today} hrs</span>
-                </div>
-              )}
+              {(() => {
+                const machine = ps.machineId ? vehicles.find(v => v.id === ps.machineId) : null
+                if (!machine) return null
+                return (
+                  <div className="rounded-lg bg-stone-50 border border-stone-200 px-3 py-2 space-y-0.5">
+                    <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1">Machine</p>
+                    <p className="text-sm font-medium text-stone-900">{machine.make} {machine.model}</p>
+                    {machine.registration && <p className="text-xs text-stone-500">{machine.registration}</p>}
+                    {mc.hours_today && (
+                      <p className="text-xs text-stone-500">Meter reading at submission: <span className="font-semibold text-stone-700">{mc.hours_today} hrs</span></p>
+                    )}
+                  </div>
+                )
+              })()}
 
               <div className="rounded-lg border border-stone-200 overflow-hidden divide-y divide-stone-100">
                 {CHECKLIST_ITEMS.map(item => (
@@ -735,7 +803,7 @@ export default function PreStartsTab({
                       {machineryVehicles.map(v => (
                         <option key={v.id} value={v.id}>
                           {v.make} {v.model}{v.registration ? ` (${v.registration})` : ''}
-                          {v.current_hours != null ? ` — ${v.current_hours} hrs` : ''}
+                          {v.assigned_to ? ` — ${v.assigned_to}` : ''}
                         </option>
                       ))}
                     </select>
@@ -748,28 +816,20 @@ export default function PreStartsTab({
                 )}
               </div>
 
-              {/* Hours on machine today */}
+              {/* Current meter reading */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">
-                  Hours on machine today
+                  Current meter reading (hrs)
                 </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    value={machineHours}
-                    onChange={e => setMachineHours(e.target.value)}
-                    placeholder="e.g. 4.5"
-                    min="0"
-                    step="0.5"
-                    className="w-36 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none"
-                  />
-                  <span className="text-sm text-stone-400">hrs</span>
-                  {machineHours && selectedVehicle?.current_hours != null && (
-                    <span className="text-xs text-stone-400">
-                      → new total: {(selectedVehicle.current_hours + parseFloat(machineHours || '0')).toFixed(1)} hrs
-                    </span>
-                  )}
-                </div>
+                <input
+                  type="number"
+                  value={machineHours}
+                  onChange={e => setMachineHours(e.target.value)}
+                  placeholder="e.g. 1234.5"
+                  min="0"
+                  step="0.5"
+                  className="w-36 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none"
+                />
               </div>
 
               {/* Checklist */}
