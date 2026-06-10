@@ -9,6 +9,7 @@ import { uploadStagePlan } from './actions'
 import PlanPhotoUpload from '../../PlanPhotoUpload'
 import EditStageForm from './EditStageForm'
 import MaterialsSummary from './MaterialsSummary'
+import BulkUpdateLotsButton from './BulkUpdateLotsButton'
 import { getR2SignedUrl } from '@/lib/r2'
 
 interface Props {
@@ -152,8 +153,11 @@ export default async function StagePage({ params }: Props) {
         </div>
 
         {/* ── Lots list ─────────────────────────────────────────────────────── */}
-        <div>
-          <h2 className="text-base font-semibold text-stone-800 mb-3">Lots</h2>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold text-stone-800">Lots</h2>
+          </div>
+          {canAddLot && <BulkUpdateLotsButton stageId={stageId} siteId={siteId} />}
 
           {lots.length === 0 ? (
             <div className="rounded-xl border border-stone-200 bg-white px-4 py-12 text-center">

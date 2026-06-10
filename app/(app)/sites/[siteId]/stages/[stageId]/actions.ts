@@ -8,6 +8,115 @@ import { uploadToR2, deleteFromR2 } from '@/lib/r2'
 
 import type { ActionState, EditState, UploadActionState } from '@/types/actions'
 
+export type BulkUpdateResult = {
+  updated: number
+  created: number
+  errors:  string[]
+}
+
+export async function bulkUpdateLots(
+  stageId: string,
+  siteId:  string,
+  rawData: string,
+): Promise<BulkUpdateResult> {
+  const profile = await requireAuth()
+  if (
+    profile.role !== 'leading_hand' &&
+    profile.role !== 'supervisor' &&
+    profile.role !== 'admin'
+  ) {
+    return { updated: 0, created: 0, errors: ['Insufficient permissions'] }
+  }
+
+  const lines = rawData.split('\n').map(l => l.trim()).filter(Boolean)
+  if (lines.length === 0) return { updated: 0, created: 0, errors: [] }
+
+  const supabase = await createClient()
+
+  const { data: existingLots } = await supabase
+    .from('lots')
+    .select('id, lot_number, status')
+    .eq('stage_id', stageId)
+
+  const lotsMap = new Map(
+    (existingLots ?? []).map(l => [l.lot_number as string, l as { id: string; lot_number: string; status: string }])
+  )
+
+  const errors: string[] = []
+  let updated = 0
+  let created = 0
+
+  for (const line of lines) {
+    // Split on first tab or comma
+    const sepIdx = line.search(/[\t,]/)
+    if (sepIdx === -1) {
+      errors.push(`"${line}": missing separator — expected tab or comma between lot number and date`)
+      continue
+    }
+    const lotNumber = line.slice(0, sepIdx).trim()
+    const dateStr   = line.slice(sepIdx + 1).trim()
+
+    if (!lotNumber) {
+      errors.push(`"${line}": missing lot number`)
+      continue
+    }
+
+    // Parse DD/MM/YYYY
+    const match = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+    if (!match) {
+      errors.push(`Lot ${lotNumber}: invalid date "${dateStr}" — expected DD/MM/YYYY`)
+      continue
+    }
+    const [, dd, mm, yyyy] = match
+    const day   = parseInt(dd, 10)
+    const month = parseInt(mm, 10)
+    const year  = parseInt(yyyy, 10)
+    const dt = new Date(year, month - 1, day)
+    if (dt.getDate() !== day || dt.getMonth() !== month - 1 || dt.getFullYear() !== year) {
+      errors.push(`Lot ${lotNumber}: "${dateStr}" is not a valid calendar date`)
+      continue
+    }
+    const isoDate = `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`
+
+    const existing = lotsMap.get(lotNumber)
+    if (existing) {
+      const noDowngrade = existing.status === 'complete' || existing.status === 'in_progress'
+      const newStatus   = noDowngrade ? existing.status : 'scheduled'
+      const { error } = await supabase
+        .from('lots')
+        .update({ due_date: isoDate, status: newStatus })
+        .eq('id', existing.id)
+      if (error) {
+        errors.push(`Lot ${lotNumber}: ${error.message}`)
+      } else {
+        updated++
+        lotsMap.set(lotNumber, { ...existing, status: newStatus })
+      }
+    } else {
+      const { data: newLot, error } = await supabase
+        .from('lots')
+        .insert({ stage_id: stageId, lot_number: lotNumber, due_date: isoDate, status: 'scheduled' })
+        .select('id, lot_number, status')
+        .single()
+      if (error) {
+        errors.push(`Lot ${lotNumber} (create): ${error.message}`)
+      } else {
+        created++
+        lotsMap.set(lotNumber, newLot)
+      }
+    }
+  }
+
+  if (updated > 0 || created > 0) {
+    revalidatePath(`/sites/${siteId}/stages/${stageId}`)
+    revalidateTag('stages')
+    revalidateTag('dashboard')
+    revalidateTag('schedule')
+  }
+
+  return { updated, created, errors }
+}
+
 export async function deleteStage(
   _prev: ActionState,
   formData: FormData
