@@ -37,6 +37,11 @@ export type PreStartRow = {
   usingMachinery:  boolean
   machineryChecks: Record<string, string> | null
   machineId:       string | null
+  usingTruck:      boolean
+  truckId:         string | null
+  truckChecks:     Record<string, string> | null
+  usingTrailer:    boolean
+  trailerChecks:   Record<string, string> | null
   notes:           string | null
   photoPaths:      string[]
   createdAt:       string

@@ -7,11 +7,57 @@ import { LOGO_DATA_URL } from '@/lib/pdfAssets'
 import type { Role } from '@/types/database'
 import type { PreStartRow, SiteOption, StaffOption, VehicleOption } from './SafetyView'
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Checklist definitions ─────────────────────────────────────────────────────
 
-const WEATHER_OPTIONS = ['Fine', 'Hot', 'Wet', 'Windy', 'Extreme heat'] as const
+type ChecklistItem = {
+  readonly key:              string
+  readonly label:            string
+  readonly inverted?:        boolean  // "yes" is the bad answer
+  readonly blocksSubmission?: boolean // bad answer prevents submit (truck Q1)
+}
 
-const CHECKLIST_ITEMS = [
+const MACHINERY_CHECKLIST: readonly ChecklistItem[] = [
+  { key: 'air_filters',       label: 'Have air filters been cleaned today?' },
+  { key: 'pre_cleaner_bowl',  label: 'Has the air filter been checked and bowl emptied?' },
+  { key: 'engine_fluids',     label: 'Have engine oil, coolant and hydraulic fluid levels been checked, no leaks?' },
+  { key: 'battery_water',     label: 'Have battery, leads and water level been checked?' },
+  { key: 'belts_hoses',       label: 'Have belts, hoses and battery condition/connections been checked?' },
+  { key: 'greased_today',     label: 'Has the machine been greased today?' },
+  { key: 'attachments_secure',label: 'Are buckets, forks, attachment pins and bolts secure?' },
+  { key: 'lights_working',    label: 'Are work lights, beacon, taillights and reverse lights working?' },
+  { key: 'seatbelt_controls', label: 'Is the seatbelt working, and are controls, horn and reverse beeper operational?' },
+  { key: 'fire_extinguisher', label: 'Is a fire extinguisher present and not expired?' },
+  { key: 'door_seals',        label: 'Does the door open and close correctly with seals undamaged?' },
+  { key: 'tyre_pressure',     label: 'Have tyre pressures been checked and wheel nuts are secure?' },
+  { key: 'machine_washed',    label: 'Has the machine been washed in the last week?' },
+  { key: 'faults_concerns',   label: 'Are there any faults or concerns to report?', inverted: true },
+]
+
+const TRUCK_CHECKLIST: readonly ChecklistItem[] = [
+  { key: 'fitness_to_drive',  label: 'Are you fit, drug and alcohol free to drive this vehicle?', blocksSubmission: true },
+  { key: 'fluid_levels',      label: 'Have fluid levels been checked (oil, coolant, brake/clutch fluid)?' },
+  { key: 'battery_water',     label: 'Have battery, leads and water level been checked?' },
+  { key: 'wheels_tyres',      label: 'Have wheels, tyres and hubs been checked (tread, pressure, wheel nuts)?' },
+  { key: 'lights_reflectors', label: 'Are all lights and reflectors working?' },
+  { key: 'windscreen_wipers', label: 'Are windscreen, wipers and mirrors clean and undamaged?' },
+  { key: 'fluid_leaks',       label: 'Any fluid leaks visible (oil, fuel, water, hydraulic)?', inverted: true },
+  { key: 'warning_lights',    label: 'After starting — any warning lights remain on?', inverted: true },
+  { key: 'truck_washed',      label: 'Has the truck been washed in the last week?' },
+  { key: 'faults_concerns',   label: 'Are there any faults or concerns to report?', inverted: true },
+]
+
+const TRAILER_CHECKLIST: readonly ChecklistItem[] = [
+  { key: 'tyres_checked',     label: 'Have all tyres been checked (tread, damage, inflation, including spares)?' },
+  { key: 'mudguards',         label: 'Are mudguards and mudflaps securely fitted?' },
+  { key: 'lights_indicators', label: 'Are all lights, indicators and reflectors working?' },
+  { key: 'chassis_suspension',label: 'Visual check of chassis, body and suspension complete?' },
+  { key: 'tow_hitch',         label: 'Are tow hitch, safety chains and tie down straps secure (chains crossed left-right)?' },
+  { key: 'brakes_tested',     label: 'Have brakes been tested at low speed (apply and release)?' },
+  { key: 'faults_concerns',   label: 'Are there any faults or concerns to report?', inverted: true },
+]
+
+// Kept only for rendering legacy pre-start records in the detail view
+const OLD_MACHINERY_CHECKLIST: readonly ChecklistItem[] = [
   { key: 'no_new_damage',   label: 'Is the machine free of new damage since last use?' },
   { key: 'fluid_levels',    label: 'Are all fluid levels checked (fuel, oil, hydraulic)?' },
   { key: 'brakes_steering', label: 'Are brakes and steering operating correctly?' },
@@ -19,23 +65,61 @@ const CHECKLIST_ITEMS = [
   { key: 'seatbelt',        label: 'Is the seatbelt working and in good condition?' },
   { key: 'tyres_tracks',    label: 'Are tyres/tracks in good condition?' },
   { key: 'greased_today',   label: 'Has the machine been greased today?' },
-  { key: 'faults_concerns', label: 'Are there any faults or concerns to report?' },
-] as const
+  { key: 'faults_concerns', label: 'Are there any faults or concerns to report?', inverted: true },
+]
 
-type CheckKey = typeof CHECKLIST_ITEMS[number]['key']
+const WEATHER_OPTIONS = ['Fine', 'Hot', 'Wet', 'Windy', 'Extreme heat'] as const
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
 type CheckVal = 'yes' | 'no' | 'na' | ''
 
-function defaultChecks(): Record<CheckKey, CheckVal> {
-  return {
-    no_new_damage:   '',
-    fluid_levels:    '',
-    brakes_steering: '',
-    guards_safety:   '',
-    seatbelt:        '',
-    tyres_tracks:    '',
-    greased_today:   '',
-    faults_concerns: '',
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function defaultChecksFor(items: readonly ChecklistItem[]): Record<string, CheckVal> {
+  return Object.fromEntries(items.map(i => [i.key, '' as CheckVal]))
+}
+
+function isBadAnswer(item: ChecklistItem, val: CheckVal): boolean {
+  if (!val) return false
+  return item.inverted ? val === 'yes' : val === 'no'
+}
+
+// Validate a checklist; returns first error string or null
+function validateSection(
+  items: readonly ChecklistItem[],
+  checks: Record<string, CheckVal>,
+  notes: Record<string, string>,
+  sectionLabel: string,
+): string | null {
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    const val = (checks[item.key] ?? '') as CheckVal
+    if (!isBadAnswer(item, val)) continue
+    if (item.blocksSubmission) {
+      return 'Vehicle cannot be operated — please notify your supervisor immediately'
+    }
+    if (!notes[item.key]?.trim()) {
+      return `${sectionLabel} question ${i + 1}: please describe what's wrong`
+    }
   }
+  return null
+}
+
+// Build JSON blob: { key: val, key_notes: note, ... }
+function buildChecksJson(
+  items: readonly ChecklistItem[],
+  checks: Record<string, CheckVal>,
+  notes: Record<string, string>,
+  extra?: Record<string, string>,
+): Record<string, string> {
+  const result: Record<string, string> = { ...extra }
+  for (const item of items) {
+    result[item.key] = checks[item.key] ?? ''
+    const note = notes[item.key]?.trim()
+    if (note) result[`${item.key}_notes`] = note
+  }
+  return result
 }
 
 function pdfCheckVal(val: string | undefined, inverted = false): string {
@@ -43,6 +127,18 @@ function pdfCheckVal(val: string | undefined, inverted = false): string {
   if (val === 'no')  return inverted ? '<span style="color:#16a34a;font-weight:bold">No</span>'  : '<span style="color:#dc2626;font-weight:bold">No</span>'
   if (val === 'na')  return '<span style="color:#999">N/A</span>'
   return '<span style="color:#ccc">—</span>'
+}
+
+function pdfChecklistRows(items: readonly ChecklistItem[], checks: Record<string, string>): string {
+  return items.map(item => {
+    const val  = checks[item.key] ?? ''
+    const note = checks[`${item.key}_notes`] ?? ''
+    const bad  = isBadAnswer(item, val as CheckVal)
+    return `<tr>
+      <td style="padding:1.5px 6px 1.5px 0;font-size:7.5px;color:#444;border-bottom:1px solid #f0f0f0;">${item.label}${bad && note ? `<br><span style="color:#dc2626;font-size:7px;">${note}</span>` : ''}</td>
+      <td style="padding:1.5px 0;font-size:7.5px;white-space:nowrap;border-bottom:1px solid #f0f0f0;text-align:right;">${pdfCheckVal(val, item.inverted)}</td>
+    </tr>`
+  }).join('')
 }
 
 // ── PDF ───────────────────────────────────────────────────────────────────────
@@ -64,6 +160,35 @@ const PDF_STYLES = `<style>
 .html2pdf__container .note { margin-top: 12px; font-size: 8px; color: #999; }
 </style>`
 
+function pdfEquipmentDetailRow(
+  label: string,
+  bgColor: string,
+  borderColor: string,
+  labelColor: string,
+  infoHtml: string,
+  items: readonly ChecklistItem[],
+  checks: Record<string, string>,
+  photosLine: string,
+): string {
+  return `<tr>
+    <td colspan="9" style="padding:5px 8px 7px 8px;background:${bgColor};border-bottom:2px solid ${borderColor};">
+      <div style="display:flex;gap:16px;align-items:flex-start;">
+        <div style="min-width:160px;max-width:200px;flex-shrink:0;">
+          <div style="font-size:7px;font-weight:bold;text-transform:uppercase;color:${labelColor};margin-bottom:3px;letter-spacing:0.05em;">${label}</div>
+          ${infoHtml}
+          ${photosLine}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:7px;font-weight:bold;text-transform:uppercase;color:${labelColor};margin-bottom:3px;letter-spacing:0.05em;">Pre-Start Checklist</div>
+          <table style="width:100%;border-collapse:collapse;">
+            <tbody>${pdfChecklistRows(items, checks)}</tbody>
+          </table>
+        </div>
+      </div>
+    </td>
+  </tr>`
+}
+
 async function downloadPreStartsPdf(
   preStarts: PreStartRow[],
   vehicles: VehicleOption[],
@@ -83,6 +208,12 @@ async function downloadPreStartsPdf(
 
   const rows = preStarts.map(ps => {
     const hazard = ps.siteHazards ? `<span class="warn">Yes</span>` : 'No'
+    const equipmentUsed = [
+      ps.usingMachinery && 'Machine',
+      ps.usingTruck     && 'Truck',
+      ps.usingTrailer   && 'Trailer',
+    ].filter(Boolean).join(', ') || 'No'
+
     const summaryRow = `<tr>
       <td>${ps.date}</td>
       <td>${ps.siteName}</td>
@@ -92,59 +223,50 @@ async function downloadPreStartsPdf(
       <td>${hazard}</td>
       <td class="${ps.ppeConfirmed ? 'ok' : 'bad'}">${ps.ppeConfirmed ? '✓' : '✗'}</td>
       <td class="${ps.fitForWork ? 'ok' : 'bad'}">${ps.fitForWork ? '✓' : '✗'}</td>
-      <td>${ps.usingMachinery ? 'Yes' : 'No'}</td>
+      <td>${equipmentUsed}</td>
     </tr>`
 
-    if (!ps.usingMachinery || !ps.machineryChecks) return summaryRow
+    let detailRows = ''
 
-    const mc = ps.machineryChecks
-    const machine = ps.machineId ? vehicles.find(v => v.id === ps.machineId) : null
+    // Machinery detail
+    if (ps.usingMachinery && ps.machineryChecks) {
+      const mc      = ps.machineryChecks
+      const machine = ps.machineId ? vehicles.find(v => v.id === ps.machineId) : null
+      const isOld   = 'no_new_damage' in mc
+      const items   = isOld ? OLD_MACHINERY_CHECKLIST : MACHINERY_CHECKLIST
+      const photosLine = ps.photoPaths.length > 0
+        ? `<div style="margin-top:4px;font-size:7.5px;color:#6b7280;">${ps.photoPaths.length} photo${ps.photoPaths.length !== 1 ? 's' : ''} attached</div>`
+        : ''
+      const infoHtml = [
+        machine ? `<div style="font-size:8.5px;font-weight:bold;color:#111;">${machine.make} ${machine.model}</div>` : '',
+        machine?.registration ? `<div style="font-size:7.5px;color:#555;margin-top:1px;">${machine.registration}</div>` : '',
+        machine?.assigned_to  ? `<div style="font-size:7.5px;color:#555;">Location: ${machine.assigned_to}</div>` : '',
+        mc.hours_today ? `<div style="font-size:7.5px;color:#555;margin-top:3px;">Meter reading: <strong>${mc.hours_today} hrs</strong></div>` : '',
+        // Legacy notes
+        isOld && mc.greased_why_not    ? `<div style="margin-top:4px;font-size:7.5px;"><b style="color:#d97706">Not greased:</b> ${mc.greased_why_not}</div>` : '',
+        isOld && mc.damage_description ? `<div style="margin-top:3px;font-size:7.5px;"><b style="color:#dc2626">Damage:</b> ${mc.damage_description}</div>` : '',
+      ].filter(Boolean).join('')
+      detailRows += pdfEquipmentDetailRow('Machine', '#fffbeb', '#fde68a', '#92400e', infoHtml, items, mc, photosLine)
+    }
 
-    const machineName = machine ? `${machine.make} ${machine.model}` : '—'
-    const machineRego = machine?.registration ?? null
-    const machineLocation = machine?.assigned_to ?? null
+    // Truck detail
+    if (ps.usingTruck && ps.truckChecks) {
+      const tc    = ps.truckChecks
+      const truck = ps.truckId ? vehicles.find(v => v.id === ps.truckId) : null
+      const infoHtml = [
+        truck ? `<div style="font-size:8.5px;font-weight:bold;color:#111;">${truck.make} ${truck.model}</div>` : '',
+        truck?.registration ? `<div style="font-size:7.5px;color:#555;margin-top:1px;">${truck.registration}</div>` : '',
+        truck?.assigned_to  ? `<div style="font-size:7.5px;color:#555;">Location: ${truck.assigned_to}</div>` : '',
+      ].filter(Boolean).join('')
+      detailRows += pdfEquipmentDetailRow('Truck', '#eff6ff', '#bfdbfe', '#1e40af', infoHtml, TRUCK_CHECKLIST, tc, '')
+    }
 
-    const checklistRows = CHECKLIST_ITEMS.map(item => {
-      const val = mc[item.key] ?? ''
-      const inverted = item.key === 'faults_concerns'
-      return `<tr>
-        <td style="padding:1.5px 6px 1.5px 0;font-size:7.5px;color:#444;border-bottom:1px solid #f0f0f0;">${item.label}</td>
-        <td style="padding:1.5px 0;font-size:7.5px;white-space:nowrap;border-bottom:1px solid #f0f0f0;text-align:right;">${pdfCheckVal(val, inverted)}</td>
-      </tr>`
-    }).join('')
+    // Trailer detail
+    if (ps.usingTrailer && ps.trailerChecks) {
+      detailRows += pdfEquipmentDetailRow('Trailer', '#f0fdf4', '#bbf7d0', '#166534', '<div style="font-size:8.5px;font-weight:bold;color:#111;">Trailer</div>', TRAILER_CHECKLIST, ps.trailerChecks, '')
+    }
 
-    const faultNotes = [
-      mc.damage_description ? `<div style="margin-top:4px;font-size:7.5px;"><span style="font-weight:bold;color:#dc2626;">Damage noted: </span><span style="color:#7f1d1d;">${mc.damage_description}</span></div>` : '',
-      mc.greased_why_not    ? `<div style="margin-top:3px;font-size:7.5px;"><span style="font-weight:bold;color:#d97706;">Not greased: </span><span style="color:#78350f;">${mc.greased_why_not}</span></div>` : '',
-    ].filter(Boolean).join('')
-
-    const photosLine = ps.photoPaths.length > 0
-      ? `<div style="margin-top:4px;font-size:7.5px;color:#6b7280;">${ps.photoPaths.length} photo${ps.photoPaths.length !== 1 ? 's' : ''} attached</div>`
-      : ''
-
-    const detailRow = `<tr>
-      <td colspan="9" style="padding:5px 8px 7px 8px;background:#fffbeb;border-bottom:2px solid #fde68a;">
-        <div style="display:flex;gap:16px;align-items:flex-start;">
-          <div style="min-width:160px;max-width:200px;flex-shrink:0;">
-            <div style="font-size:7px;font-weight:bold;text-transform:uppercase;color:#92400e;margin-bottom:3px;letter-spacing:0.05em;">Machine</div>
-            <div style="font-size:8.5px;font-weight:bold;color:#111;">${machineName}</div>
-            ${machineRego     ? `<div style="font-size:7.5px;color:#555;margin-top:1px;">${machineRego}</div>` : ''}
-            ${machineLocation ? `<div style="font-size:7.5px;color:#555;">Location: ${machineLocation}</div>` : ''}
-            ${mc.hours_today  ? `<div style="font-size:7.5px;color:#555;margin-top:3px;">Meter reading: <strong>${mc.hours_today} hrs</strong></div>` : ''}
-            ${photosLine}
-            ${faultNotes}
-          </div>
-          <div style="flex:1;min-width:0;">
-            <div style="font-size:7px;font-weight:bold;text-transform:uppercase;color:#92400e;margin-bottom:3px;letter-spacing:0.05em;">Pre-Start Checklist</div>
-            <table style="width:100%;border-collapse:collapse;">
-              <tbody>${checklistRows}</tbody>
-            </table>
-          </div>
-        </div>
-      </td>
-    </tr>`
-
-    return summaryRow + detailRow
+    return summaryRow + detailRows
   }).join('')
 
   const html = `${PDF_STYLES}
@@ -161,7 +283,7 @@ async function downloadPreStartsPdf(
   </div>
   <table>
     <thead>
-      <tr><th>Date</th><th>Site</th><th>Submitted By</th><th>Crew</th><th>Weather</th><th>Hazards</th><th>PPE</th><th>Fit</th><th>Machinery</th></tr>
+      <tr><th>Date</th><th>Site</th><th>Submitted By</th><th>Crew</th><th>Weather</th><th>Hazards</th><th>PPE</th><th>Fit</th><th>Equipment</th></tr>
     </thead>
     <tbody>
       ${rows || '<tr><td colspan="9" style="text-align:center;color:#aaa;padding:8px;font-style:italic">No records</td></tr>'}
@@ -194,7 +316,7 @@ async function downloadPreStartsPdf(
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── UI helpers ────────────────────────────────────────────────────────────────
 
 function fmtDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-AU', {
@@ -209,19 +331,113 @@ function checkLabel(val: string, inverted = false) {
   return <span className="text-stone-400">N/A</span>
 }
 
+// Checklist display in the detail view
+function DetailChecklist({
+  items,
+  checks,
+}: {
+  items: readonly ChecklistItem[]
+  checks: Record<string, string>
+}) {
+  return (
+    <div className="rounded-lg border border-stone-200 overflow-hidden divide-y divide-stone-100">
+      {items.map(item => {
+        const val  = checks[item.key] ?? ''
+        const note = checks[`${item.key}_notes`] ?? ''
+        const bad  = isBadAnswer(item, val as CheckVal)
+        return (
+          <div key={item.key} className="px-3 py-2 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-stone-700 flex-1 pr-4">{item.label}</span>
+              {checkLabel(val, item.inverted)}
+            </div>
+            {bad && note && (
+              <p className="mt-1 text-xs text-red-700 bg-red-50 rounded px-2 py-1">{note}</p>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// Checklist input in the form
+function ChecklistSection({
+  items,
+  checks,
+  notes,
+  onCheck,
+  onNote,
+}: {
+  items:   readonly ChecklistItem[]
+  checks:  Record<string, CheckVal>
+  notes:   Record<string, string>
+  onCheck: (key: string, val: CheckVal) => void
+  onNote:  (key: string, note: string) => void
+}) {
+  return (
+    <div className="rounded-lg border border-stone-200 bg-white overflow-hidden divide-y divide-stone-100">
+      {items.map(item => {
+        const val     = (checks[item.key] ?? '') as CheckVal
+        const bad     = isBadAnswer(item, val)
+        const isBlock = bad && item.blocksSubmission
+        return (
+          <div key={item.key} className="space-y-2 px-3 py-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-stone-700 flex-1">{item.label}</span>
+              <div className="flex gap-1 shrink-0">
+                {(['yes', 'no'] as const).map(v => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => onCheck(item.key, v)}
+                    className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+                      val === v
+                        ? item.inverted
+                          ? v === 'yes' ? 'bg-red-600 text-white' : 'bg-green-600 text-white'
+                          : v === 'yes' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+                        : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
+                    }`}
+                  >
+                    {v === 'yes' ? 'Yes' : 'No'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {isBlock && (
+              <p className="rounded-lg bg-red-100 border border-red-300 px-3 py-2 text-sm font-medium text-red-800">
+                Vehicle cannot be operated — please notify your supervisor immediately
+              </p>
+            )}
+            {bad && !isBlock && (
+              <textarea
+                value={notes[item.key] ?? ''}
+                onChange={e => onNote(item.key, e.target.value)}
+                placeholder="What's wrong? (required)"
+                rows={2}
+                className="w-full rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-stone-900 placeholder:text-red-400 focus:border-red-400 focus:outline-none resize-none"
+              />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Props {
-  preStarts:          PreStartRow[]
-  onPreStartsChange:  Dispatch<SetStateAction<PreStartRow[]>>
-  sites:              SiteOption[]
-  staff:              StaffOption[]
-  vehicles:           VehicleOption[]
-  role:               Role
-  userId:             string
-  userName:           string
-  today:              string
-  tableExists:        boolean
+  preStarts:         PreStartRow[]
+  onPreStartsChange: Dispatch<SetStateAction<PreStartRow[]>>
+  sites:             SiteOption[]
+  staff:             StaffOption[]
+  vehicles:          VehicleOption[]
+  role:              Role
+  userId:            string
+  userName:          string
+  today:             string
+  tableExists:       boolean
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -241,17 +457,15 @@ export default function PreStartsTab({
   const isSupervisorPlus = role === 'supervisor' || role === 'admin'
   const isAdmin          = role === 'admin'
 
-  // Only machinery-type vehicles in the selector
   const machineryVehicles = vehicles.filter(v => v.vehicle_type === 'Machinery')
+  const truckVehicles     = vehicles.filter(v => v.vehicle_type === 'Truck')
 
-  // ── List state ─────────────────────────────────────────────────────────────
-  // localPreStarts state is owned by SafetyView (passed via preStarts + onPreStartsChange)
-  // so it persists when this component unmounts during tab switches.
+  // ── List / nav state ───────────────────────────────────────────────────────
   const [view, setView] = useState<'list' | 'new' | 'detail'>('list')
   const [detailId, setDetailId] = useState<string | null>(null)
   const [detailPhotoUrls, setDetailPhotoUrls] = useState<string[]>([])
 
-  // Filter state (supervisor)
+  // Filter state (supervisor+)
   const [filterSite, setFilterSite] = useState('')
   const [filterFrom, setFilterFrom] = useState(today)
   const [filterTo, setFilterTo]     = useState(today)
@@ -266,12 +480,25 @@ export default function PreStartsTab({
   const [siteHazards, setSiteHazards]   = useState('')
   const [ppeConfirmed, setPpeConfirmed] = useState(true)
   const [fitForWork, setFitForWork]     = useState(true)
-  const [usingMachinery, setUsingMachinery] = useState(false)
-  const [machineId, setMachineId]       = useState('')
-  const [machineHours, setMachineHours] = useState('')
-  const [checks, setChecks]             = useState<Record<CheckKey, CheckVal>>(defaultChecks())
-  const [greasedWhyNot, setGreasedWhyNot]       = useState('')
-  const [damageDescription, setDamageDescription] = useState('')
+
+  // Machinery
+  const [usingMachinery, setUsingMachinery]   = useState(false)
+  const [machineId, setMachineId]             = useState('')
+  const [machineHours, setMachineHours]       = useState('')
+  const [machineChecks, setMachineChecks]     = useState<Record<string, CheckVal>>(defaultChecksFor(MACHINERY_CHECKLIST))
+  const [machineNotes, setMachineNotes]       = useState<Record<string, string>>({})
+
+  // Truck
+  const [usingTruck, setUsingTruck]           = useState(false)
+  const [truckId, setTruckId]                 = useState('')
+  const [truckChecks, setTruckChecks]         = useState<Record<string, CheckVal>>(defaultChecksFor(TRUCK_CHECKLIST))
+  const [truckNotes, setTruckNotes]           = useState<Record<string, string>>({})
+
+  // Trailer
+  const [usingTrailer, setUsingTrailer]       = useState(false)
+  const [trailerChecks, setTrailerChecks]     = useState<Record<string, CheckVal>>(defaultChecksFor(TRAILER_CHECKLIST))
+  const [trailerNotes, setTrailerNotes]       = useState<Record<string, string>>({})
+
   const [notes, setNotes]               = useState('')
   const [saving, setSaving]             = useState(false)
   const [formError, setFormError]       = useState<string | null>(null)
@@ -291,7 +518,7 @@ export default function PreStartsTab({
   // ── Computed ───────────────────────────────────────────────────────────────
 
   const filteredPreStarts = isSupervisorPlus
-    ? preStarts.filter((ps) => {
+    ? preStarts.filter(ps => {
         if (filterSite && ps.siteId !== filterSite) return false
         if (filterFrom && ps.date < filterFrom) return false
         if (filterTo   && ps.date > filterTo)   return false
@@ -299,19 +526,23 @@ export default function PreStartsTab({
       })
     : preStarts
 
-  const todaysPreStarts    = preStarts.filter(ps => ps.date === today)
-  const selectedPreStart   = detailId ? preStarts.find(ps => ps.id === detailId) : null
-  const selectedVehicle    = machineryVehicles.find(v => v.id === machineId)
+  const todaysPreStarts  = preStarts.filter(ps => ps.date === today)
+  const selectedPreStart = detailId ? preStarts.find(ps => ps.id === detailId) : null
+  const selectedMachine  = machineryVehicles.find(v => v.id === machineId)
+  const selectedTruck    = truckVehicles.find(v => v.id === truckId)
 
   // ── Handlers ───────────────────────────────────────────────────────────────
 
   function openNew() {
-    // Clean up any existing object URLs
     photoPreviews.forEach(url => URL.revokeObjectURL(url))
     setSiteId(''); setDate(today); setCrewPresent([]); setWeather([])
     setSiteHazards(''); setPpeConfirmed(true); setFitForWork(true)
     setUsingMachinery(false); setMachineId(''); setMachineHours('')
-    setChecks(defaultChecks()); setGreasedWhyNot(''); setDamageDescription('')
+    setMachineChecks(defaultChecksFor(MACHINERY_CHECKLIST)); setMachineNotes({})
+    setUsingTruck(false); setTruckId('')
+    setTruckChecks(defaultChecksFor(TRUCK_CHECKLIST)); setTruckNotes({})
+    setUsingTrailer(false)
+    setTrailerChecks(defaultChecksFor(TRAILER_CHECKLIST)); setTrailerNotes({})
     setNotes(''); setFormError(null)
     setPendingPhotos([]); setPhotoPreviews([])
     setView('new')
@@ -321,7 +552,6 @@ export default function PreStartsTab({
     setDetailId(id)
     setDetailPhotoUrls([])
     setView('detail')
-
     const ps = preStarts.find(p => p.id === id)
     if (ps && ps.photoPaths.length > 0) {
       const urls = await Promise.all(ps.photoPaths.map(path => getSafetyDocUrl(path)))
@@ -330,29 +560,19 @@ export default function PreStartsTab({
   }
 
   function toggleCrew(name: string) {
-    setCrewPresent(prev =>
-      prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]
-    )
+    setCrewPresent(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name])
   }
 
   function toggleWeather(w: string) {
-    setWeather(prev =>
-      prev.includes(w) ? prev.filter(x => x !== w) : [...prev, w]
-    )
-  }
-
-  function setCheck(key: CheckKey, val: CheckVal) {
-    setChecks(prev => ({ ...prev, [key]: val }))
+    setWeather(prev => prev.includes(w) ? prev.filter(x => x !== w) : [...prev, w])
   }
 
   async function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
     if (files.length === 0) return
-
     setCompressingPhotos(true)
     const newFiles: File[] = []
     const newPreviews: string[] = []
-
     for (const file of files) {
       try {
         const compressed = await compressImage(file, 1920, 800 * 1024)
@@ -360,7 +580,6 @@ export default function PreStartsTab({
         newPreviews.push(URL.createObjectURL(compressed))
       } catch { /* skip */ }
     }
-
     setCompressingPhotos(false)
     setPendingPhotos(prev => [...prev, ...newFiles])
     setPhotoPreviews(prev => [...prev, ...newPreviews])
@@ -378,50 +597,54 @@ export default function PreStartsTab({
     if (!date)   { setFormError('Date is required'); return }
 
     if (usingMachinery) {
-      if (checks.greased_today === 'no' && !greasedWhyNot.trim()) {
-        setFormError('Please explain why the machine was not greased today')
-        return
-      }
-      if (checks.no_new_damage === 'no' && !damageDescription.trim()) {
-        setFormError('Please describe the new damage found on the machine')
-        return
-      }
+      const err = validateSection(MACHINERY_CHECKLIST, machineChecks, machineNotes, 'Machinery')
+      if (err) { setFormError(err); return }
+    }
+    if (usingTruck) {
+      const err = validateSection(TRUCK_CHECKLIST, truckChecks, truckNotes, 'Truck')
+      if (err) { setFormError(err); return }
+    }
+    if (usingTrailer) {
+      const err = validateSection(TRAILER_CHECKLIST, trailerChecks, trailerNotes, 'Trailer')
+      if (err) { setFormError(err); return }
     }
 
     setSaving(true); setFormError(null)
 
     const fd = new FormData()
-    fd.set('site_id', siteId)
-    fd.set('date', date)
-    fd.set('crew_present', JSON.stringify(crewPresent))
-    fd.set('weather', JSON.stringify(weather))
-    fd.set('site_hazards', siteHazards)
-    fd.set('ppe_confirmed', String(ppeConfirmed))
-    fd.set('fit_for_work', String(fitForWork))
-    fd.set('using_machinery', String(usingMachinery))
-    fd.set('machine_id', machineId)
-    fd.set('hours_today', machineHours)
+    fd.set('site_id',        siteId)
+    fd.set('date',           date)
+    fd.set('crew_present',   JSON.stringify(crewPresent))
+    fd.set('weather',        JSON.stringify(weather))
+    fd.set('site_hazards',   siteHazards)
+    fd.set('ppe_confirmed',  String(ppeConfirmed))
+    fd.set('fit_for_work',   String(fitForWork))
+    fd.set('using_machinery',String(usingMachinery))
+    fd.set('machine_id',     machineId)
+    fd.set('hours_today',    machineHours)
     if (usingMachinery) {
-      fd.set('machinery_checks', JSON.stringify({
-        ...checks,
-        hours_today:         machineHours,
-        greased_why_not:     greasedWhyNot,
-        damage_description:  damageDescription,
-      }))
+      fd.set('machinery_checks', JSON.stringify(
+        buildChecksJson(MACHINERY_CHECKLIST, machineChecks, machineNotes, { hours_today: machineHours })
+      ))
+    }
+    fd.set('using_truck',  String(usingTruck))
+    fd.set('truck_id',     truckId)
+    if (usingTruck) {
+      fd.set('truck_checks', JSON.stringify(buildChecksJson(TRUCK_CHECKLIST, truckChecks, truckNotes)))
+    }
+    fd.set('using_trailer', String(usingTrailer))
+    if (usingTrailer) {
+      fd.set('trailer_checks', JSON.stringify(buildChecksJson(TRAILER_CHECKLIST, trailerChecks, trailerNotes)))
     }
     fd.set('notes', notes)
 
-    // Attach compressed photos
-    pendingPhotos.forEach((photo, i) => {
-      fd.append(`photo_${i}`, photo, photo.name)
-    })
+    pendingPhotos.forEach((photo, i) => fd.append(`photo_${i}`, photo, photo.name))
 
     const result = await submitPreStart(fd)
     setSaving(false)
 
     if (result?.error) { setFormError(result.error); return }
 
-    // Clean up object URLs now that submission succeeded
     photoPreviews.forEach(url => URL.revokeObjectURL(url))
 
     const newRow: PreStartRow = {
@@ -437,13 +660,15 @@ export default function PreStartsTab({
       ppeConfirmed,
       fitForWork,
       usingMachinery,
-      machineryChecks: usingMachinery ? {
-        ...checks,
-        hours_today:        machineHours,
-        greased_why_not:    greasedWhyNot,
-        damage_description: damageDescription,
-      } : null,
+      machineryChecks: usingMachinery
+        ? buildChecksJson(MACHINERY_CHECKLIST, machineChecks, machineNotes, { hours_today: machineHours })
+        : null,
       machineId:      usingMachinery ? machineId : null,
+      usingTruck,
+      truckId:        usingTruck ? truckId : null,
+      truckChecks:    usingTruck ? buildChecksJson(TRUCK_CHECKLIST, truckChecks, truckNotes) : null,
+      usingTrailer,
+      trailerChecks:  usingTrailer ? buildChecksJson(TRAILER_CHECKLIST, trailerChecks, trailerNotes) : null,
       notes:          notes || null,
       photoPaths:     ('photoPaths' in result && Array.isArray(result.photoPaths)) ? result.photoPaths : [],
       createdAt:      new Date().toISOString(),
@@ -469,8 +694,7 @@ export default function PreStartsTab({
   }
 
   async function handleDelete(id: string) {
-    setDeleting(true)
-    setDeleteError(null)
+    setDeleting(true); setDeleteError(null)
     const result = await deletePreStart(id)
     setDeleting(false)
     if (result?.error) { setDeleteError(result.error); return }
@@ -486,14 +710,13 @@ export default function PreStartsTab({
   if (view === 'detail' && selectedPreStart) {
     const ps = selectedPreStart
     const mc = ps.machineryChecks
+    const isOldMachinery = mc ? 'no_new_damage' in mc : false
+
     return (
       <div className="space-y-5">
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setView('list')}
-            className="flex items-center gap-1 text-sm text-stone-500 hover:text-stone-800 transition-colors"
-          >
+          <button type="button" onClick={() => setView('list')}
+            className="flex items-center gap-1 text-sm text-stone-500 hover:text-stone-800 transition-colors">
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
             </svg>
@@ -504,6 +727,8 @@ export default function PreStartsTab({
         </div>
 
         <div className="rounded-xl border border-stone-200 bg-white p-5 space-y-5">
+
+          {/* General info */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <Field label="Site"         value={ps.siteName} />
             <Field label="Date"         value={fmtDate(ps.date)} />
@@ -511,29 +736,27 @@ export default function PreStartsTab({
             <div className="col-span-2 sm:col-span-3">
               <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1">Crew Present</p>
               <p className="text-sm text-stone-900">
-                {ps.crewPresent.length > 0
-                  ? ps.crewPresent.join(', ')
-                  : <span className="text-stone-400 italic">None listed</span>
-                }
+                {ps.crewPresent.length > 0 ? ps.crewPresent.join(', ') : <span className="text-stone-400 italic">None listed</span>}
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div>
-              <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1">Weather</p>
-              <div className="flex flex-wrap gap-1">
-                {ps.weather.length > 0
-                  ? ps.weather.map(w => (
-                    <span key={w} className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-700">{w}</span>
-                  ))
-                  : <span className="text-sm text-stone-400 italic">Not recorded</span>
-                }
-              </div>
+          {/* Weather + bool flags */}
+          <div>
+            <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1">Weather</p>
+            <div className="flex flex-wrap gap-1 mb-3">
+              {ps.weather.length > 0
+                ? ps.weather.map(w => <span key={w} className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-700">{w}</span>)
+                : <span className="text-sm text-stone-400 italic">Not recorded</span>
+              }
             </div>
-            <BoolField label="PPE Confirmed"   value={ps.ppeConfirmed} />
-            <BoolField label="Fit for Work"    value={ps.fitForWork} />
-            <BoolField label="Using Machinery" value={ps.usingMachinery} />
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <BoolField label="PPE Confirmed"   value={ps.ppeConfirmed} />
+              <BoolField label="Fit for Work"    value={ps.fitForWork} />
+              <BoolField label="Machinery"       value={ps.usingMachinery} />
+              <BoolField label="Truck"           value={ps.usingTruck} />
+              <BoolField label="Trailer"         value={ps.usingTrailer} />
+            </div>
           </div>
 
           {ps.siteHazards && (
@@ -543,10 +766,10 @@ export default function PreStartsTab({
             </div>
           )}
 
+          {/* Machinery section */}
           {ps.usingMachinery && mc && (
             <div className="space-y-3">
               <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Machinery Pre-Start</p>
-
               {(() => {
                 const machine = ps.machineId ? vehicles.find(v => v.id === ps.machineId) : null
                 if (!machine) return null
@@ -561,29 +784,47 @@ export default function PreStartsTab({
                   </div>
                 )
               })()}
-
-              <div className="rounded-lg border border-stone-200 overflow-hidden divide-y divide-stone-100">
-                {CHECKLIST_ITEMS.map(item => (
-                  <div key={item.key} className="flex items-center justify-between px-3 py-2 text-sm">
-                    <span className="text-stone-700 flex-1 pr-4">{item.label}</span>
-                    {checkLabel(mc[item.key] ?? '', item.key === 'faults_concerns')}
-                  </div>
-                ))}
-              </div>
-
-              {mc.greased_why_not && (
+              <DetailChecklist items={isOldMachinery ? OLD_MACHINERY_CHECKLIST : MACHINERY_CHECKLIST} checks={mc} />
+              {/* Legacy notes for old-format records */}
+              {isOldMachinery && mc.greased_why_not && (
                 <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2">
                   <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-0.5">Why not greased</p>
                   <p className="text-sm text-amber-900 whitespace-pre-wrap">{mc.greased_why_not}</p>
                 </div>
               )}
-
-              {mc.damage_description && (
+              {isOldMachinery && mc.damage_description && (
                 <div className="rounded-lg bg-red-50 border border-red-100 px-3 py-2">
                   <p className="text-xs font-semibold text-red-700 uppercase tracking-wide mb-0.5">Damage description</p>
                   <p className="text-sm text-red-900 whitespace-pre-wrap">{mc.damage_description}</p>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Truck section */}
+          {ps.usingTruck && ps.truckChecks && (
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Truck Pre-Start</p>
+              {(() => {
+                const truck = ps.truckId ? vehicles.find(v => v.id === ps.truckId) : null
+                if (!truck) return null
+                return (
+                  <div className="rounded-lg bg-stone-50 border border-stone-200 px-3 py-2 space-y-0.5">
+                    <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1">Truck</p>
+                    <p className="text-sm font-medium text-stone-900">{truck.make} {truck.model}</p>
+                    {truck.registration && <p className="text-xs text-stone-500">{truck.registration}</p>}
+                  </div>
+                )
+              })()}
+              <DetailChecklist items={TRUCK_CHECKLIST} checks={ps.truckChecks} />
+            </div>
+          )}
+
+          {/* Trailer section */}
+          {ps.usingTrailer && ps.trailerChecks && (
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Trailer Pre-Start</p>
+              <DetailChecklist items={TRAILER_CHECKLIST} checks={ps.trailerChecks} />
             </div>
           )}
 
@@ -605,11 +846,8 @@ export default function PreStartsTab({
                   {detailPhotoUrls.map((url, i) => (
                     // eslint-disable-next-line @next/next/no-img-element
                     <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                      <img
-                        src={url}
-                        alt={`Photo ${i + 1}`}
-                        className="w-full h-32 object-cover rounded-lg border border-stone-200 hover:opacity-90 transition-opacity"
-                      />
+                      <img src={url} alt={`Photo ${i + 1}`}
+                        className="w-full h-32 object-cover rounded-lg border border-stone-200 hover:opacity-90 transition-opacity" />
                     </a>
                   ))}
                 </div>
@@ -625,31 +863,17 @@ export default function PreStartsTab({
               {confirmDeleteDetail ? (
                 <div className="flex items-center gap-3 flex-wrap">
                   <span className="text-sm text-stone-600">Delete this pre-start record permanently?</span>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(ps.id)}
-                    disabled={deleting}
-                    className="text-sm font-medium text-red-600 hover:text-red-800 disabled:opacity-50 transition-colors"
-                  >
+                  <button type="button" onClick={() => handleDelete(ps.id)} disabled={deleting}
+                    className="text-sm font-medium text-red-600 hover:text-red-800 disabled:opacity-50 transition-colors">
                     {deleting ? 'Deleting…' : 'Yes, delete'}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => { setConfirmDeleteDetail(false); setDeleteError(null) }}
-                    className="text-sm text-stone-400 hover:text-stone-600 transition-colors"
-                  >
-                    Cancel
-                  </button>
+                  <button type="button" onClick={() => { setConfirmDeleteDetail(false); setDeleteError(null) }}
+                    className="text-sm text-stone-400 hover:text-stone-600 transition-colors">Cancel</button>
                   {deleteError && <span className="text-sm text-red-500">{deleteError}</span>}
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setConfirmDeleteDetail(true)}
-                  className="text-sm text-stone-400 hover:text-red-500 transition-colors"
-                >
-                  Delete record
-                </button>
+                <button type="button" onClick={() => setConfirmDeleteDetail(true)}
+                  className="text-sm text-stone-400 hover:text-red-500 transition-colors">Delete record</button>
               )}
             </div>
           )}
@@ -664,11 +888,8 @@ export default function PreStartsTab({
     return (
       <div className="space-y-5">
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setView('list')}
-            className="flex items-center gap-1 text-sm text-stone-500 hover:text-stone-800 transition-colors"
-          >
+          <button type="button" onClick={() => setView('list')}
+            className="flex items-center gap-1 text-sm text-stone-500 hover:text-stone-800 transition-colors">
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
             </svg>
@@ -684,23 +905,16 @@ export default function PreStartsTab({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Site *</label>
-              <select
-                value={siteId}
-                onChange={e => setSiteId(e.target.value)}
-                className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 focus:border-stone-400 focus:outline-none"
-              >
+              <select value={siteId} onChange={e => setSiteId(e.target.value)}
+                className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 focus:border-stone-400 focus:outline-none">
                 <option value="">— Select site —</option>
                 {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Date *</label>
-              <input
-                type="date"
-                value={date}
-                onChange={e => setDate(e.target.value)}
-                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 focus:border-stone-400 focus:outline-none"
-              />
+              <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 focus:border-stone-400 focus:outline-none" />
             </div>
           </div>
 
@@ -713,12 +927,8 @@ export default function PreStartsTab({
               <div className="rounded-lg border border-stone-200 max-h-48 overflow-y-auto divide-y divide-stone-50">
                 {staff.map(s => (
                   <label key={s.id} className="flex items-center gap-2.5 px-3 py-2 hover:bg-stone-50 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={crewPresent.includes(s.full_name)}
-                      onChange={() => toggleCrew(s.full_name)}
-                      className="h-4 w-4 rounded border-stone-300 text-green-700 focus:ring-green-600"
-                    />
+                    <input type="checkbox" checked={crewPresent.includes(s.full_name)} onChange={() => toggleCrew(s.full_name)}
+                      className="h-4 w-4 rounded border-stone-300 text-green-700 focus:ring-green-600" />
                     <span className="text-sm text-stone-800">{s.full_name}</span>
                   </label>
                 ))}
@@ -734,18 +944,10 @@ export default function PreStartsTab({
             <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Weather</label>
             <div className="flex flex-wrap gap-2">
               {WEATHER_OPTIONS.map(w => (
-                <button
-                  key={w}
-                  type="button"
-                  onClick={() => toggleWeather(w)}
+                <button key={w} type="button" onClick={() => toggleWeather(w)}
                   className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                    weather.includes(w)
-                      ? 'bg-stone-800 text-white'
-                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                  }`}
-                >
-                  {w}
-                </button>
+                    weather.includes(w) ? 'bg-stone-800 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  }`}>{w}</button>
               ))}
             </div>
           </div>
@@ -755,17 +957,13 @@ export default function PreStartsTab({
             <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">
               Any hazards identified on site?
             </label>
-            <textarea
-              value={siteHazards}
-              onChange={e => setSiteHazards(e.target.value)}
-              placeholder="Describe any hazards identified…"
-              rows={2}
-              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none resize-none"
-            />
+            <textarea value={siteHazards} onChange={e => setSiteHazards(e.target.value)}
+              placeholder="Describe any hazards identified…" rows={2}
+              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none resize-none" />
           </div>
 
-          {/* Toggles */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* PPE + Fit */}
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">PPE being worn?</label>
               <YesNo value={ppeConfirmed} onChange={setPpeConfirmed} />
@@ -774,120 +972,126 @@ export default function PreStartsTab({
               <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">All crew fit for work?</label>
               <YesNo value={fitForWork} onChange={setFitForWork} />
             </div>
+          </div>
+
+          {/* Equipment toggles */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Using machinery today?</label>
               <YesNo value={usingMachinery} onChange={setUsingMachinery} />
             </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Using a truck today?</label>
+              <YesNo value={usingTruck} onChange={setUsingTruck} />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Using a trailer today?</label>
+              <YesNo value={usingTrailer} onChange={setUsingTrailer} />
+            </div>
           </div>
 
-          {/* Machinery section */}
+          {/* ── Machinery pre-start ── */}
           {usingMachinery && (
             <div className="space-y-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
               <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide">Machinery Pre-Start Check</p>
 
-              {/* Machine selector */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Select Machine</label>
                 {machineryVehicles.length === 0 ? (
-                  <p className="text-sm text-stone-400 italic">
-                    No machinery in fleet. Add vehicles with type &quot;Machinery&quot; in the Vehicles page.
-                  </p>
+                  <p className="text-sm text-stone-400 italic">No machinery in fleet. Add vehicles with type &quot;Machinery&quot; in the Vehicles page.</p>
                 ) : (
                   <>
-                    <select
-                      value={machineId}
-                      onChange={e => setMachineId(e.target.value)}
-                      className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 focus:border-stone-400 focus:outline-none"
-                    >
+                    <select value={machineId} onChange={e => setMachineId(e.target.value)}
+                      className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 focus:border-stone-400 focus:outline-none">
                       <option value="">— Select machine —</option>
                       {machineryVehicles.map(v => (
                         <option key={v.id} value={v.id}>
-                          {v.make} {v.model}{v.registration ? ` (${v.registration})` : ''}
-                          {v.assigned_to ? ` — ${v.assigned_to}` : ''}
+                          {v.make} {v.model}{v.registration ? ` (${v.registration})` : ''}{v.assigned_to ? ` — ${v.assigned_to}` : ''}
                         </option>
                       ))}
                     </select>
-                    {selectedVehicle?.current_hours != null && (
+                    {selectedMachine?.current_hours != null && (
                       <p className="text-xs text-stone-500">
-                        Current hours on this machine: <span className="font-semibold">{selectedVehicle.current_hours} hrs</span>
+                        Current hours on this machine: <span className="font-semibold">{selectedMachine.current_hours} hrs</span>
                       </p>
                     )}
                   </>
                 )}
               </div>
 
-              {/* Current meter reading */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">
-                  Current meter reading (hrs)
-                </label>
-                <input
-                  type="number"
-                  value={machineHours}
-                  onChange={e => setMachineHours(e.target.value)}
-                  placeholder="e.g. 1234.5"
-                  min="0"
-                  step="0.5"
-                  className="w-36 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none"
-                />
+                <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Current meter reading (hrs)</label>
+                <input type="number" value={machineHours} onChange={e => setMachineHours(e.target.value)}
+                  placeholder="e.g. 1234.5" min="0" step="0.5"
+                  className="w-36 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none" />
               </div>
 
-              {/* Checklist */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Checklist</label>
-                <div className="rounded-lg border border-stone-200 bg-white overflow-hidden divide-y divide-stone-100">
-                  {CHECKLIST_ITEMS.map(item => (
-                    <div key={item.key} className="space-y-2 px-3 py-2.5">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm text-stone-700 flex-1">{item.label}</span>
-                        <div className="flex gap-1 shrink-0">
-                          {(['yes', 'no', 'na'] as const).map(val => (
-                            <button
-                              key={val}
-                              type="button"
-                              onClick={() => setCheck(item.key, val)}
-                              className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
-                                checks[item.key] === val
-                                  ? item.key === 'faults_concerns'
-                                    ? val === 'no'  ? 'bg-green-600 text-white'
-                                    : val === 'yes' ? 'bg-red-600 text-white'
-                                    :                 'bg-stone-500 text-white'
-                                    : val === 'yes' ? 'bg-green-600 text-white'
-                                    : val === 'no'  ? 'bg-red-600 text-white'
-                                    :                 'bg-stone-500 text-white'
-                                  : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
-                              }`}
-                            >
-                              {val === 'na' ? 'N/A' : val === 'yes' ? 'Yes' : 'No'}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+                <ChecklistSection
+                  items={MACHINERY_CHECKLIST}
+                  checks={machineChecks}
+                  notes={machineNotes}
+                  onCheck={(k, v) => setMachineChecks(prev => ({ ...prev, [k]: v }))}
+                  onNote={(k, n)  => setMachineNotes(prev => ({ ...prev, [k]: n }))}
+                />
+              </div>
+            </div>
+          )}
 
-                      {/* Conditional: greased_today = No → Why not? */}
-                      {item.key === 'greased_today' && checks.greased_today === 'no' && (
-                        <textarea
-                          value={greasedWhyNot}
-                          onChange={e => setGreasedWhyNot(e.target.value)}
-                          placeholder="Why wasn't the machine greased today? (required)"
-                          rows={2}
-                          className="w-full rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-stone-900 placeholder:text-amber-400 focus:border-amber-400 focus:outline-none resize-none"
-                        />
-                      )}
+          {/* ── Truck pre-start ── */}
+          {usingTruck && (
+            <div className="space-y-4 rounded-xl border border-blue-200 bg-blue-50 p-4">
+              <p className="text-xs font-semibold text-blue-800 uppercase tracking-wide">Truck Pre-Start Check</p>
 
-                      {/* Conditional: no_new_damage = No → Describe the damage */}
-                      {item.key === 'no_new_damage' && checks.no_new_damage === 'no' && (
-                        <textarea
-                          value={damageDescription}
-                          onChange={e => setDamageDescription(e.target.value)}
-                          placeholder="Describe the new damage found (required)"
-                          rows={2}
-                          className="w-full rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-stone-900 placeholder:text-red-400 focus:border-red-400 focus:outline-none resize-none"
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Select Truck</label>
+                {truckVehicles.length === 0 ? (
+                  <p className="text-sm text-stone-400 italic">No trucks in fleet. Add vehicles with type &quot;Truck&quot; in the Vehicles page.</p>
+                ) : (
+                  <>
+                    <select value={truckId} onChange={e => setTruckId(e.target.value)}
+                      className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 focus:border-stone-400 focus:outline-none">
+                      <option value="">— Select truck —</option>
+                      {truckVehicles.map(v => (
+                        <option key={v.id} value={v.id}>
+                          {v.make} {v.model}{v.registration ? ` (${v.registration})` : ''}{v.assigned_to ? ` — ${v.assigned_to}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedTruck && (
+                      <p className="text-xs text-stone-500">{selectedTruck.make} {selectedTruck.model} selected</p>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Checklist</label>
+                <ChecklistSection
+                  items={TRUCK_CHECKLIST}
+                  checks={truckChecks}
+                  notes={truckNotes}
+                  onCheck={(k, v) => setTruckChecks(prev => ({ ...prev, [k]: v }))}
+                  onNote={(k, n)  => setTruckNotes(prev => ({ ...prev, [k]: n }))}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ── Trailer pre-start ── */}
+          {usingTrailer && (
+            <div className="space-y-4 rounded-xl border border-green-200 bg-green-50 p-4">
+              <p className="text-xs font-semibold text-green-800 uppercase tracking-wide">Trailer Pre-Start Check</p>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Checklist</label>
+                <ChecklistSection
+                  items={TRAILER_CHECKLIST}
+                  checks={trailerChecks}
+                  notes={trailerNotes}
+                  onCheck={(k, v) => setTrailerChecks(prev => ({ ...prev, [k]: v }))}
+                  onNote={(k, n)  => setTrailerNotes(prev => ({ ...prev, [k]: n }))}
+                />
               </div>
             </div>
           )}
@@ -895,13 +1099,9 @@ export default function PreStartsTab({
           {/* General notes */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">General Notes</label>
-            <textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="Any additional notes…"
-              rows={2}
-              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none resize-none"
-            />
+            <textarea value={notes} onChange={e => setNotes(e.target.value)}
+              placeholder="Any additional notes…" rows={2}
+              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none resize-none" />
           </div>
 
           {/* Photo upload */}
@@ -909,45 +1109,26 @@ export default function PreStartsTab({
             <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">
               Attach photos (optional) — e.g. damage, hazards
             </label>
-
-            {/* Previews */}
             {photoPreviews.length > 0 && (
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {photoPreviews.map((url, i) => (
                   <div key={i} className="relative">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={url}
-                      alt={`Photo ${i + 1}`}
-                      className="w-full h-20 object-cover rounded-lg border border-stone-200"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removePhoto(i)}
-                      className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs hover:bg-red-600 transition-colors"
-                    >
-                      ×
-                    </button>
+                    <img src={url} alt={`Photo ${i + 1}`} className="w-full h-20 object-cover rounded-lg border border-stone-200" />
+                    <button type="button" onClick={() => removePhoto(i)}
+                      className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs hover:bg-red-600 transition-colors">×</button>
                   </div>
                 ))}
               </div>
             )}
-
             <div className="flex items-center gap-3">
               <label className={`flex items-center gap-2 rounded-lg border border-stone-200 px-3 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50 transition-colors cursor-pointer ${compressingPhotos ? 'opacity-50 pointer-events-none' : ''}`}>
                 <svg className="h-4 w-4 text-stone-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
                 {compressingPhotos ? 'Compressing…' : 'Add photos'}
-                <input
-                  ref={photoInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="sr-only"
-                  onChange={handlePhotoSelect}
-                  disabled={compressingPhotos}
-                />
+                <input ref={photoInputRef} type="file" accept="image/*" multiple className="sr-only"
+                  onChange={handlePhotoSelect} disabled={compressingPhotos} />
               </label>
               {pendingPhotos.length > 0 && (
                 <span className="text-xs text-stone-400">{pendingPhotos.length} photo{pendingPhotos.length !== 1 ? 's' : ''} ready</span>
@@ -962,21 +1143,12 @@ export default function PreStartsTab({
 
         {/* Actions */}
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={saving || compressingPhotos}
-            className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-60 transition-colors"
-          >
+          <button type="button" onClick={handleSubmit} disabled={saving || compressingPhotos}
+            className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-60 transition-colors">
             {saving ? 'Submitting…' : 'Submit pre-start'}
           </button>
-          <button
-            type="button"
-            onClick={() => setView('list')}
-            className="text-sm text-stone-500 hover:text-stone-700 transition-colors"
-          >
-            Cancel
-          </button>
+          <button type="button" onClick={() => setView('list')}
+            className="text-sm text-stone-500 hover:text-stone-700 transition-colors">Cancel</button>
         </div>
       </div>
     )
@@ -987,14 +1159,12 @@ export default function PreStartsTab({
   return (
     <div className="space-y-5">
 
-      {/* Table not found banner */}
       {!tableExists && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           The <code className="font-mono">pre_starts</code> table hasn&apos;t been created yet. Run the SQL migration to enable this feature.
         </div>
       )}
 
-      {/* Supervisor: today's summary + filters */}
       {isSupervisorPlus && (
         <div className="space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-3">
@@ -1003,16 +1173,11 @@ export default function PreStartsTab({
                 Today — {todaysPreStarts.length} pre-start{todaysPreStarts.length !== 1 ? 's' : ''}
               </h2>
               {todaysPreStarts.length > 0 && (
-                <p className="text-xs text-stone-400 mt-0.5">
-                  {todaysPreStarts.map(ps => ps.submitterName).join(', ')}
-                </p>
+                <p className="text-xs text-stone-400 mt-0.5">{todaysPreStarts.map(ps => ps.submitterName).join(', ')}</p>
               )}
             </div>
-            <button
-              type="button"
-              onClick={openNew}
-              className="rounded-lg bg-stone-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-stone-700 transition-colors"
-            >
+            <button type="button" onClick={openNew}
+              className="rounded-lg bg-stone-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-stone-700 transition-colors">
               New pre-start
             </button>
           </div>
@@ -1022,47 +1187,28 @@ export default function PreStartsTab({
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
               <div className="space-y-1">
                 <label className="text-xs text-stone-500">From</label>
-                <input
-                  type="date"
-                  value={filterFrom}
-                  onChange={e => setFilterFrom(e.target.value)}
-                  className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-sm text-stone-900 focus:border-stone-400 focus:outline-none"
-                />
+                <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
+                  className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-sm text-stone-900 focus:border-stone-400 focus:outline-none" />
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-stone-500">To</label>
-                <input
-                  type="date"
-                  value={filterTo}
-                  onChange={e => setFilterTo(e.target.value)}
-                  className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-sm text-stone-900 focus:border-stone-400 focus:outline-none"
-                />
+                <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
+                  className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-sm text-stone-900 focus:border-stone-400 focus:outline-none" />
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-stone-500">Site</label>
-                <select
-                  value={filterSite}
-                  onChange={e => setFilterSite(e.target.value)}
-                  className="w-full rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-sm text-stone-900 focus:border-stone-400 focus:outline-none"
-                >
+                <select value={filterSite} onChange={e => setFilterSite(e.target.value)}
+                  className="w-full rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-sm text-stone-900 focus:border-stone-400 focus:outline-none">
                   <option value="">All sites</option>
                   {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
               <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => { setFilterFrom(''); setFilterTo(''); setFilterSite('') }}
-                  className="text-xs text-stone-400 hover:text-stone-700 transition-colors"
-                >
-                  Clear
-                </button>
-                <button
-                  type="button"
-                  onClick={handleExportPdf}
+                <button type="button" onClick={() => { setFilterFrom(''); setFilterTo(''); setFilterSite('') }}
+                  className="text-xs text-stone-400 hover:text-stone-700 transition-colors">Clear</button>
+                <button type="button" onClick={handleExportPdf}
                   disabled={pdfGenerating || filteredPreStarts.length === 0}
-                  className="flex items-center gap-1.5 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50 transition-colors"
-                >
+                  className="flex items-center gap-1.5 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50 transition-colors">
                   {pdfGenerating ? <Spinner /> : <PdfIcon />}
                   Export PDF
                 </button>
@@ -1073,23 +1219,19 @@ export default function PreStartsTab({
         </div>
       )}
 
-      {/* Leading hand: just new button */}
       {!isSupervisorPlus && (
         <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={openNew}
-            className="rounded-lg bg-stone-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-stone-700 transition-colors"
-          >
+          <button type="button" onClick={openNew}
+            className="rounded-lg bg-stone-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-stone-700 transition-colors">
             New pre-start
           </button>
         </div>
       )}
 
-      {/* Pre-starts list */}
       {deleteError && !confirmDeleteId && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{deleteError}</p>
       )}
+
       {filteredPreStarts.length === 0 ? (
         <div className="rounded-xl border border-stone-200 bg-white px-4 py-14 text-center">
           <p className="text-sm font-medium text-stone-600">No pre-starts{isSupervisorPlus ? ' for this filter' : ' submitted yet'}</p>
@@ -1105,21 +1247,21 @@ export default function PreStartsTab({
             const isConfirming = confirmDeleteId === ps.id
             return (
               <div key={ps.id} className="flex items-stretch">
-                <button
-                  type="button"
-                  onClick={() => openDetail(ps.id)}
-                  className="flex-1 flex items-start gap-3 px-5 py-4 hover:bg-stone-50 transition-colors text-left min-w-0"
-                >
+                <button type="button" onClick={() => openDetail(ps.id)}
+                  className="flex-1 flex items-start gap-3 px-5 py-4 hover:bg-stone-50 transition-colors text-left min-w-0">
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-semibold text-stone-900 text-sm">{ps.siteName}</span>
                       <span className="text-xs text-stone-400">{fmtDate(ps.date)}</span>
-                      {hasHazards && (
-                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Hazard</span>
-                      )}
+                      {hasHazards && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Hazard</span>}
                       {issueFlags.map(f => (
                         <span key={f} className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">{f} ✗</span>
                       ))}
+                      {(ps.usingMachinery || ps.usingTruck || ps.usingTrailer) && (
+                        <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
+                          {[ps.usingMachinery && 'Machine', ps.usingTruck && 'Truck', ps.usingTrailer && 'Trailer'].filter(Boolean).join(', ')}
+                        </span>
+                      )}
                       {ps.photoPaths.length > 0 && (
                         <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
                           {ps.photoPaths.length} photo{ps.photoPaths.length !== 1 ? 's' : ''}
@@ -1128,12 +1270,8 @@ export default function PreStartsTab({
                     </div>
                     <div className="flex items-center gap-3 text-xs text-stone-400">
                       <span>Submitted by {ps.submitterName}</span>
-                      {ps.crewPresent.length > 0 && (
-                        <span>· {ps.crewPresent.length} crew</span>
-                      )}
-                      {ps.weather.length > 0 && (
-                        <span>· {ps.weather.join(', ')}</span>
-                      )}
+                      {ps.crewPresent.length > 0 && <span>· {ps.crewPresent.length} crew</span>}
+                      {ps.weather.length > 0 && <span>· {ps.weather.join(', ')}</span>}
                     </div>
                   </div>
                   <svg className="h-4 w-4 text-stone-300 shrink-0 mt-1" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -1141,36 +1279,21 @@ export default function PreStartsTab({
                   </svg>
                 </button>
 
-                {/* Admin delete controls — sibling to nav button, never nested */}
                 {isAdmin && (
                   <div className="flex items-center px-4 border-l border-stone-100 shrink-0">
                     {isConfirming ? (
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-stone-500">Delete?</span>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(ps.id)}
-                          disabled={deleting}
-                          className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50 transition-colors"
-                        >
+                        <button type="button" onClick={() => handleDelete(ps.id)} disabled={deleting}
+                          className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50 transition-colors">
                           {deleting ? '…' : 'Yes'}
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => { setConfirmDeleteId(null); setDeleteError(null) }}
-                          className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
-                        >
-                          Cancel
-                        </button>
+                        <button type="button" onClick={() => { setConfirmDeleteId(null); setDeleteError(null) }}
+                          className="text-xs text-stone-400 hover:text-stone-600 transition-colors">Cancel</button>
                       </div>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => setConfirmDeleteId(ps.id)}
-                        className="text-xs text-stone-300 hover:text-red-500 transition-colors"
-                      >
-                        Delete
-                      </button>
+                      <button type="button" onClick={() => setConfirmDeleteId(ps.id)}
+                        className="text-xs text-stone-300 hover:text-red-500 transition-colors">Delete</button>
                     )}
                   </div>
                 )}
@@ -1208,22 +1331,12 @@ function BoolField({ label, value }: { label: string; value: boolean }) {
 function YesNo({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
   return (
     <div className="flex gap-1.5">
-      <button
-        type="button"
-        onClick={() => onChange(true)}
-        className={`flex-1 rounded-lg py-2 text-xs font-medium transition-colors ${
-          value ? 'bg-green-600 text-white' : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
-        }`}
-      >
+      <button type="button" onClick={() => onChange(true)}
+        className={`flex-1 rounded-lg py-2 text-xs font-medium transition-colors ${value ? 'bg-green-600 text-white' : 'bg-stone-100 text-stone-500 hover:bg-stone-200'}`}>
         Yes
       </button>
-      <button
-        type="button"
-        onClick={() => onChange(false)}
-        className={`flex-1 rounded-lg py-2 text-xs font-medium transition-colors ${
-          !value ? 'bg-red-600 text-white' : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
-        }`}
-      >
+      <button type="button" onClick={() => onChange(false)}
+        className={`flex-1 rounded-lg py-2 text-xs font-medium transition-colors ${!value ? 'bg-red-600 text-white' : 'bg-stone-100 text-stone-500 hover:bg-stone-200'}`}>
         No
       </button>
     </div>

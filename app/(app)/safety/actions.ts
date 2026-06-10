@@ -32,6 +32,15 @@ export async function submitPreStart(formData: FormData) {
   const machineryChecks = usingMachinery
     ? JSON.parse((formData.get('machinery_checks') as string) || 'null')
     : null
+  const usingTruck     = formData.get('using_truck') === 'true'
+  const truckId        = (formData.get('truck_id') as string) || null
+  const truckChecks    = usingTruck
+    ? JSON.parse((formData.get('truck_checks') as string) || 'null')
+    : null
+  const usingTrailer   = formData.get('using_trailer') === 'true'
+  const trailerChecks  = usingTrailer
+    ? JSON.parse((formData.get('trailer_checks') as string) || 'null')
+    : null
   const notes          = (formData.get('notes') as string) || null
 
   if (!siteId) return { error: 'Site is required' }
@@ -51,6 +60,11 @@ export async function submitPreStart(formData: FormData) {
       using_machinery:  usingMachinery,
       machinery_checks: machineryChecks,
       machine_id:       usingMachinery ? machineId : null,
+      using_truck:      usingTruck,
+      truck_id:         usingTruck ? truckId : null,
+      truck_checks:     truckChecks,
+      using_trailer:    usingTrailer,
+      trailer_checks:   trailerChecks,
       notes,
     })
     .select('id')

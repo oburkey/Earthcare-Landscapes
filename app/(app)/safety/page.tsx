@@ -48,7 +48,10 @@ export default async function SafetyPage() {
       .select(`
         id, site_id, submitted_by, date, crew_present, weather,
         site_hazards, ppe_confirmed, fit_for_work, using_machinery,
-        machinery_checks, machine_id, notes, created_at,
+        machinery_checks, machine_id,
+        using_truck, truck_id, truck_checks,
+        using_trailer, trailer_checks,
+        notes, created_at,
         sites(name), profiles(full_name)
       `)
       .order('date', { ascending: false })
@@ -90,6 +93,11 @@ export default async function SafetyPage() {
         usingMachinery: r.using_machinery,
         machineryChecks: r.machinery_checks,
         machineId:      r.machine_id,
+        usingTruck:     r.using_truck  ?? false,
+        truckId:        r.truck_id     ?? null,
+        truckChecks:    r.truck_checks ?? null,
+        usingTrailer:   r.using_trailer ?? false,
+        trailerChecks:  r.trailer_checks ?? null,
         notes:          r.notes,
         photoPaths:     photosByPreStart[r.id] ?? [],
         createdAt:      r.created_at,

@@ -38,8 +38,11 @@ export async function bulkUpdateLots(
     .select('id, lot_number, status')
     .eq('stage_id', stageId)
 
+  // Strip leading zeros for comparison so "019" matches "19", "030" matches "30"
+  const stripZeros = (s: string) => s.replace(/^0+/, '') || '0'
+
   const lotsMap = new Map(
-    (existingLots ?? []).map(l => [l.lot_number as string, l as { id: string; lot_number: string; status: string }])
+    (existingLots ?? []).map(l => [stripZeros(l.lot_number as string), l as { id: string; lot_number: string; status: string }])
   )
 
   const errors: string[] = []
@@ -78,7 +81,7 @@ export async function bulkUpdateLots(
     }
     const isoDate = `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`
 
-    const existing = lotsMap.get(lotNumber)
+    const existing = lotsMap.get(stripZeros(lotNumber))
     if (existing) {
       const noDowngrade = existing.status === 'complete' || existing.status === 'in_progress'
       const newStatus   = noDowngrade ? existing.status : 'scheduled'
@@ -90,7 +93,7 @@ export async function bulkUpdateLots(
         errors.push(`Lot ${lotNumber}: ${error.message}`)
       } else {
         updated++
-        lotsMap.set(lotNumber, { ...existing, status: newStatus })
+        lotsMap.set(stripZeros(lotNumber), { ...existing, status: newStatus })
       }
     } else {
       const { data: newLot, error } = await supabase
@@ -102,7 +105,7 @@ export async function bulkUpdateLots(
         errors.push(`Lot ${lotNumber} (create): ${error.message}`)
       } else {
         created++
-        lotsMap.set(lotNumber, newLot)
+        lotsMap.set(stripZeros(newLot.lot_number), newLot)
       }
     }
   }
