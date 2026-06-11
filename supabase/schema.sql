@@ -1044,6 +1044,93 @@ CREATE POLICY "site_plan_documents: clients read permitted"
   );
 
 
+-- ── Lot trade status ──────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS lot_trade_status (
+  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  lot_id                uuid NOT NULL UNIQUE REFERENCES lots(id) ON DELETE CASCADE,
+  trades_completed      text[] NOT NULL DEFAULT '{}',
+  ready_for_landscaping boolean NOT NULL DEFAULT false,
+  blocking_notes        text,
+  updated_by            uuid REFERENCES profiles(id),
+  updated_at            timestamptz NOT NULL DEFAULT now()
+);
+
+DROP TRIGGER IF EXISTS lot_trade_status_updated_at ON lot_trade_status;
+CREATE TRIGGER lot_trade_status_updated_at
+  BEFORE UPDATE ON lot_trade_status
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+ALTER TABLE lot_trade_status ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "lot_trade_status: staff read all"          ON lot_trade_status;
+DROP POLICY IF EXISTS "lot_trade_status: leading_hand+ write"      ON lot_trade_status;
+DROP POLICY IF EXISTS "lot_trade_status: clients read permitted"   ON lot_trade_status;
+
+CREATE POLICY "lot_trade_status: staff read all"
+  ON lot_trade_status FOR SELECT
+  USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
+CREATE POLICY "lot_trade_status: leading_hand+ write"
+  ON lot_trade_status FOR ALL
+  USING (current_user_role() IN ('leading_hand', 'supervisor', 'admin'));
+CREATE POLICY "lot_trade_status: clients read permitted"
+  ON lot_trade_status FOR SELECT
+  USING (
+    current_user_role() = 'client'
+    AND lot_id IN (
+      SELECT l.id FROM lots l
+      JOIN stages s ON s.id = l.stage_id
+      JOIN client_site_access csa ON csa.site_id = s.site_id
+      WHERE csa.client_user_id = auth.uid()
+    )
+  );
+
+
+-- ── Lot completion checklist ──────────────────────────────────────────────────
+ALTER TABLE lots ADD COLUMN IF NOT EXISTS extras_notes text;
+
+CREATE TABLE IF NOT EXISTS lot_checklist_items (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  lot_id         uuid NOT NULL REFERENCES lots(id) ON DELETE CASCADE,
+  section        text NOT NULL CHECK (section IN ('pre_checks', 'landscaping_works', 'finishing')),
+  item_key       text NOT NULL,
+  completed      boolean NOT NULL DEFAULT false,
+  response       text CHECK (response IN ('yes', 'no')),
+  completed_date date,
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  updated_at     timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (lot_id, item_key)
+);
+
+DROP TRIGGER IF EXISTS lot_checklist_items_updated_at ON lot_checklist_items;
+CREATE TRIGGER lot_checklist_items_updated_at
+  BEFORE UPDATE ON lot_checklist_items
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+ALTER TABLE lot_checklist_items ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "lot_checklist_items: staff read all"        ON lot_checklist_items;
+DROP POLICY IF EXISTS "lot_checklist_items: leading_hand+ write"    ON lot_checklist_items;
+DROP POLICY IF EXISTS "lot_checklist_items: clients read permitted" ON lot_checklist_items;
+
+CREATE POLICY "lot_checklist_items: staff read all"
+  ON lot_checklist_items FOR SELECT
+  USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
+CREATE POLICY "lot_checklist_items: leading_hand+ write"
+  ON lot_checklist_items FOR ALL
+  USING (current_user_role() IN ('leading_hand', 'supervisor', 'admin'));
+CREATE POLICY "lot_checklist_items: clients read permitted"
+  ON lot_checklist_items FOR SELECT
+  USING (
+    current_user_role() = 'client'
+    AND lot_id IN (
+      SELECT l.id FROM lots l
+      JOIN stages s ON s.id = l.stage_id
+      JOIN client_site_access csa ON csa.site_id = s.site_id
+      WHERE csa.client_user_id = auth.uid()
+    )
+  );
+
+
 -- =============================================================================
 -- END OF SCHEMA
 -- =============================================================================

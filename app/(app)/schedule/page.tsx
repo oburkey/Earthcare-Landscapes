@@ -1,6 +1,6 @@
 import { requireAuth } from '@/lib/auth'
-import { getCachedScheduleData } from '@/lib/data'
-import { STATUS_CONFIG, EXTRA_JOB_STATUS_CONFIG } from '@/lib/lotStatus'
+import { getCachedScheduleData, getCachedTradeStatusByLotIds } from '@/lib/data'
+import { STATUS_CONFIG, EXTRA_JOB_STATUS_CONFIG, tradeStatusBadge } from '@/lib/lotStatus'
 import Link from 'next/link'
 import type { LotStatus, ExtraJobStatus } from '@/types/database'
 
@@ -97,6 +97,9 @@ export default async function SchedulePage() {
   // Sort all items by due date
   items.sort((a, b) => a.due_date.localeCompare(b.due_date))
 
+  const lotIds = items.filter((item) => item.kind === 'lot').map((item) => item.lotId)
+  const tradeStatusMap = await getCachedTradeStatusByLotIds(lotIds)
+
   // Group by week
   const weeks = new Map<string, ScheduleItem[]>()
   for (const item of items) {
@@ -146,6 +149,8 @@ export default async function SchedulePage() {
                           ? (STATUS_CONFIG[item.status] ?? STATUS_CONFIG.not_started)
                           : (EXTRA_JOB_STATUS_CONFIG[item.status as ExtraJobStatus] ?? EXTRA_JOB_STATUS_CONFIG.not_started)
 
+                      const tradeBadge = item.kind === 'lot' ? tradeStatusBadge(tradeStatusMap[item.lotId]) : null
+
                       return (
                         <Link
                           key={item.id}
@@ -163,6 +168,11 @@ export default async function SchedulePage() {
                               <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cfg.badge}`}>
                                 {cfg.label}
                               </span>
+                              {tradeBadge && (
+                                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${tradeBadge.badge}`}>
+                                  {tradeBadge.label}
+                                </span>
+                              )}
                             </div>
                             <p className="mt-0.5 text-xs text-stone-500">
                               {item.site} · {item.stage}

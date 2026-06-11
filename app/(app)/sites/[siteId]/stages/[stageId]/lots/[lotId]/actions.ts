@@ -5,6 +5,8 @@ import { requireAuth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { uploadToR2, deleteFromR2 } from '@/lib/r2'
+import { TRADE_OPTIONS } from '@/lib/lotStatus'
+import { CHECKLIST_SECTIONS, GATING_ITEM_KEYS } from '@/lib/checklist'
 import type { ActionState } from '@/types/actions'
 
 const SUPERVISOR_FLAGS = ['build_complete', 'quant_done'] as const
@@ -169,6 +171,124 @@ export async function deleteLot(
   revalidateTag('stages')
   revalidateTag('sites')
   redirect(`/sites/${siteId}/stages/${stageId}`)
+}
+
+export async function updateTradeStatus(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'leading_hand' && profile.role !== 'supervisor' && profile.role !== 'admin') {
+    return { error: 'Only leading hands and above can update trade status.' }
+  }
+
+  const lotId   = formData.get('lot_id')   as string
+  const siteId  = formData.get('site_id')  as string
+  const stageId = formData.get('stage_id') as string
+  if (!lotId) return { error: 'Lot ID is missing.' }
+
+  const tradesCompleted = formData.getAll('trades_completed')
+    .map((t) => String(t))
+    .filter((t) => (TRADE_OPTIONS as readonly string[]).includes(t))
+
+  const readyForLandscaping = formData.get('ready_for_landscaping') === 'true'
+  const blockingNotes = (formData.get('blocking_notes') as string)?.trim() || null
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('lot_trade_status')
+    .upsert({
+      lot_id: lotId,
+      trades_completed: tradesCompleted,
+      ready_for_landscaping: readyForLandscaping,
+      blocking_notes: readyForLandscaping ? null : blockingNotes,
+      updated_by: profile.id,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'lot_id' })
+
+  if (error) return { error: error.message }
+
+  revalidatePath(`/sites/${siteId}/stages/${stageId}/lots/${lotId}`)
+  revalidatePath(`/sites/${siteId}/stages/${stageId}`)
+  revalidatePath('/schedule')
+  revalidateTag('trade-status')
+  return null
+}
+
+export async function updateChecklist(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'leading_hand' && profile.role !== 'supervisor' && profile.role !== 'admin') {
+    return { error: 'Only leading hands and above can update the checklist.' }
+  }
+
+  const lotId   = formData.get('lot_id')   as string
+  const siteId  = formData.get('site_id')  as string
+  const stageId = formData.get('stage_id') as string
+  if (!lotId) return { error: 'Lot ID is missing.' }
+
+  const today = new Date().toISOString().split('T')[0]
+
+  const rows = CHECKLIST_SECTIONS.flatMap((section) =>
+    section.items.map((item) => {
+      const dateRaw = (formData.get(`date__${item.key}`) as string) || null
+
+      let completed: boolean
+      let response: string | null = null
+
+      if (item.type === 'yesno') {
+        const r = formData.get(`response__${item.key}`) as string
+        response = r === 'yes' || r === 'no' ? r : null
+        completed = response !== null
+      } else {
+        completed = formData.get(`completed__${item.key}`) === 'true'
+      }
+
+      return {
+        lot_id: lotId,
+        section: section.id,
+        item_key: item.key,
+        completed,
+        response,
+        completed_date: completed ? (dateRaw || today) : dateRaw,
+      }
+    })
+  )
+
+  const extrasNotes = (formData.get('extras_notes') as string)?.trim() || null
+
+  const supabase = await createClient()
+
+  const { error: checklistError } = await supabase
+    .from('lot_checklist_items')
+    .upsert(rows, { onConflict: 'lot_id,item_key' })
+  if (checklistError) return { error: checklistError.message }
+
+  const { error: notesError } = await supabase
+    .from('lots')
+    .update({ extras_notes: extrasNotes })
+    .eq('id', lotId)
+  if (notesError) return { error: notesError.message }
+
+  // Auto-complete the lot once every gating item has been completed/answered.
+  // A manual "un-tick" of build_complete only holds until the checklist is
+  // saved again with all gating items still complete.
+  const allGatingComplete = rows
+    .filter((r) => GATING_ITEM_KEYS.has(r.item_key))
+    .every((r) => r.completed)
+
+  if (allGatingComplete) {
+    await supabase.from('lots').update({ build_complete: true }).eq('id', lotId)
+  }
+
+  revalidatePath(`/sites/${siteId}/stages/${stageId}/lots/${lotId}`)
+  revalidatePath(`/sites/${siteId}/stages/${stageId}`)
+  revalidateTag('stages')
+  revalidateTag('dashboard')
+  revalidateTag('schedule')
+  return null
 }
 
 export async function updateLot(

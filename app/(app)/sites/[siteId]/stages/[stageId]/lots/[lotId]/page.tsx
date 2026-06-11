@@ -10,6 +10,8 @@ import PhotoUpload from '@/app/_components/PhotoUpload'
 import LotDocumentUpload from './LotDocumentUpload'
 import LotQuantities from './LotQuantities'
 import LotStatusToggles from './LotStatusToggles'
+import TradeStatusSection from './TradeStatusSection'
+import ChecklistSection from './ChecklistSection'
 import { getR2SignedUrlSafe } from '@/lib/r2'
 
 interface Props {
@@ -48,12 +50,14 @@ export default async function LotPage({ params }: Props) {
     { data: docRows },
     { data: sectionsData },
     { data: quotesData },
+    tradeStatusResult,
+    checklistResult,
   ] = await Promise.all([
     supabase
       .from('lots')
       .select(`
         id, lot_number, status, due_date, scheduled_date, completion_date, notes,
-        build_complete, quant_done, invoiced, has_client_extras,
+        build_complete, quant_done, invoiced, has_client_extras, extras_notes,
         stages!inner(id, name, sites!inner(id, name, has_client_extras))
       `)
       .eq('id', lotId)
@@ -92,6 +96,17 @@ export default async function LotPage({ params }: Props) {
           `)
           .eq('lot_id', lotId)
       : Promise.resolve({ data: null }),
+    // Trade status — table may not exist yet, handled gracefully below
+    supabase
+      .from('lot_trade_status')
+      .select('trades_completed, ready_for_landscaping, blocking_notes, updated_at, profiles(full_name)')
+      .eq('lot_id', lotId)
+      .maybeSingle(),
+    // Completion checklist — table may not exist yet, handled gracefully below
+    supabase
+      .from('lot_checklist_items')
+      .select('item_key, completed, response, completed_date')
+      .eq('lot_id', lotId),
   ])
 
   // Fall back to query without flag columns if they don't exist yet
@@ -116,6 +131,7 @@ export default async function LotPage({ params }: Props) {
   const quantDone       = lotAny?.quant_done       ?? false
   const invoiced        = lotAny?.invoiced          ?? false
   const lotClientExtras = lotAny?.has_client_extras ?? true
+  const extrasNotes     = lotAny?.extras_notes      ?? null
 
   const stage = Array.isArray(lot.stages) ? lot.stages[0] : lot.stages as { id: string; name: string; sites: unknown }
   const site             = Array.isArray(stage.sites) ? stage.sites[0] : stage.sites as { id: string; name: string; has_client_extras?: boolean }
@@ -182,6 +198,22 @@ export default async function LotPage({ params }: Props) {
           }
         })
     : []
+
+  // Trade status — gracefully fall back if the table doesn't exist yet
+  const tradeStatusRow = tradeStatusResult.error ? null : tradeStatusResult.data
+  const tradeStatusProfile = tradeStatusRow
+    ? (Array.isArray(tradeStatusRow.profiles) ? tradeStatusRow.profiles[0] : tradeStatusRow.profiles as { full_name: string } | null)
+    : null
+  const tradeStatus = {
+    tradesCompleted: tradeStatusRow?.trades_completed ?? [],
+    readyForLandscaping: tradeStatusRow?.ready_for_landscaping ?? false,
+    blockingNotes: tradeStatusRow?.blocking_notes ?? null,
+    updatedByName: tradeStatusProfile?.full_name ?? null,
+    updatedAt: tradeStatusRow?.updated_at ?? null,
+  }
+
+  // Completion checklist — gracefully fall back if the table doesn't exist yet
+  const checklistItems = checklistResult.error ? [] : (checklistResult.data ?? [])
 
   // Quotes
   const estimatedQuote = quotesData?.find((q) => q.is_estimated) ?? null
@@ -251,6 +283,35 @@ export default async function LotPage({ params }: Props) {
               <p className="text-sm text-stone-800 whitespace-pre-wrap">{lot.notes}</p>
             </div>
           )}
+        </div>
+
+        {/* ── Trades Completed ──────────────────────────────────────────────── */}
+        <div>
+          <h2 className="text-base font-semibold text-stone-800 mb-3">Trades Completed</h2>
+          <TradeStatusSection
+            lotId={lotId}
+            siteId={siteId}
+            stageId={stageId}
+            canManage={canManage}
+            tradesCompleted={tradeStatus.tradesCompleted}
+            readyForLandscaping={tradeStatus.readyForLandscaping}
+            blockingNotes={tradeStatus.blockingNotes}
+            updatedByName={tradeStatus.updatedByName}
+            updatedAt={tradeStatus.updatedAt}
+          />
+        </div>
+
+        {/* ── Completion Checklist ──────────────────────────────────────────── */}
+        <div>
+          <h2 className="text-base font-semibold text-stone-800 mb-3">Completion Checklist</h2>
+          <ChecklistSection
+            lotId={lotId}
+            siteId={siteId}
+            stageId={stageId}
+            canManage={canManage}
+            savedItems={checklistItems}
+            extrasNotes={extrasNotes}
+          />
         </div>
 
         {/* ── Quantities ─────────────────────────────────────────────────────── */}

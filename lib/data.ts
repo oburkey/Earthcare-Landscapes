@@ -144,6 +144,25 @@ async function _vehicles(db: Db) {
   return data ?? []
 }
 
+// Trade status for a set of lots, keyed by lot_id. Returns {} for lots with
+// no record, and gracefully returns {} entirely if the table doesn't exist yet.
+async function _tradeStatusByLotIds(db: Db, lotIds: string[]) {
+  if (lotIds.length === 0) return {}
+  const { data, error } = await db
+    .from('lot_trade_status')
+    .select('lot_id, trades_completed, ready_for_landscaping')
+    .in('lot_id', lotIds)
+  if (error || !data) return {}
+  const map: Record<string, { trades_completed: string[]; ready_for_landscaping: boolean }> = {}
+  for (const row of data) {
+    map[row.lot_id] = {
+      trades_completed: row.trades_completed ?? [],
+      ready_for_landscaping: row.ready_for_landscaping ?? false,
+    }
+  }
+  return map
+}
+
 async function _materialsTemplate(db: Db) {
   const { data } = await db
     .from('quote_template_sections')
@@ -214,6 +233,13 @@ export const getCachedVehicles = withCache(
   async () => _vehicles(await createClient() as Db),
   ['vehicles-list'],
   { tags: ['vehicles'] }
+)
+
+export const getCachedTradeStatusByLotIds = withCache(
+  (lotIds: string[]) => _tradeStatusByLotIds(createServiceClient(), lotIds),
+  async (lotIds: string[]) => _tradeStatusByLotIds(await createClient() as Db, lotIds),
+  ['trade-status-by-lot-ids'],
+  { tags: ['trade-status'], revalidate: 60 }
 )
 
 export const getCachedMaterialsTemplate = withCache(

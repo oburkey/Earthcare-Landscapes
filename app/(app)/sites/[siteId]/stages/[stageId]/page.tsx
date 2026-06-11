@@ -1,9 +1,9 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireAuth } from '@/lib/auth'
-import { getCachedStage } from '@/lib/data'
+import { getCachedStage, getCachedTradeStatusByLotIds } from '@/lib/data'
 import { PrefetchLink } from '@/app/_components/PrefetchLink'
-import { STATUS_CONFIG, EXTRA_JOB_STATUS_CONFIG, formatDate } from '@/lib/lotStatus'
+import { STATUS_CONFIG, EXTRA_JOB_STATUS_CONFIG, formatDate, tradeStatusBadge } from '@/lib/lotStatus'
 import type { LotStatus, ExtraJobStatus } from '@/types/database'
 import { uploadStagePlan } from './actions'
 import PlanPhotoUpload from '../../PlanPhotoUpload'
@@ -50,6 +50,8 @@ export default async function StagePage({ params }: Props) {
 
   const total = lots.length
   const completed = lots.filter((l) => l.status === 'complete').length
+
+  const tradeStatusMap = await getCachedTradeStatusByLotIds(lots.map((l) => l.id))
 
   // Generate R2 signed URL for the stage plan if one exists
   let stagePlanUrl: string | null = null
@@ -176,6 +178,7 @@ export default async function StagePage({ params }: Props) {
               {lots.map((lot) => {
                 const status = lot.status as LotStatus
                 const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.not_started
+                const tradeBadge = tradeStatusBadge(tradeStatusMap[lot.id])
                 return (
                   <PrefetchLink
                     key={lot.id}
@@ -190,6 +193,11 @@ export default async function StagePage({ params }: Props) {
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cfg.badge}`}>
                           {cfg.label}
                         </span>
+                        {tradeBadge && (
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${tradeBadge.badge}`}>
+                            {tradeBadge.label}
+                          </span>
+                        )}
                       </div>
                       {lot.due_date && (
                         <p className="mt-1 text-xs text-stone-500">

@@ -65,3 +65,25 @@ export function formatDate(dateStr: string | null | undefined): string {
     { day: 'numeric', month: 'short', year: 'numeric' }
   )
 }
+
+// ── Trades completed ──────────────────────────────────────────────────────────
+
+export const TRADE_OPTIONS = ['Fencer', 'Concreter', 'Paver', 'Tiler', 'Roofer', 'Painter', 'Gates and Screening'] as const
+
+export type Trade = typeof TRADE_OPTIONS[number]
+
+export interface TradeStatusSummary {
+  trades_completed: string[]
+  ready_for_landscaping: boolean
+}
+
+// Small badge for stage overview / schedule lot cards. Returns null if no
+// trades completed status has been recorded for the lot yet.
+export function tradeStatusBadge(status: TradeStatusSummary | null | undefined): { label: string; badge: string } | null {
+  if (!status) return null
+  if (status.ready_for_landscaping) {
+    return { label: 'Ready', badge: 'bg-green-100 text-green-700' }
+  }
+  const trades = status.trades_completed.length > 0 ? status.trades_completed.join(', ') : 'blocked'
+  return { label: `Blocked — ${trades}`, badge: 'bg-amber-100 text-amber-700' }
+}

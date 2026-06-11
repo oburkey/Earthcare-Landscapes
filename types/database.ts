@@ -72,6 +72,7 @@ export interface Lot {
   completion_date: string | null
   notes: string | null
   has_client_extras: boolean
+  extras_notes: string | null
   created_at: string
   updated_at: string
 }
@@ -270,6 +271,35 @@ export interface DocumentSignoff {
   signed_by: string
   signed_at: string
   signature_notes: string | null
+}
+
+// ── Completion Checklist ─────────────────────────────────────────────────────
+export type ChecklistSectionId = 'pre_checks' | 'landscaping_works' | 'finishing'
+export type ChecklistResponse = 'yes' | 'no'
+
+export interface LotChecklistItem {
+  id: string
+  lot_id: string
+  section: ChecklistSectionId
+  item_key: string
+  completed: boolean
+  response: ChecklistResponse | null
+  completed_date: string | null
+  created_at: string
+  updated_at: string
+}
+
+// ── Trades Completed ──────────────────────────────────────────────────────────
+// One row per lot, tracking which trades have completed their work and whether
+// the lot is ready to be handed over for landscaping.
+export interface LotTradeStatus {
+  id: string
+  lot_id: string
+  trades_completed: string[]
+  ready_for_landscaping: boolean
+  blocking_notes: string | null
+  updated_by: string | null
+  updated_at: string
 }
 
 // ── Joined types (useful for queries that join tables) ────────────────────────
