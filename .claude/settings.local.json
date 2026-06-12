@@ -26,7 +26,13 @@
       "mcp__ide__getDiagnostics",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(git config *)",
+      "Bash(npx eslint *)",
+      "Bash(grep -rn \"client\" app/page.tsx app/\\\\\\(auth\\\\\\)/login/LoginForm.tsx middleware.ts)",
+      "Bash(cat app/page.tsx)",
+      "Bash(sed -n '67,80p' supabase/schema.sql)",
+      "Bash(sed -n '52,62p' types/database.ts)"
     ]
   }
 }

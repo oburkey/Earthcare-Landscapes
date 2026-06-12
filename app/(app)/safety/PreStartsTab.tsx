@@ -844,8 +844,8 @@ export default function PreStartsTab({
               {detailPhotoUrls.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {detailPhotoUrls.map((url, i) => (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={url} alt={`Photo ${i + 1}`}
                         className="w-full h-32 object-cover rounded-lg border border-stone-200 hover:opacity-90 transition-opacity" />
                     </a>

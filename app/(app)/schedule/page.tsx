@@ -1,196 +1,74 @@
 import { requireAuth } from '@/lib/auth'
 import { getCachedScheduleData, getCachedTradeStatusByLotIds } from '@/lib/data'
-import { STATUS_CONFIG, EXTRA_JOB_STATUS_CONFIG, tradeStatusBadge } from '@/lib/lotStatus'
-import Link from 'next/link'
+import ScheduleView, { type LotItem, type JobItem, type SiteOption } from './ScheduleView'
 import type { LotStatus, ExtraJobStatus } from '@/types/database'
 
 export const metadata = { title: 'Schedule — Earthcare Landscapes' }
-
-function getWeekStart(dateStr: string): string {
-  const [y, m, d] = dateStr.split('-').map(Number)
-  const date = new Date(y, m - 1, d)
-  const day = date.getDay()
-  const diff = day === 0 ? -6 : 1 - day // Monday as week start
-  date.setDate(date.getDate() + diff)
-  return date.toISOString().split('T')[0]
-}
-
-function formatWeekLabel(weekStart: string): string {
-  const [y, m, d] = weekStart.split('-').map(Number)
-  const start = new Date(y, m - 1, d)
-  const end = new Date(y, m - 1, d + 6)
-  const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }
-  const endOpts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' }
-  return `${start.toLocaleDateString('en-AU', opts)} – ${end.toLocaleDateString('en-AU', endOpts)}`
-}
-
-function formatDate(dateStr: string): string {
-  const [y, m, d] = dateStr.split('-').map(Number)
-  return new Date(y, m - 1, d).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
-}
-
-type ScheduleItem =
-  | {
-      kind: 'lot'
-      id: string
-      siteId: string
-      stageId: string
-      lotId: string
-      label: string
-      site: string
-      stage: string
-      status: LotStatus
-      due_date: string
-    }
-  | {
-      kind: 'job'
-      id: string
-      siteId: string
-      stageId: string
-      label: string
-      site: string
-      stage: string
-      status: ExtraJobStatus
-      due_date: string
-    }
 
 export default async function SchedulePage() {
   await requireAuth()
 
   const { lots, jobs } = await getCachedScheduleData()
 
-  const items: ScheduleItem[] = []
+  const lotItems: LotItem[] = []
+  const jobItems: JobItem[] = []
+  const sitesById = new Map<string, string>()
 
   for (const lot of lots ?? []) {
     const stage = Array.isArray(lot.stages) ? lot.stages[0] : lot.stages as { id: string; name: string; sites: unknown }
     const site = Array.isArray(stage.sites) ? stage.sites[0] : stage.sites as { id: string; name: string }
-    items.push({
-      kind: 'lot',
+    sitesById.set(site.id, site.name)
+    lotItems.push({
       id: lot.id,
       siteId: site.id,
+      siteName: site.name,
       stageId: stage.id,
+      stageName: stage.name,
       lotId: lot.id,
-      label: `Lot ${lot.lot_number}`,
-      site: site.name,
-      stage: stage.name,
+      lotNumber: lot.lot_number,
       status: lot.status as LotStatus,
-      due_date: lot.due_date as string,
+      dueDate: lot.due_date as string,
+      tradesCompleted: [],
+      readyForLandscaping: false,
     })
   }
 
   for (const job of jobs ?? []) {
     const stage = Array.isArray(job.stages) ? job.stages[0] : job.stages as { id: string; name: string; sites: unknown }
     const site = Array.isArray(stage.sites) ? stage.sites[0] : stage.sites as { id: string; name: string }
-    items.push({
-      kind: 'job',
+    sitesById.set(site.id, site.name)
+    jobItems.push({
       id: job.id,
       siteId: site.id,
+      siteName: site.name,
       stageId: stage.id,
-      label: job.title,
-      site: site.name,
-      stage: stage.name,
+      stageName: stage.name,
+      title: job.title,
       status: job.status as ExtraJobStatus,
-      due_date: job.due_date as string,
+      dueDate: job.due_date as string,
     })
   }
 
-  // Sort all items by due date
-  items.sort((a, b) => a.due_date.localeCompare(b.due_date))
-
-  const lotIds = items.filter((item) => item.kind === 'lot').map((item) => item.lotId)
+  const lotIds = lotItems.map((item) => item.lotId)
   const tradeStatusMap = await getCachedTradeStatusByLotIds(lotIds)
 
-  // Group by week
-  const weeks = new Map<string, ScheduleItem[]>()
-  for (const item of items) {
-    const week = getWeekStart(item.due_date)
-    if (!weeks.has(week)) weeks.set(week, [])
-    weeks.get(week)!.push(item)
+  for (const item of lotItems) {
+    const status = tradeStatusMap[item.lotId]
+    item.tradesCompleted = status?.trades_completed ?? []
+    item.readyForLandscaping = status?.ready_for_landscaping ?? false
   }
+
+  const sites: SiteOption[] = [...sitesById.entries()]
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name))
 
   const today = new Date().toISOString().split('T')[0]
 
   return (
     <div className="min-h-screen bg-stone-50">
-      <div className="mx-auto max-w-2xl px-4 py-6 space-y-5">
-
+      <div className="mx-auto max-w-5xl px-4 py-6 space-y-5">
         <h1 className="text-xl font-semibold text-stone-900">Schedule</h1>
-
-        {items.length === 0 ? (
-          <div className="rounded-xl border border-stone-200 bg-white px-4 py-12 text-center">
-            <p className="text-sm text-stone-500">No upcoming work with due dates.</p>
-          </div>
-        ) : (
-          <div className="space-y-5">
-            {[...weeks.entries()].map(([weekStart, weekItems]) => {
-              const isOverdue = weekStart < today
-              return (
-                <div key={weekStart}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <h2 className="text-sm font-semibold text-stone-600">
-                      {formatWeekLabel(weekStart)}
-                    </h2>
-                    {isOverdue && (
-                      <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-                        Overdue
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="rounded-xl border border-stone-200 bg-white overflow-hidden divide-y divide-stone-100">
-                    {weekItems.map((item) => {
-                      const href =
-                        item.kind === 'lot'
-                          ? `/sites/${item.siteId}/stages/${item.stageId}/lots/${item.lotId}`
-                          : `/sites/${item.siteId}/stages/${item.stageId}/extra-jobs/${item.id}`
-
-                      const cfg =
-                        item.kind === 'lot'
-                          ? (STATUS_CONFIG[item.status] ?? STATUS_CONFIG.not_started)
-                          : (EXTRA_JOB_STATUS_CONFIG[item.status as ExtraJobStatus] ?? EXTRA_JOB_STATUS_CONFIG.not_started)
-
-                      const tradeBadge = item.kind === 'lot' ? tradeStatusBadge(tradeStatusMap[item.lotId]) : null
-
-                      return (
-                        <Link
-                          key={item.id}
-                          href={href}
-                          className="flex items-start gap-3 px-4 py-3.5 hover:bg-stone-50 active:bg-stone-100 transition-colors"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm font-semibold text-stone-900">{item.label}</span>
-                              {item.kind === 'job' && (
-                                <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
-                                  Extra job
-                                </span>
-                              )}
-                              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cfg.badge}`}>
-                                {cfg.label}
-                              </span>
-                              {tradeBadge && (
-                                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${tradeBadge.badge}`}>
-                                  {tradeBadge.label}
-                                </span>
-                              )}
-                            </div>
-                            <p className="mt-0.5 text-xs text-stone-500">
-                              {item.site} · {item.stage}
-                            </p>
-                          </div>
-                          <div className="shrink-0 text-right">
-                            <p className="text-xs text-stone-500">{formatDate(item.due_date)}</p>
-                          </div>
-                        </Link>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-
+        <ScheduleView lotItems={lotItems} jobItems={jobItems} sites={sites} today={today} />
       </div>
     </div>
   )

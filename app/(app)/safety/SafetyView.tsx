@@ -5,6 +5,7 @@ import type { Profile } from '@/types/database'
 import PreStartsTab from './PreStartsTab'
 import DocumentsTab from './DocumentsTab'
 import SignoffsTab from './SignoffsTab'
+import ToolboxMeetingsTab from './ToolboxMeetingsTab'
 
 export type PreStartsSetter = Dispatch<SetStateAction<PreStartRow[]>>
 
@@ -68,21 +69,35 @@ export type SignoffRow = {
   signatureNotes: string | null
 }
 
+export type ToolboxMeetingRow = {
+  id:            string
+  siteId:        string
+  siteName:      string
+  date:          string
+  topic:         string
+  notes:         string | null
+  attendees:     string[]
+  submittedBy:   string
+  submitterName: string
+  createdAt:     string
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
-type Tab = 'prestarts' | 'documents' | 'signoffs'
+type Tab = 'prestarts' | 'documents' | 'signoffs' | 'toolbox_meetings'
 
 interface Props {
-  profile:       Profile
-  today:         string
-  preStarts:     PreStartRow[]
-  sites:         SiteOption[]
-  staff:         StaffOption[]
-  vehicles:      VehicleOption[]
-  safetyDocs:    SafetyDocRow[]
-  mySignoffIds:  string[]
-  signoffs:      SignoffRow[]
-  tablesExist:   { preStarts: boolean; safetyDocuments: boolean }
+  profile:          Profile
+  today:            string
+  preStarts:        PreStartRow[]
+  sites:            SiteOption[]
+  staff:            StaffOption[]
+  vehicles:         VehicleOption[]
+  safetyDocs:       SafetyDocRow[]
+  mySignoffIds:     string[]
+  signoffs:         SignoffRow[]
+  toolboxMeetings:  ToolboxMeetingRow[]
+  tablesExist:      { preStarts: boolean; safetyDocuments: boolean; toolboxMeetings: boolean }
 }
 
 export default function SafetyView({
@@ -95,6 +110,7 @@ export default function SafetyView({
   safetyDocs,
   mySignoffIds,
   signoffs,
+  toolboxMeetings,
   tablesExist,
 }: Props) {
   const isLeadingHandPlus = ['leading_hand', 'supervisor', 'admin'].includes(profile.role)
@@ -102,6 +118,7 @@ export default function SafetyView({
 
   // Owned here so deletions survive tab unmount/remount
   const [localPreStarts, setLocalPreStarts] = useState<PreStartRow[]>(preStarts)
+  const [localToolboxMeetings, setLocalToolboxMeetings] = useState<ToolboxMeetingRow[]>(toolboxMeetings)
 
   const [activeTab, setActiveTab] = useState<Tab>(
     isLeadingHandPlus ? 'prestarts' : 'documents'
@@ -111,6 +128,7 @@ export default function SafetyView({
     ...(isLeadingHandPlus ? [{ id: 'prestarts' as Tab, label: 'Pre-starts' }] : []),
     { id: 'documents', label: 'Documents' },
     { id: 'signoffs',  label: 'Sign-offs' },
+    { id: 'toolbox_meetings', label: 'Toolbox Meetings' },
   ]
 
   return (
@@ -170,6 +188,22 @@ export default function SafetyView({
           docs={safetyDocs}
           mySignoffIds={mySignoffIds}
           isSupervisorPlus={isSupervisorPlus}
+        />
+      )}
+
+      {activeTab === 'toolbox_meetings' && (
+        <ToolboxMeetingsTab
+          meetings={localToolboxMeetings}
+          onMeetingsChange={setLocalToolboxMeetings}
+          sites={sites}
+          staff={staff}
+          role={profile.role}
+          userId={profile.id}
+          userName={profile.full_name}
+          today={today}
+          tableExists={tablesExist.toolboxMeetings}
+          canManage={isLeadingHandPlus}
+          isAdmin={profile.role === 'admin'}
         />
       )}
     </div>

@@ -163,6 +163,17 @@ async function _tradeStatusByLotIds(db: Db, lotIds: string[]) {
   return map
 }
 
+// Plant ratio settings (global default + per-site overrides). Gracefully
+// returns [] if the table doesn't exist yet.
+async function _plantRatioSettings(db: Db) {
+  const { data, error } = await db
+    .from('plant_ratio_settings')
+    .select('id, site_id, front_ratio, rear_ratio, pot_size_split, updated_at')
+    .order('site_id', { ascending: true, nullsFirst: true })
+  if (error || !data) return []
+  return data
+}
+
 async function _materialsTemplate(db: Db) {
   const { data } = await db
     .from('quote_template_sections')
@@ -175,6 +186,40 @@ async function _materialsTemplate(db: Db) {
     `)
     .order('order_index', { ascending: true })
   return data ?? []
+}
+
+// Lots and extra jobs due within [startDate, endDate), with their ESTIMATE
+// quote line items (lots) and template-matched line items (extra jobs), for
+// the materials planning page. Used to compute garden bed m² / plant counts.
+async function _materialsPlanningData(db: Db, startDate: string, endDate: string) {
+  const [{ data: lots }, { data: jobs }] = await Promise.all([
+    db
+      .from('lots')
+      .select(`
+        id, lot_number, due_date,
+        stages!inner(id, name, sites!inner(id, name)),
+        lot_quotes(is_estimated, lot_quote_items(item_name, quantity)),
+        lot_documents(storage_path, document_type, created_at)
+      `)
+      .not('due_date', 'is', null)
+      .gte('due_date', startDate)
+      .lt('due_date', endDate)
+      .neq('status', 'complete')
+      .order('due_date', { ascending: true }),
+    db
+      .from('extra_jobs')
+      .select(`
+        id, title, due_date,
+        stages!inner(id, name, sites!inner(id, name)),
+        extra_job_quote_items(quantity, quote_template_items(name))
+      `)
+      .not('due_date', 'is', null)
+      .gte('due_date', startDate)
+      .lt('due_date', endDate)
+      .neq('status', 'complete')
+      .order('due_date', { ascending: true }),
+  ])
+  return { lots: lots ?? [], jobs: jobs ?? [] }
 }
 
 // ── Exports ───────────────────────────────────────────────────────────────────
@@ -247,4 +292,18 @@ export const getCachedMaterialsTemplate = withCache(
   async () => _materialsTemplate(await createClient() as Db),
   ['materials-template'],
   { tags: ['template'] }
+)
+
+export const getCachedPlantRatioSettings = withCache(
+  () => _plantRatioSettings(createServiceClient()),
+  async () => _plantRatioSettings(await createClient() as Db),
+  ['plant-ratio-settings'],
+  { tags: ['plant-ratios'] }
+)
+
+export const getCachedMaterialsPlanningData = withCache(
+  (startDate: string, endDate: string) => _materialsPlanningData(createServiceClient(), startDate, endDate),
+  async (startDate: string, endDate: string) => _materialsPlanningData(await createClient() as Db, startDate, endDate),
+  ['materials-planning-data'],
+  { tags: ['schedule', 'quotes'], revalidate: 300 }
 )

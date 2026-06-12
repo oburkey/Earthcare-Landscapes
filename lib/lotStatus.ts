@@ -84,6 +84,7 @@ export function tradeStatusBadge(status: TradeStatusSummary | null | undefined):
   if (status.ready_for_landscaping) {
     return { label: 'Ready', badge: 'bg-green-100 text-green-700' }
   }
-  const trades = status.trades_completed.length > 0 ? status.trades_completed.join(', ') : 'blocked'
-  return { label: `Blocked — ${trades}`, badge: 'bg-amber-100 text-amber-700' }
+  const outstanding = TRADE_OPTIONS.filter((trade) => !status.trades_completed.includes(trade))
+  const reason = outstanding.length > 0 ? `waiting on ${outstanding.join(', ')}` : 'see notes'
+  return { label: `Blocked — ${reason}`, badge: 'bg-amber-100 text-amber-700' }
 }

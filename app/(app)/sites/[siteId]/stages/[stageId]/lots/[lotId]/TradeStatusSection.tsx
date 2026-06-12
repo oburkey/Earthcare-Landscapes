@@ -31,6 +31,12 @@ export default function TradeStatusSection({
 }: Props) {
   const [state, action, pending] = useActionState<ActionState, FormData>(updateTradeStatus, null)
   const [ready, setReady] = useState(readyForLandscaping)
+  const [trades, setTrades] = useState<string[]>(tradesCompleted)
+  const [notes, setNotes] = useState(blockingNotes ?? '')
+
+  function toggleTrade(trade: string) {
+    setTrades((prev) => prev.includes(trade) ? prev.filter((t) => t !== trade) : [...prev, trade])
+  }
 
   const lastUpdated = updatedByName && updatedAt
     ? `Last updated by ${updatedByName} on ${formatDateTime(updatedAt)}`
@@ -90,7 +96,8 @@ export default function TradeStatusSection({
                   type="checkbox"
                   name="trades_completed"
                   value={trade}
-                  defaultChecked={tradesCompleted.includes(trade)}
+                  checked={trades.includes(trade)}
+                  onChange={() => toggleTrade(trade)}
                   className="h-4 w-4 rounded border-stone-300 text-green-700 focus:ring-green-600"
                 />
                 <span className="text-sm text-stone-700">{trade}</span>
@@ -134,7 +141,8 @@ export default function TradeStatusSection({
               id="blocking_notes"
               name="blocking_notes"
               rows={3}
-              defaultValue={blockingNotes ?? ''}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
               placeholder="e.g. Waiting on fencer to finish boundary"
               className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 resize-none"
             />

@@ -273,6 +273,17 @@ export interface DocumentSignoff {
   signature_notes: string | null
 }
 
+export interface ToolboxMeeting {
+  id: string
+  site_id: string
+  date: string
+  topic: string
+  notes: string | null
+  attendees: string[]
+  submitted_by: string
+  created_at: string
+}
+
 // ── Completion Checklist ─────────────────────────────────────────────────────
 export type ChecklistSectionId = 'pre_checks' | 'landscaping_works' | 'finishing'
 export type ChecklistResponse = 'yes' | 'no'

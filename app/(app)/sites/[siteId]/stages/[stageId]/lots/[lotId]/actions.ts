@@ -37,9 +37,13 @@ export async function toggleLotFlag(
   }
 
   const supabase = await createClient()
+  const update: Record<string, unknown> = { [flag as LotFlag]: value }
+  if (flag === 'build_complete') {
+    update.build_completed_at = value ? new Date().toISOString() : null
+  }
   const { error } = await supabase
     .from('lots')
-    .update({ [flag as LotFlag]: value })
+    .update(update)
     .eq('id', lotId)
   if (error) return { error: error.message }
 
@@ -280,7 +284,16 @@ export async function updateChecklist(
     .every((r) => r.completed)
 
   if (allGatingComplete) {
-    await supabase.from('lots').update({ build_complete: true }).eq('id', lotId)
+    const { data: lotRow } = await supabase
+      .from('lots')
+      .select('build_completed_at')
+      .eq('id', lotId)
+      .single()
+
+    const update: { build_complete: true; build_completed_at?: string } = { build_complete: true }
+    if (!lotRow?.build_completed_at) update.build_completed_at = new Date().toISOString()
+
+    await supabase.from('lots').update(update).eq('id', lotId)
   }
 
   revalidatePath(`/sites/${siteId}/stages/${stageId}/lots/${lotId}`)

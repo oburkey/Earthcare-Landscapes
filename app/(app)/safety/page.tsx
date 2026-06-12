@@ -7,6 +7,7 @@ import SafetyView, {
   type SiteOption,
   type StaffOption,
   type VehicleOption,
+  type ToolboxMeetingRow,
 } from './SafetyView'
 
 export const metadata = { title: 'Safety — Earthcare Landscapes' }
@@ -175,6 +176,39 @@ export default async function SafetyPage() {
     docsExist = false
   }
 
+  // ── Toolbox meetings ─────────────────────────────────────────────────────────
+  let toolboxMeetings: ToolboxMeetingRow[] = []
+  let toolboxMeetingsExist = true
+
+  try {
+    const { data, error } = await supabase
+      .from('toolbox_meetings')
+      .select('id, site_id, date, topic, notes, attendees, submitted_by, created_at, sites(name), profiles(full_name)')
+      .order('date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(300)
+
+    if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
+      toolboxMeetingsExist = false
+    } else if (!error) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      toolboxMeetings = (data ?? []).map((r: any): ToolboxMeetingRow => ({
+        id:            r.id,
+        siteId:        r.site_id,
+        siteName:      r.sites?.name ?? 'Unknown',
+        date:          r.date,
+        topic:         r.topic,
+        notes:         r.notes,
+        attendees:     r.attendees ?? [],
+        submittedBy:   r.submitted_by,
+        submitterName: r.profiles?.full_name ?? 'Unknown',
+        createdAt:     r.created_at,
+      }))
+    }
+  } catch {
+    toolboxMeetingsExist = false
+  }
+
   return (
     <div className="min-h-screen bg-stone-50">
       <div className="mx-auto max-w-5xl px-4 py-6">
@@ -188,7 +222,8 @@ export default async function SafetyPage() {
           safetyDocs={safetyDocs}
           mySignoffIds={mySignoffIds}
           signoffs={signoffs}
-          tablesExist={{ preStarts: preStartsExist, safetyDocuments: docsExist }}
+          toolboxMeetings={toolboxMeetings}
+          tablesExist={{ preStarts: preStartsExist, safetyDocuments: docsExist, toolboxMeetings: toolboxMeetingsExist }}
         />
       </div>
     </div>

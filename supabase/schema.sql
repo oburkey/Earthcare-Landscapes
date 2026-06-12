@@ -718,6 +718,298 @@ CREATE TRIGGER contacts_updated_at
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 
+-- ── 3b. Additional tables & columns (consolidated from supabase/migration_*.sql) ──
+-- The blocks below were originally applied via separate migration files and are
+-- merged here so this file is a complete, idempotent single source of truth.
+
+-- Site plan photo columns (from migration_photos.sql)
+ALTER TABLE sites  ADD COLUMN IF NOT EXISTS site_plan_path text;
+ALTER TABLE stages ADD COLUMN IF NOT EXISTS site_plan_path text;
+
+
+-- Vehicles (from migration_vehicles.sql, plus vehicle_type / current_hours additions)
+CREATE TABLE IF NOT EXISTS vehicles (
+  id                     uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  -- Identity
+  make                   text NOT NULL,
+  model                  text NOT NULL,
+  year                   int,
+  registration           text,
+  assigned_to            text,           -- staff member name or site name
+  vehicle_type           text,           -- 'Truck' | 'Machinery' | 'Ute'
+
+  -- Registration & insurance
+  rego_expiry_date       date,
+  insurance_expiry_date  date,
+
+  -- Service history
+  last_service_date      date,
+  last_service_hours     numeric(10, 1), -- engine hours at last service
+  last_service_odometer  int,            -- odometer km at last service
+
+  -- Next service due
+  next_service_due_date  date,
+  next_service_km        int,            -- odometer km target
+  next_service_hours     numeric(10, 1), -- engine hours target
+
+  -- Current hours (machinery only)
+  current_hours             numeric(10, 1),
+  current_hours_updated_at  timestamptz,
+
+  notes                  text,
+  created_at             timestamptz NOT NULL DEFAULT now()
+);
+
+-- Column additions for installs created before the above CREATE TABLE included them.
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS vehicle_type text;
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS current_hours numeric(10, 1);
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS current_hours_updated_at timestamptz;
+-- NOTE: current_hours / current_hours_updated_at were applied to the live database
+-- without a tracked migration file — included here so schema.sql stays accurate.
+
+ALTER TABLE vehicles ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "vehicles: supervisors and admins full access" ON vehicles;
+CREATE POLICY "vehicles: supervisors and admins full access"
+  ON vehicles FOR ALL
+  USING (current_user_role() IN ('supervisor', 'admin'));
+
+
+-- Quote template sections (from migration_phase2.sql)
+CREATE TABLE IF NOT EXISTS quote_template_sections (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name            text NOT NULL,
+  order_index     integer NOT NULL DEFAULT 0,
+  is_active       boolean NOT NULL DEFAULT true,
+  is_client_extra boolean NOT NULL DEFAULT false,
+  created_at      timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE quote_template_sections ADD COLUMN IF NOT EXISTS is_client_extra boolean NOT NULL DEFAULT false;
+
+ALTER TABLE quote_template_sections ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "qts: internal users read" ON quote_template_sections;
+CREATE POLICY "qts: internal users read"
+  ON quote_template_sections FOR SELECT
+  USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
+
+DROP POLICY IF EXISTS "qts: admin write" ON quote_template_sections;
+CREATE POLICY "qts: admin write"
+  ON quote_template_sections FOR ALL
+  USING (current_user_role() = 'admin');
+
+
+-- Quote template items (from migration_phase2.sql)
+-- unit values: 'No.' | 'm²' | 'm³' | 'Lin M' | 'toggle' | 'auto'
+-- plant_category drives irrigation auto-calc: 'front' = Softscape Front plants,
+--   'rear' = Softscape Rear plants. NULL = not a plant item.
+-- auto_calc_formula: 'front_plants' | 'rear_plants' | 'all_plants' | 'all_plants_x0.5'
+CREATE TABLE IF NOT EXISTS quote_template_items (
+  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  section_id         uuid NOT NULL REFERENCES quote_template_sections(id) ON DELETE CASCADE,
+  name               text NOT NULL,
+  unit               text NOT NULL DEFAULT 'No.',
+  unit_price         numeric(10,2),
+  is_auto_calculated boolean NOT NULL DEFAULT false,
+  auto_calc_formula  text,
+  plant_category     text CHECK (plant_category IN ('front', 'rear')),
+  order_index        integer NOT NULL DEFAULT 0,
+  is_active          boolean NOT NULL DEFAULT true,
+  created_at         timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS qti_section_id_idx ON quote_template_items(section_id);
+
+ALTER TABLE quote_template_items ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "qti: internal users read" ON quote_template_items;
+CREATE POLICY "qti: internal users read"
+  ON quote_template_items FOR SELECT
+  USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
+
+DROP POLICY IF EXISTS "qti: admin write" ON quote_template_items;
+CREATE POLICY "qti: admin write"
+  ON quote_template_items FOR ALL
+  USING (current_user_role() = 'admin');
+
+
+-- Lot quotes (from migration_phase2.sql)
+-- is_estimated = true  → pre-job estimate (filled before works start)
+-- is_estimated = false → final actual quantities (filled on completion)
+-- One of each type per lot, enforced by the unique constraint.
+CREATE TABLE IF NOT EXISTS lot_quotes (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  lot_id       uuid NOT NULL REFERENCES lots(id) ON DELETE CASCADE,
+  is_estimated boolean NOT NULL DEFAULT true,
+  status       text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'submitted', 'approved')),
+  quoted_by    uuid REFERENCES profiles(id),
+  quoted_at    timestamptz,
+  notes        text,
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  updated_at   timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (lot_id, is_estimated)
+);
+
+CREATE INDEX IF NOT EXISTS lot_quotes_lot_id_idx ON lot_quotes(lot_id);
+
+DROP TRIGGER IF EXISTS lot_quotes_updated_at ON lot_quotes;
+CREATE TRIGGER lot_quotes_updated_at
+  BEFORE UPDATE ON lot_quotes
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+ALTER TABLE lot_quotes ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "lot_quotes: leading_hand+ access" ON lot_quotes;
+CREATE POLICY "lot_quotes: leading_hand+ access"
+  ON lot_quotes FOR ALL
+  USING (current_user_role() IN ('leading_hand', 'supervisor', 'admin'));
+
+
+-- Lot quote items (from migration_phase2.sql)
+-- item_name / unit / unit_price_snapshot are snapshots taken at save time so
+-- historical quotes remain accurate if the template is later changed.
+CREATE TABLE IF NOT EXISTS lot_quote_items (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  quote_id            uuid NOT NULL REFERENCES lot_quotes(id) ON DELETE CASCADE,
+  template_item_id    uuid REFERENCES quote_template_items(id),
+  item_name           text NOT NULL,
+  unit                text NOT NULL,
+  quantity            numeric(10,3),
+  unit_price_snapshot numeric(10,2),
+  notes               text,
+  created_at          timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (quote_id, template_item_id)
+);
+
+CREATE INDEX IF NOT EXISTS lqi_quote_id_idx ON lot_quote_items(quote_id);
+
+ALTER TABLE lot_quote_items ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "lot_quote_items: leading_hand+ access" ON lot_quote_items;
+CREATE POLICY "lot_quote_items: leading_hand+ access"
+  ON lot_quote_items FOR ALL
+  USING (current_user_role() IN ('leading_hand', 'supervisor', 'admin'));
+
+
+-- Default quote template seed — only runs if no sections exist yet (from migration_phase2.sql)
+DO $$
+DECLARE
+  s_earthworks      uuid;
+  s_hardscape       uuid;
+  s_softscape_front uuid;
+  s_softscape_rear  uuid;
+  s_irrigation      uuid;
+  s_client_extras   uuid;
+BEGIN
+
+  IF EXISTS (SELECT 1 FROM quote_template_sections LIMIT 1) THEN
+    RETURN;
+  END IF;
+
+  -- Sections
+  INSERT INTO quote_template_sections (name, order_index) VALUES ('Earthworks', 0)             RETURNING id INTO s_earthworks;
+  INSERT INTO quote_template_sections (name, order_index) VALUES ('Hardscape Works', 1)         RETURNING id INTO s_hardscape;
+  INSERT INTO quote_template_sections (name, order_index) VALUES ('Softscape Front', 2)         RETURNING id INTO s_softscape_front;
+  INSERT INTO quote_template_sections (name, order_index) VALUES ('Softscape Rear & Side', 3)   RETURNING id INTO s_softscape_rear;
+  INSERT INTO quote_template_sections (name, order_index) VALUES ('Irrigation', 4)              RETURNING id INTO s_irrigation;
+  INSERT INTO quote_template_sections (name, order_index, is_client_extra) VALUES ('Client Extras', 5, true) RETURNING id INTO s_client_extras;
+
+  -- Earthworks
+  INSERT INTO quote_template_items (section_id, name, unit, order_index) VALUES
+    (s_earthworks, 'Fine grading',          'm²',  0),
+    (s_earthworks, 'Extra earthworks',      'm²',  1),
+    (s_earthworks, 'Extra works/comment',   'No.', 2);
+
+  -- Hardscape Works
+  INSERT INTO quote_template_items (section_id, name, unit, order_index) VALUES
+    (s_hardscape, 'Moss rock installed',          'Lin M', 0),
+    (s_hardscape, 'Steppers 600x300mm',           'No.',   1),
+    (s_hardscape, 'Large boulders',               'No.',   2),
+    (s_hardscape, 'Small pitching',               'Lin M', 3),
+    (s_hardscape, 'Steel edging to mulch areas',  'Lin M', 4);
+
+  -- Softscape Front (plant items tagged with plant_category = 'front')
+  INSERT INTO quote_template_items (section_id, name, unit, plant_category, order_index) VALUES
+    (s_softscape_front, '130mm plants',                      'No.',   'front', 0),
+    (s_softscape_front, '175-200mm plants',                  'No.',   'front', 1),
+    (s_softscape_front, '300mm pot plants',                  'No.',   'front', 2),
+    (s_softscape_front, 'Street tree 90L',                   'No.',   null,    3),
+    (s_softscape_front, 'Street tree 35Lt',                  'No.',   null,    4),
+    (s_softscape_front, 'Artificial turf',                   'm²',    null,    5),
+    (s_softscape_front, 'Steel edging to turf',              'Lin M', null,    6),
+    (s_softscape_front, 'Mulch - Limestone 32mm',            'm²',    null,    7),
+    (s_softscape_front, 'Mulch - Red gravel',                'm²',    null,    8),
+    (s_softscape_front, 'Mulch - Black',                     'm²',    null,    9),
+    (s_softscape_front, 'Mulch - Grey',                      'm²',    null,    10),
+    (s_softscape_front, 'Rock mulch around A/C and services','No.',   null,    11),
+    (s_softscape_front, 'Other',                             'No.',   null,    12);
+
+  -- Softscape Rear & Side
+  -- 'Corner lot' uses unit='toggle' — renders as YES/NO, value stored as 1/0
+  INSERT INTO quote_template_items (section_id, name, unit, plant_category, order_index) VALUES
+    (s_softscape_rear, 'Corner lot',                      'toggle', null,   0),
+    (s_softscape_rear, '130mm plants',                    'No.',    'rear', 1),
+    (s_softscape_rear, '175-200mm plants',                'No.',    'rear', 2),
+    (s_softscape_rear, '300mm pot plants',                'No.',    'rear', 3),
+    (s_softscape_rear, 'Other larger plant stock - size', 'No.',    'rear', 4),
+    (s_softscape_rear, 'Limestone stone mulch',           'm²',     null,   5),
+    (s_softscape_rear, 'Black mulch',                     'm²',     null,   6),
+    (s_softscape_rear, 'Steppers 600x300mm',              'No.',    null,   7),
+    (s_softscape_rear, 'Small tree - size and type',      'No.',    null,   8),
+    (s_softscape_rear, 'Other',                           'No.',    null,   9);
+
+  -- Irrigation — all auto-calculated, read-only in the form
+  INSERT INTO quote_template_items (section_id, name, unit, is_auto_calculated, auto_calc_formula, order_index) VALUES
+    (s_irrigation, 'Front drippers',        'No.',   true, 'front_plants',    0),
+    (s_irrigation, 'Back drippers',         'No.',   true, 'rear_plants',     1),
+    (s_irrigation, 'Jabs',                  'No.',   true, 'all_plants',      2),
+    (s_irrigation, 'Dripper tube estimate', 'Lin M', true, 'all_plants_x0.5', 3);
+
+  -- Client Extras
+  INSERT INTO quote_template_items (section_id, name, unit, order_index) VALUES
+    (s_client_extras, 'Artificial turf rear', 'm²',    0),
+    (s_client_extras, 'Steel edging to turf', 'Lin M', 1),
+    (s_client_extras, 'Other',                'No.',   2);
+
+END $$;
+
+
+-- Plant ratio settings (from migration_plant_ratio_settings.sql)
+CREATE TABLE IF NOT EXISTS plant_ratio_settings (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  site_id         uuid REFERENCES sites(id) ON DELETE CASCADE,
+  front_ratio     numeric NOT NULL DEFAULT 2.0,
+  rear_ratio      numeric NOT NULL DEFAULT 1.75,
+  pot_size_split  jsonb NOT NULL DEFAULT '{"130mm": 75, "200mm": 25}',
+  updated_by      uuid REFERENCES profiles(id),
+  updated_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS plant_ratio_settings_site_id_unique
+  ON plant_ratio_settings (site_id) WHERE site_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS plant_ratio_settings_global_unique
+  ON plant_ratio_settings ((true)) WHERE site_id IS NULL;
+
+DROP TRIGGER IF EXISTS plant_ratio_settings_updated_at ON plant_ratio_settings;
+CREATE TRIGGER plant_ratio_settings_updated_at
+  BEFORE UPDATE ON plant_ratio_settings
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+ALTER TABLE plant_ratio_settings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "plant_ratio_settings: staff read all" ON plant_ratio_settings;
+CREATE POLICY "plant_ratio_settings: staff read all"
+  ON plant_ratio_settings FOR SELECT
+  USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
+
+DROP POLICY IF EXISTS "plant_ratio_settings: admin write" ON plant_ratio_settings;
+CREATE POLICY "plant_ratio_settings: admin write"
+  ON plant_ratio_settings FOR ALL
+  USING (current_user_role() = 'admin');
+
+
 -- ── 4. Enable RLS on all tables (idempotent) ──────────────────────────────────
 
 ALTER TABLE profiles           ENABLE ROW LEVEL SECURITY;
@@ -1006,6 +1298,7 @@ UPDATE quote_template_sections SET is_client_extra = true WHERE name = 'Client E
 ALTER TABLE lots ADD COLUMN IF NOT EXISTS build_complete boolean NOT NULL DEFAULT false;
 ALTER TABLE lots ADD COLUMN IF NOT EXISTS quant_done     boolean NOT NULL DEFAULT false;
 ALTER TABLE lots ADD COLUMN IF NOT EXISTS invoiced       boolean NOT NULL DEFAULT false;
+ALTER TABLE lots ADD COLUMN IF NOT EXISTS build_completed_at timestamptz;
 
 
 -- ── Vehicle type ──────────────────────────────────────────────────────────────
@@ -1129,6 +1422,34 @@ CREATE POLICY "lot_checklist_items: clients read permitted"
       WHERE csa.client_user_id = auth.uid()
     )
   );
+
+
+-- ── Toolbox meetings ──────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS toolbox_meetings (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  site_id       uuid NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+  date          date NOT NULL,
+  topic         text NOT NULL,
+  notes         text,
+  attendees     text[] NOT NULL DEFAULT '{}',
+  submitted_by  uuid NOT NULL REFERENCES profiles(id),
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS toolbox_meetings_site_id_idx ON toolbox_meetings(site_id);
+CREATE INDEX IF NOT EXISTS toolbox_meetings_date_idx    ON toolbox_meetings(date);
+
+ALTER TABLE toolbox_meetings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "toolbox_meetings: staff read all"     ON toolbox_meetings;
+DROP POLICY IF EXISTS "toolbox_meetings: leading_hand+ write" ON toolbox_meetings;
+
+CREATE POLICY "toolbox_meetings: staff read all"
+  ON toolbox_meetings FOR SELECT
+  USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
+CREATE POLICY "toolbox_meetings: leading_hand+ write"
+  ON toolbox_meetings FOR ALL
+  USING (current_user_role() IN ('leading_hand', 'supervisor', 'admin'));
 
 
 -- =============================================================================

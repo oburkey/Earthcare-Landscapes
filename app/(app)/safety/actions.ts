@@ -252,3 +252,57 @@ export async function getSafetyDocUrl(filePath: string): Promise<string> {
   await requireAuth()
   return getR2SignedUrlSafe(filePath, 300)
 }
+
+export async function submitToolboxMeeting(formData: FormData) {
+  const profile = await requireAuth()
+  if (ROLE_LEVEL[profile.role] < ROLE_LEVEL['leading_hand']) {
+    return { error: 'Insufficient permissions' }
+  }
+
+  const supabase = await createClient()
+
+  const siteId    = formData.get('site_id') as string
+  const date      = formData.get('date') as string
+  const topic     = (formData.get('topic') as string)?.trim()
+  const notes     = (formData.get('notes') as string) || null
+  const attendees = JSON.parse((formData.get('attendees') as string) || '[]') as string[]
+
+  if (!siteId) return { error: 'Site is required' }
+  if (!date)   return { error: 'Date is required' }
+  if (!topic)  return { error: 'Topic is required' }
+
+  const { data, error } = await supabase
+    .from('toolbox_meetings')
+    .insert({
+      site_id:      siteId,
+      date,
+      topic,
+      notes,
+      attendees,
+      submitted_by: profile.id,
+    })
+    .select('id')
+    .single()
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/safety')
+  return { success: true, id: data.id }
+}
+
+export async function deleteToolboxMeeting(id: string) {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Admin access required' }
+
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('toolbox_meetings')
+    .delete()
+    .eq('id', id)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/safety')
+  return { success: true }
+}

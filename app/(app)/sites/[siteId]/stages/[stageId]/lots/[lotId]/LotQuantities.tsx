@@ -123,8 +123,15 @@ export default function LotQuantities({
   showClientExtras = true,
 }: Props) {
   const [open, setOpen] = useState(false)
-  const [isEstimated, setIsEstimated] = useState(true)
+  // Default to Final once estimate data has been saved, so leading hands don't
+  // accidentally overwrite the estimate during regular site visits.
+  const hasEstimateData = !!estimatedQuote && estimatedQuote.items.some((i) => i.quantity !== null)
+  const [isEstimated, setIsEstimated] = useState(!hasEstimateData)
   const activeQuote = isEstimated ? estimatedQuote : finalQuote
+  // The quote matching the initial active mode above — used to seed initial
+  // state below (must NOT always be estimatedQuote, or "Final" mode would
+  // open showing Estimate data when it defaults to Final).
+  const initialQuote = hasEstimateData ? finalQuote : estimatedQuote
 
   const allItems = useMemo(
     () => sections.flatMap((s) => s.items.map((item) => ({ ...item, isClientExtra: s.isClientExtra ?? false }))),
@@ -136,7 +143,7 @@ export default function LotQuantities({
   )
 
   const [values, setValues] = useState<Record<string, string>>(() => {
-    const base = initValues(estimatedQuote)
+    const base = initValues(initialQuote)
     // Seed the four irrigation toggles to YES when there is no saved value for them
     for (const item of allItems) {
       if (item.unit === 'toggle' && DEFAULT_YES_TOGGLES.has(item.name) && !(item.id in base)) {
@@ -146,9 +153,9 @@ export default function LotQuantities({
     return base
   })
   const [variantSel, setVariantSel] = useState<Record<string, string>>(
-    () => initVariantSel(estimatedQuote, variantGroups)
+    () => initVariantSel(initialQuote, variantGroups)
   )
-  const [notes, setNotes]           = useState(estimatedQuote?.notes ?? '')
+  const [notes, setNotes]           = useState(initialQuote?.notes ?? '')
   const [error, setError]           = useState<string | null>(null)
   const [saved, setSaved]           = useState(false)
   const [isPending, startTransition] = useTransition()
