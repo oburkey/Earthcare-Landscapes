@@ -27,6 +27,7 @@
       "Bash(git add *)",
       "Bash(git commit *)",
       "Bash(git push *)",
+      "Bash(git pull *)",
       "Bash(git config *)",
       "Bash(npx eslint *)",
       "Bash(grep -rn \"client\" app/page.tsx app/\\\\\\(auth\\\\\\)/login/LoginForm.tsx middleware.ts)",
