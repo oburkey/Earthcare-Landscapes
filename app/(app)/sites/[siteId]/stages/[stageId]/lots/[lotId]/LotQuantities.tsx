@@ -43,6 +43,7 @@ type Props = {
   estimatedQuote: QuoteData
   finalQuote: QuoteData
   showClientExtras?: boolean
+  contractPrice?: number | null
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -121,12 +122,15 @@ export default function LotQuantities({
   isAdmin, canManage,
   sections, estimatedQuote, finalQuote,
   showClientExtras = true,
+  contractPrice,
 }: Props) {
   const [open, setOpen] = useState(false)
   // Default to Final once estimate data has been saved, so leading hands don't
   // accidentally overwrite the estimate during regular site visits.
+  // Also default to Final when a contract price is set.
   const hasEstimateData = !!estimatedQuote && estimatedQuote.items.some((i) => i.quantity !== null)
-  const [isEstimated, setIsEstimated] = useState(!hasEstimateData)
+  const hasContractPrice = contractPrice != null && contractPrice > 0
+  const [isEstimated, setIsEstimated] = useState(hasContractPrice ? false : !hasEstimateData)
   const activeQuote = isEstimated ? estimatedQuote : finalQuote
   // The quote matching the initial active mode above — used to seed initial
   // state below (must NOT always be estimatedQuote, or "Final" mode would

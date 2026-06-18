@@ -46,7 +46,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
 
   let lotsQuery = supabase
     .from('lots')
-    .select('id, lot_number, stage_id, due_date, build_complete, invoiced')
+    .select('id, lot_number, stage_id, due_date, build_complete, invoiced, contract_price')
   if (pipelineStartDate && pipelineEndDate) {
     lotsQuery = lotsQuery.gte('due_date', pipelineStartDate).lt('due_date', pipelineEndDate)
   }

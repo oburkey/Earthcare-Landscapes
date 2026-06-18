@@ -1,7 +1,7 @@
 'use client'
 
-import { useActionState } from 'react'
-import { updateExtraJob } from './actions'
+import { useActionState, useState } from 'react'
+import { updateExtraJob, deleteExtraJob } from './actions'
 import type { ExtraJobStatus } from '@/types/database'
 import type { ActionState } from '@/types/actions'
 import { EXTRA_JOB_STATUS_OPTIONS } from '@/lib/lotStatus'
@@ -15,6 +15,7 @@ interface Props {
   currentStatus: ExtraJobStatus
   currentNotes: string | null
   canManage: boolean
+  isAdmin?: boolean
 }
 
 
@@ -27,13 +28,20 @@ export default function EditExtraJobForm({
   currentStatus,
   currentNotes,
   canManage,
+  isAdmin,
 }: Props) {
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [state, action, pending] = useActionState<ActionState, FormData>(
     updateExtraJob,
     null
   )
+  const [deleteState, deleteAction, deletePending] = useActionState<ActionState, FormData>(
+    deleteExtraJob,
+    null
+  )
 
   return (
+    <>
     <form action={action} className="space-y-4">
       <input type="hidden" name="extra_job_id" value={extraJobId} />
       <input type="hidden" name="site_id"      value={siteId} />
@@ -121,5 +129,50 @@ export default function EditExtraJobForm({
         {pending ? 'Saving…' : 'Save changes'}
       </button>
     </form>
+
+    {isAdmin && (
+      <div className="mt-4 pt-3 border-t border-stone-100">
+        {!confirmDelete ? (
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(true)}
+            className="text-sm text-red-500 hover:text-red-700"
+          >
+            Delete extra job
+          </button>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-sm text-stone-700">
+              Permanently delete this extra job and all its photos and pricing data?
+            </p>
+            <div className="flex items-center gap-3">
+              <form action={deleteAction}>
+                <input type="hidden" name="extra_job_id" value={extraJobId} />
+                <input type="hidden" name="site_id"      value={siteId} />
+                <input type="hidden" name="stage_id"     value={stageId} />
+                <button
+                  type="submit"
+                  disabled={deletePending}
+                  className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  {deletePending ? 'Deleting…' : 'Yes, delete'}
+                </button>
+              </form>
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(false)}
+                className="text-sm text-stone-500 hover:text-stone-700"
+              >
+                Cancel
+              </button>
+            </div>
+            {deleteState?.error && (
+              <p className="text-sm text-red-600">{deleteState.error}</p>
+            )}
+          </div>
+        )}
+      </div>
+    )}
+    </>
   )
 }

@@ -165,16 +165,37 @@ export async function updateStage(
 
   if (!name) return { error: 'Stage name is required.' }
 
+  const isContractPricing = formData.get('is_contract_pricing') === 'true'
+  const rawPrice = formData.get('default_contract_price') as string
+  const defaultContractPrice = rawPrice ? parseFloat(rawPrice) : null
+
+  if (isContractPricing && defaultContractPrice !== null && (isNaN(defaultContractPrice) || defaultContractPrice < 0)) {
+    return { error: 'Default contract price must be a valid positive number.' }
+  }
+
   const supabase = await createClient()
   const { error } = await supabase
     .from('stages')
-    .update({ name })
+    .update({
+      name,
+      is_contract_pricing: isContractPricing,
+      default_contract_price: isContractPricing ? defaultContractPrice : null,
+    })
     .eq('id', stageId)
 
   if (error) return { error: error.message }
 
+  if (isContractPricing && defaultContractPrice !== null) {
+    await supabase
+      .from('lots')
+      .update({ contract_price: defaultContractPrice })
+      .eq('stage_id', stageId)
+      .is('contract_price', null)
+  }
+
   revalidatePath(`/sites/${siteId}/stages/${stageId}`)
   revalidatePath(`/sites/${siteId}`)
+  revalidatePath('/invoices')
   revalidateTag('stages')
   revalidateTag('sites')
   return { success: true }

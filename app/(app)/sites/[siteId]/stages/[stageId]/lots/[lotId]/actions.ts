@@ -325,12 +325,17 @@ export async function updateLot(
       newStatus === 'complete' ? new Date().toISOString().split('T')[0] : null,
   }
 
-  // Leading hands, supervisors and admins can also update dates
+  // Leading hands, supervisors and admins can also update dates and contract price
   if (profile.role === 'leading_hand' || profile.role === 'supervisor' || profile.role === 'admin') {
     const rawDue = formData.get('due_date') as string
     const rawScheduled = formData.get('scheduled_date') as string
     updates.due_date = rawDue || null
     updates.scheduled_date = rawScheduled || null
+
+    const rawContractPrice = formData.get('contract_price') as string | null
+    if (rawContractPrice !== null) {
+      updates.contract_price = rawContractPrice ? parseFloat(rawContractPrice) : null
+    }
   }
 
   const supabase = await createClient()

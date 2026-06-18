@@ -18,6 +18,9 @@ interface Props {
   currentScheduledDate: string | null
   canManage: boolean
   isAdmin?: boolean
+  isContractPricing?: boolean
+  contractPrice?: number | null
+  defaultContractPrice?: number | null
 }
 
 export default function EditLotForm({
@@ -30,6 +33,9 @@ export default function EditLotForm({
   currentScheduledDate,
   canManage,
   isAdmin,
+  isContractPricing,
+  contractPrice,
+  defaultContractPrice,
 }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [state, action, pending] = useActionState<UpdateState, FormData>(updateLot, null)
@@ -103,6 +109,31 @@ export default function EditLotForm({
               className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
             />
           </div>
+        </div>
+      )}
+
+      {/* Contract price — only when stage has contract pricing enabled */}
+      {isContractPricing && canManage && (
+        <div>
+          <label htmlFor="contract_price" className="block text-sm font-medium text-stone-700">
+            Contract price
+          </label>
+          <div className="relative mt-1">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">$</span>
+            <input
+              id="contract_price"
+              name="contract_price"
+              type="number"
+              min="0"
+              step="0.01"
+              defaultValue={contractPrice ?? defaultContractPrice ?? ''}
+              placeholder="0.00"
+              className="block w-full rounded-lg border border-stone-300 pl-7 pr-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+            />
+          </div>
+          <p className="mt-1 text-xs text-stone-400">
+            Fixed price for this lot (overrides quant sheet total)
+          </p>
         </div>
       )}
 

@@ -306,3 +306,111 @@ export async function deleteToolboxMeeting(id: string) {
   revalidatePath('/safety')
   return { success: true }
 }
+
+// ── Incidents ─────────────────────────────────────────────────────────────────
+
+export async function submitIncident(formData: FormData) {
+  const profile = await requireAuth()
+  if (ROLE_LEVEL[profile.role] < ROLE_LEVEL['leading_hand']) {
+    return { error: 'Insufficient permissions' }
+  }
+
+  const supabase = await createClient()
+
+  const siteId          = formData.get('site_id') as string
+  const date            = formData.get('date') as string
+  const time            = (formData.get('time') as string) || null
+  const type            = formData.get('type') as string
+  const description     = (formData.get('description') as string)?.trim()
+  const peopleInvolved  = (formData.get('people_involved') as string)?.trim() || null
+  const immediateAction = (formData.get('immediate_action') as string)?.trim() || null
+
+  if (!siteId)       return { error: 'Site is required' }
+  if (!date)         return { error: 'Date is required' }
+  if (!description)  return { error: 'Description is required' }
+
+  const VALID_TYPES = ['incident', 'near_miss', 'first_aid', 'property_damage']
+  if (!VALID_TYPES.includes(type)) return { error: 'Invalid type' }
+
+  const { data, error } = await supabase
+    .from('incidents')
+    .insert({
+      site_id:          siteId,
+      date,
+      time:             time || null,
+      type,
+      description,
+      people_involved:  peopleInvolved,
+      immediate_action: immediateAction,
+      reported_by:      profile.id,
+    })
+    .select('id')
+    .single()
+
+  if (error) return { error: error.message }
+
+  const photoPaths: string[] = []
+  for (let i = 0; i < 10; i++) {
+    const photo = formData.get(`photo_${i}`) as File | null
+    if (!photo || !photo.size) break
+    try {
+      const bytes  = await photo.arrayBuffer()
+      const buffer = Buffer.from(bytes)
+      const safeName = photo.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+      const key = `incident-photos/${data.id}/${Date.now()}-${i}-${safeName}`
+      await uploadToR2(key, buffer, photo.type || 'image/jpeg')
+      await supabase.from('incident_photos').insert({
+        incident_id:  data.id,
+        storage_path: key,
+        uploaded_by:  profile.id,
+      })
+      photoPaths.push(key)
+    } catch { /* non-fatal */ }
+  }
+
+  revalidatePath('/safety')
+  return { success: true, id: data.id, photoPaths }
+}
+
+export async function updateIncidentAdminNotes(id: string, notes: string) {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Admin access required' }
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('incidents')
+    .update({ admin_notes: notes || null })
+    .eq('id', id)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/safety')
+  return { success: true }
+}
+
+export async function deleteIncident(id: string) {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Admin access required' }
+
+  const supabase = await createClient()
+
+  const { data: photos } = await supabase
+    .from('incident_photos')
+    .select('storage_path')
+    .eq('incident_id', id)
+
+  for (const photo of (photos ?? [])) {
+    await deleteFromR2(photo.storage_path).catch(() => {})
+  }
+
+  const { error } = await supabase.from('incidents').delete().eq('id', id)
+  if (error) return { error: error.message }
+
+  revalidatePath('/safety')
+  return { success: true }
+}
+
+export async function getIncidentPhotoUrl(path: string): Promise<string> {
+  await requireAuth()
+  return getR2SignedUrlSafe(path, 300)
+}

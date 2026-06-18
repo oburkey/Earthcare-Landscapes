@@ -84,7 +84,14 @@ export default async function StagePage({ params }: Props) {
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-xl font-semibold text-stone-900">{stage.name}</h1>
               {canManageStage && (
-                <EditStageForm siteId={siteId} stageId={stageId} name={stage.name} isAdmin={isAdmin} />
+                <EditStageForm
+                  siteId={siteId}
+                  stageId={stageId}
+                  name={stage.name}
+                  isAdmin={isAdmin}
+                  isContractPricing={(stage as unknown as { is_contract_pricing?: boolean }).is_contract_pricing ?? false}
+                  defaultContractPrice={(stage as unknown as { default_contract_price?: number | null }).default_contract_price ?? null}
+                />
               )}
             </div>
             {total > 0 && (

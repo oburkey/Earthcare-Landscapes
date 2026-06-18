@@ -44,6 +44,35 @@ export async function updateExtraJob(
   redirect(`/sites/${siteId}/stages/${stageId}/extra-jobs/${extraJobId}`)
 }
 
+export async function deleteExtraJob(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Only admins can delete extra jobs.' }
+
+  const extraJobId = formData.get('extra_job_id') as string
+  const siteId     = formData.get('site_id') as string
+  const stageId    = formData.get('stage_id') as string
+  const supabase = await createClient()
+
+  const { data: photos } = await supabase
+    .from('extra_job_photos')
+    .select('storage_path')
+    .eq('extra_job_id', extraJobId)
+
+  await Promise.all(
+    (photos ?? []).map((p) => deleteFromR2(p.storage_path).catch(() => null))
+  )
+
+  const { error } = await supabase.from('extra_jobs').delete().eq('id', extraJobId)
+  if (error) return { error: error.message }
+
+  revalidatePath(`/sites/${siteId}/stages/${stageId}`)
+  revalidateTag('stages')
+  redirect(`/sites/${siteId}/stages/${stageId}`)
+}
+
 export async function uploadExtraJobPhoto(
   _prev: ActionState,
   formData: FormData

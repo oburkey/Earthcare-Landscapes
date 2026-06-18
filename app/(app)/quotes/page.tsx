@@ -1,6 +1,6 @@
 import { requireAuth, requireRole } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import QuotesView, { type QuoteRow, type SiteOption } from './QuotesView'
+import QuotesView, { type QuoteRow, type SiteOption, type ConversionMap } from './QuotesView'
 
 export const metadata = { title: 'Quotes — Earthcare Landscapes' }
 
@@ -25,10 +25,22 @@ export default async function QuotesPage() {
   let tableExists = true
 
   try {
-    const { data, error } = await supabase
+    // Try full query with stage_id (requires migration_quote_conversion.sql)
+    let { data, error } = await supabase
       .from('quotes')
-      .select('id, site_id, reference, description, status, line_items, notes, created_at, sites(name)')
+      .select('id, site_id, stage_id, reference, description, status, line_items, notes, created_at, sites(name), stages(name)')
       .order('created_at', { ascending: false })
+
+    // Fall back to simpler query if stage_id column doesn't exist yet
+    if (error && error.code !== '42P01' && !error.message?.includes('does not exist')) {
+      const fallback = await supabase
+        .from('quotes')
+        .select('id, site_id, reference, description, status, line_items, notes, created_at, sites(name)')
+        .order('created_at', { ascending: false })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data = fallback.data as any
+      error = fallback.error
+    }
 
     if (error) {
       if (error.code === '42P01' || error.message?.includes('does not exist')) {
@@ -40,6 +52,8 @@ export default async function QuotesPage() {
         id:          q.id,
         siteId:      q.site_id ?? null,
         siteName:    q.sites?.name ?? null,
+        stageId:     q.stage_id ?? null,
+        stageName:   q.stages?.name ?? null,
         reference:   q.reference ?? '',
         description: q.description ?? '',
         status:      q.status ?? 'draft',
@@ -54,6 +68,32 @@ export default async function QuotesPage() {
 
   const canEdit = profile.role === 'admin' || profile.role === 'supervisor'
 
+  // Fetch conversion data — which quotes have been converted to extra jobs
+  const conversions: ConversionMap = {}
+  try {
+    const { data: convertedJobs } = await supabase
+      .from('extra_jobs')
+      .select('id, source_quote_id, stages!inner(id, name, site_id)')
+      .not('source_quote_id', 'is', null)
+
+    if (convertedJobs) {
+      for (const j of convertedJobs) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const stage = Array.isArray(j.stages) ? (j.stages as any)[0] : (j.stages as any)
+        if (j.source_quote_id && stage) {
+          conversions[j.source_quote_id] = {
+            extraJobId: j.id,
+            stageName:  stage.name,
+            siteId:     stage.site_id,
+            stageId:    stage.id,
+          }
+        }
+      }
+    }
+  } catch {
+    // source_quote_id column doesn't exist yet — migration not run
+  }
+
   return (
     <div className="min-h-screen bg-stone-50">
       <div className="mx-auto max-w-5xl px-4 py-6 space-y-5">
@@ -62,6 +102,7 @@ export default async function QuotesPage() {
           sites={sites}
           canEdit={canEdit}
           tableExists={tableExists}
+          initialConversions={conversions}
         />
       </div>
     </div>

@@ -57,8 +57,8 @@ export default async function LotPage({ params }: Props) {
       .from('lots')
       .select(`
         id, lot_number, status, due_date, scheduled_date, completion_date, notes,
-        build_complete, quant_done, invoiced, has_client_extras, extras_notes,
-        stages!inner(id, name, sites!inner(id, name, has_client_extras))
+        build_complete, quant_done, invoiced, has_client_extras, extras_notes, contract_price,
+        stages!inner(id, name, is_contract_pricing, default_contract_price, sites!inner(id, name, has_client_extras))
       `)
       .eq('id', lotId)
       .single(),
@@ -132,8 +132,13 @@ export default async function LotPage({ params }: Props) {
   const invoiced        = lotAny?.invoiced          ?? false
   const lotClientExtras = lotAny?.has_client_extras ?? true
   const extrasNotes     = lotAny?.extras_notes      ?? null
+  const contractPrice   = lotAny?.contract_price != null ? Number(lotAny.contract_price) : null
 
   const stage = Array.isArray(lot.stages) ? lot.stages[0] : lot.stages as { id: string; name: string; sites: unknown }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const stageAny = stage as any
+  const stageIsContractPricing   = stageAny?.is_contract_pricing ?? false
+  const stageDefaultContractPrice = stageAny?.default_contract_price != null ? Number(stageAny.default_contract_price) : null
   const site             = Array.isArray(stage.sites) ? stage.sites[0] : stage.sites as { id: string; name: string; has_client_extras?: boolean }
   const siteClientExtras = (site as { has_client_extras?: boolean }).has_client_extras ?? true
   const showClientExtras = siteClientExtras && lotClientExtras
@@ -327,6 +332,7 @@ export default async function LotPage({ params }: Props) {
               sections={sections}
               estimatedQuote={shapeQuote(estimatedQuote)}
               finalQuote={shapeQuote(finalQuote)}
+              contractPrice={contractPrice}
               showClientExtras={showClientExtras}
             />
           </div>
@@ -415,6 +421,9 @@ export default async function LotPage({ params }: Props) {
               currentScheduledDate={lot.scheduled_date}
               canManage={canManage}
               isAdmin={isAdmin}
+              isContractPricing={stageIsContractPricing}
+              contractPrice={contractPrice}
+              defaultContractPrice={stageDefaultContractPrice}
             />
           </div>
         </div>

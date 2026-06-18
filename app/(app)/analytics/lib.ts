@@ -45,6 +45,7 @@ export type LotRow = {
   due_date: string | null
   build_complete: boolean
   invoiced: boolean
+  contract_price: number | null
 }
 export type CompletedLotRow = { id: string; build_completed_at: string }
 export type RatioRow = { site_id: string | null; front_ratio: number; rear_ratio: number }
@@ -108,6 +109,7 @@ export type LotDrillDownRow = {
   invoiced: boolean
   varianceSummary: string | null
   estimateOnlyTotal: number | null
+  contractPrice: number | null
 }
 
 export type StageAnalytics = {
@@ -284,6 +286,7 @@ type LotCalc = {
   hasQuoteData: boolean
   estimateCats: CategoryQuantities | null
   finalCats: CategoryQuantities | null
+  contractPrice: number | null
 }
 
 function buildLotCalcs(lots: LotRow[], quotes: QuoteRow[]): LotCalc[] {
@@ -302,6 +305,9 @@ function buildLotCalcs(lots: LotRow[], quotes: QuoteRow[]): LotCalc[] {
       ? [...quotesForLot].sort((a, b) => bestQuoteScore(b) - bestQuoteScore(a))[0]
       : null
 
+    const cp = lot.contract_price != null ? Number(lot.contract_price) : null
+    const hasContractPrice = cp != null
+
     return {
       id: lot.id,
       lotNumber: lot.lot_number,
@@ -309,12 +315,13 @@ function buildLotCalcs(lots: LotRow[], quotes: QuoteRow[]): LotCalc[] {
       stageId: lot.stage_id,
       buildComplete: lot.build_complete,
       invoiced: lot.invoiced,
-      finalTotal: finalQuote ? quoteTotal(finalQuote.lot_quote_items) : null,
-      estimateTotal: estimateQuote ? quoteTotal(estimateQuote.lot_quote_items) : null,
-      bestTotal: best ? quoteTotal(best.lot_quote_items) : null,
-      hasQuoteData: quotesForLot.length > 0,
-      estimateCats: estimateQuote ? computeCategoryQuantities(estimateQuote.lot_quote_items) : null,
-      finalCats: finalQuote ? computeCategoryQuantities(finalQuote.lot_quote_items) : null,
+      finalTotal: hasContractPrice ? cp : (finalQuote ? quoteTotal(finalQuote.lot_quote_items) : null),
+      estimateTotal: hasContractPrice ? null : (estimateQuote ? quoteTotal(estimateQuote.lot_quote_items) : null),
+      bestTotal: hasContractPrice ? cp : (best ? quoteTotal(best.lot_quote_items) : null),
+      hasQuoteData: hasContractPrice || quotesForLot.length > 0,
+      estimateCats: hasContractPrice ? null : (estimateQuote ? computeCategoryQuantities(estimateQuote.lot_quote_items) : null),
+      finalCats: hasContractPrice ? null : (finalQuote ? computeCategoryQuantities(finalQuote.lot_quote_items) : null),
+      contractPrice: cp,
     }
   })
 }
@@ -341,6 +348,7 @@ function computeVariance(lots: LotCalc[]): MaterialsVariance {
 }
 
 function lotVarianceSummary(lot: LotCalc): string | null {
+  if (lot.contractPrice != null) return `Contract $${lot.contractPrice.toLocaleString('en-AU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
   if (!lot.estimateCats || !lot.finalCats) return null
   const parts: string[] = []
   for (const key of CATEGORY_KEYS) {
@@ -511,7 +519,8 @@ export function buildAnalyticsData(input: {
             buildComplete: lot.buildComplete,
             invoiced: lot.invoiced,
             varianceSummary: lotVarianceSummary(lot),
-            estimateOnlyTotal: lot.finalCats === null ? lot.estimateTotal : null,
+            estimateOnlyTotal: lot.finalCats === null && lot.contractPrice === null ? lot.estimateTotal : null,
+            contractPrice: lot.contractPrice,
           }))
         return { id: stage.id, name: stage.name, summary, lots: lotsRows }
       })
