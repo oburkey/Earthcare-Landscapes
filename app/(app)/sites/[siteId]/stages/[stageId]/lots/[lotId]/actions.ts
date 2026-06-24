@@ -177,6 +177,37 @@ export async function deleteLot(
   redirect(`/sites/${siteId}/stages/${stageId}`)
 }
 
+export async function deleteLotDocument(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Only admins can delete documents.' }
+
+  const documentId = formData.get('document_id') as string
+  const siteId     = formData.get('site_id') as string
+  const stageId    = formData.get('stage_id') as string
+  const lotId      = formData.get('lot_id') as string
+
+  const supabase = await createClient()
+
+  const { data: doc } = await supabase
+    .from('lot_documents')
+    .select('storage_path')
+    .eq('id', documentId)
+    .single()
+
+  if (doc?.storage_path) {
+    await deleteFromR2(doc.storage_path).catch(() => null)
+  }
+
+  const { error } = await supabase.from('lot_documents').delete().eq('id', documentId)
+  if (error) return { error: error.message }
+
+  revalidatePath(`/sites/${siteId}/stages/${stageId}/lots/${lotId}`)
+  return null
+}
+
 export async function updateTradeStatus(
   _prev: ActionState,
   formData: FormData
@@ -325,12 +356,17 @@ export async function updateLot(
       newStatus === 'complete' ? new Date().toISOString().split('T')[0] : null,
   }
 
-  // Leading hands, supervisors and admins can also update dates
+  // Leading hands, supervisors and admins can also update dates and contract price
   if (profile.role === 'leading_hand' || profile.role === 'supervisor' || profile.role === 'admin') {
     const rawDue = formData.get('due_date') as string
     const rawScheduled = formData.get('scheduled_date') as string
     updates.due_date = rawDue || null
     updates.scheduled_date = rawScheduled || null
+
+    const rawContractPrice = formData.get('contract_price') as string | null
+    if (rawContractPrice !== null) {
+      updates.contract_price = rawContractPrice ? parseFloat(rawContractPrice) : null
+    }
   }
 
   const supabase = await createClient()

@@ -34,6 +34,7 @@ export type LotRow = {
   clientExtrasAmount: number
   sections: LotSection[]
   showClientExtras: boolean
+  contractPrice: number | null
 }
 
 export type ExtraJobRow = {
@@ -116,39 +117,61 @@ function claimSheetBody(
   logoSrc: string
 ): string {
   const date = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
-  const standard = lot.sections.filter((s) => !s.isClientExtra)
-  const extras   = lot.showClientExtras ? lot.sections.filter((s) => s.isClientExtra) : []
 
-  let secIdx = 0
-  const sectionRows = [...standard, ...extras].map((section) => {
-    secIdx++
-    const prefix = section.isClientExtra ? 'E' : String(secIdx)
-    const items = section.items.map((item, i) => `
+  const grand = lot.contractPrice ?? (lot.standardAmount + lot.clientExtrasAmount)
+
+  let tableContent: string
+  if (lot.contractPrice != null) {
+    tableContent = `
       <tr>
-        <td class="code">${prefix}.${i + 1}</td>
-        <td>${item.name}</td>
-        <td class="r">${fmtQty(item.quantity)}</td>
-        <td class="u">${item.unit}</td>
-        <td class="r">${item.rate > 0 ? fmt(item.rate) : '—'}</td>
-        <td class="r">${item.rate > 0 ? fmt(item.total) : '—'}</td>
-      </tr>`).join('')
-    return `
-      <tr class="sec"><td colspan="6">${section.name}</td></tr>
-      ${items}
-      <tr class="sub">
-        <td colspan="5">Subtotal — ${section.name}</td>
-        <td class="r">${fmt(section.subtotal)}</td>
+        <td class="code">1</td>
+        <td>Contract Price</td>
+        <td class="r">1</td>
+        <td class="u">Lot</td>
+        <td class="r">${fmt(lot.contractPrice)}</td>
+        <td class="r">${fmt(lot.contractPrice)}</td>
+      </tr>
+      <tr class="grand">
+        <td colspan="5">Grand Total (ex GST)</td>
+        <td class="r">${fmt(grand)}</td>
       </tr>`
-  }).join('')
-
-  const grand = lot.standardAmount + lot.clientExtrasAmount
+  } else {
+    const standard = lot.sections.filter((s) => !s.isClientExtra)
+    const extras   = lot.showClientExtras ? lot.sections.filter((s) => s.isClientExtra) : []
+    let secIdx = 0
+    const sectionRows = [...standard, ...extras].map((section) => {
+      secIdx++
+      const prefix = section.isClientExtra ? 'E' : String(secIdx)
+      const items = section.items.map((item, i) => `
+        <tr>
+          <td class="code">${prefix}.${i + 1}</td>
+          <td>${item.name}</td>
+          <td class="r">${fmtQty(item.quantity)}</td>
+          <td class="u">${item.unit}</td>
+          <td class="r">${item.rate > 0 ? fmt(item.rate) : '—'}</td>
+          <td class="r">${item.rate > 0 ? fmt(item.total) : '—'}</td>
+        </tr>`).join('')
+      return `
+        <tr class="sec"><td colspan="6">${section.name}</td></tr>
+        ${items}
+        <tr class="sub">
+          <td colspan="5">Subtotal — ${section.name}</td>
+          <td class="r">${fmt(section.subtotal)}</td>
+        </tr>`
+    }).join('')
+    tableContent = `${sectionRows}
+      <tr class="grand">
+        <td colspan="5">Grand Total (ex GST)</td>
+        <td class="r">${fmt(grand)}</td>
+      </tr>`
+  }
 
   return `
 <div class="invoice-page">
   <div class="hdr">
     <div class="hdr-left">
       <h1>${site.name} — Lot ${lot.lotNumber}</h1>
-      <div class="lbl">Final Price — ACTUAL</div>
+      <div class="lbl">${lot.contractPrice != null ? 'Contract Price' : 'Final Price — ACTUAL'}</div>
       ${site.clientContact ? `<div class="sub">Developer: ${site.clientContact}</div>` : ''}
       <div class="sub">Stage: ${stageName}</div>
       <div class="sub">${date}</div>
@@ -166,11 +189,7 @@ function claimSheetBody(
       </tr>
     </thead>
     <tbody>
-      ${sectionRows}
-      <tr class="grand">
-        <td colspan="5">Grand Total (ex GST)</td>
-        <td class="r">${fmt(grand)}</td>
-      </tr>
+      ${tableContent}
     </tbody>
   </table>
   <div class="note">All amounts are exclusive of GST. GST of 10% applies.</div>
@@ -204,19 +223,20 @@ function stageSummaryBody(
   logoSrc: string
 ): string {
   const date     = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
-  const totStd   = stageTotal(stage.lots, 'standardAmount')
-  const totExtra = stageTotal(stage.lots, 'clientExtrasAmount')
-  const totAmt   = totStd + totExtra
+  const totStd   = stage.lots.reduce((s, l) => s + (l.contractPrice != null ? 0 : l.standardAmount), 0)
+  const totExtra = stage.lots.reduce((s, l) => s + (l.contractPrice != null ? 0 : l.clientExtrasAmount), 0)
+  const totContract = stage.lots.reduce((s, l) => s + (l.contractPrice ?? 0), 0)
+  const totAmt   = totStd + totExtra + totContract
 
   const rows = stage.lots.map((lot) => {
     const inv   = invoicedMap[lot.id] ?? lot.invoiced
-    const total = lot.standardAmount + lot.clientExtrasAmount
+    const total = lot.contractPrice ?? (lot.standardAmount + lot.clientExtrasAmount)
     return `<tr>
-      <td>Lot ${lot.lotNumber}</td>
+      <td>Lot ${lot.lotNumber}${lot.contractPrice != null ? ' <span style="color:#7c3aed;font-size:9px;font-weight:600">CONTRACT</span>' : ''}</td>
       <td class="c">${lot.buildComplete ? '✓' : '—'}</td>
       <td class="c">${lot.quantDone ? '✓' : '—'}</td>
-      <td class="r">${fmt(lot.standardAmount)}</td>
-      <td class="r">${lot.clientExtrasAmount > 0 ? fmt(lot.clientExtrasAmount) : '—'}</td>
+      <td class="r">${lot.contractPrice != null ? '—' : fmt(lot.standardAmount)}</td>
+      <td class="r">${lot.contractPrice != null ? '—' : (lot.clientExtrasAmount > 0 ? fmt(lot.clientExtrasAmount) : '—')}</td>
       <td class="r" style="font-weight:600">${fmt(total)}</td>
       <td class="c">${inv ? '✓' : ''}</td>
     </tr>`
@@ -645,9 +665,10 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
             {isExpanded && (
               <div className="border-t border-stone-100 divide-y divide-stone-100">
                 {site.stages.map((stage) => {
-                  const totStd        = stageTotal(stage.lots, 'standardAmount')
-                  const totExtra      = stageTotal(stage.lots, 'clientExtrasAmount')
-                  const totAmt        = totStd + totExtra
+                  const totStd        = stage.lots.reduce((s, l) => s + (l.contractPrice != null ? 0 : l.standardAmount), 0)
+                  const totExtra      = stage.lots.reduce((s, l) => s + (l.contractPrice != null ? 0 : l.clientExtrasAmount), 0)
+                  const totContract   = stage.lots.reduce((s, l) => s + (l.contractPrice ?? 0), 0)
+                  const totAmt        = totStd + totExtra + totContract
                   const allSel        = stage.lots.length > 0 && stage.lots.every((l) => selectedLots.has(l.id))
                   const someSel       = stage.lots.some((l) => selectedLots.has(l.id))
                   const summaryId     = `summary-${stage.id}`
@@ -712,7 +733,7 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
                           </thead>
                           <tbody>
                             {stage.lots.map((lot) => {
-                              const total    = lot.standardAmount + lot.clientExtrasAmount
+                              const total    = lot.contractPrice ?? (lot.standardAmount + lot.clientExtrasAmount)
                               const invoiced = invoicedMap[lot.id] ?? lot.invoiced
                               const selected = selectedLots.has(lot.id)
                               const genning  = generating.has(lot.id)
@@ -727,16 +748,23 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
                                       className="h-4 w-4 rounded border-stone-300 text-green-700 focus:ring-green-600 cursor-pointer"
                                     />
                                   </td>
-                                  <td className="py-2.5 pr-6 font-medium text-stone-900 whitespace-nowrap">Lot {lot.lotNumber}</td>
+                                  <td className="py-2.5 pr-6 font-medium text-stone-900 whitespace-nowrap">
+                                    Lot {lot.lotNumber}
+                                    {lot.contractPrice != null && (
+                                      <span className="ml-1.5 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">Contract</span>
+                                    )}
+                                  </td>
                                   <td className="py-2.5 px-3 text-center">
                                     {lot.buildComplete ? <span className="text-green-600 font-semibold">✓</span> : <span className="text-stone-300">—</span>}
                                   </td>
                                   <td className="py-2.5 px-3 text-center">
                                     {lot.quantDone ? <span className="text-green-600 font-semibold">✓</span> : <span className="text-stone-300">—</span>}
                                   </td>
-                                  <td className="py-2.5 px-3 text-right tabular-nums text-stone-700">{fmt(lot.standardAmount)}</td>
                                   <td className="py-2.5 px-3 text-right tabular-nums text-stone-700">
-                                    {lot.clientExtrasAmount > 0 ? fmt(lot.clientExtrasAmount) : <span className="text-stone-300">—</span>}
+                                    {lot.contractPrice != null ? <span className="text-stone-300">—</span> : fmt(lot.standardAmount)}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-right tabular-nums text-stone-700">
+                                    {lot.contractPrice != null ? <span className="text-stone-300">—</span> : (lot.clientExtrasAmount > 0 ? fmt(lot.clientExtrasAmount) : <span className="text-stone-300">—</span>)}
                                   </td>
                                   <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-stone-900">{fmt(total)}</td>
                                   <td className="py-2.5 px-3 text-center">

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { saveQuote, deleteQuote } from './actions'
+import { saveQuote, deleteQuote, getStagesForSite, convertQuoteToExtraJob } from './actions'
 import { LOGO_DATA_URL } from '@/lib/pdfAssets'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -17,6 +17,8 @@ export type QuoteRow = {
   id: string
   siteId: string | null
   siteName: string | null
+  stageId: string | null
+  stageName: string | null
   reference: string
   description: string
   status: 'draft' | 'sent' | 'accepted'
@@ -29,6 +31,15 @@ export type SiteOption = {
   id: string
   name: string
 }
+
+export type ConversionInfo = {
+  extraJobId: string
+  stageName: string
+  siteId: string
+  stageId: string
+}
+
+export type ConversionMap = Record<string, ConversionInfo>
 
 type Filter = 'all' | 'draft' | 'sent' | 'accepted'
 
@@ -92,7 +103,7 @@ const QUOTE_STYLES = `
 .html2pdf__container .note { margin-top: 14px; font-size: 9px; color: #999; }
 </style>`
 
-function buildQuoteHtml(
+export function buildQuoteHtml(
   siteName: string | null,
   reference: string,
   description: string,
@@ -264,7 +275,7 @@ function buildCombinedQuotesPdf(selectedQuotes: QuoteRow[], logoSrc: string): st
 </div>`
 }
 
-async function downloadPDF(
+export async function downloadPDF(
   contentHtml: string,
   filename: string,
   onError: (msg: string) => void,
@@ -300,11 +311,13 @@ export default function QuotesView({
   sites,
   canEdit,
   tableExists,
+  initialConversions,
 }: {
   initialQuotes: QuoteRow[]
   sites: SiteOption[]
   canEdit: boolean
   tableExists: boolean
+  initialConversions: ConversionMap
 }) {
   const [quotes, setQuotes]     = useState<QuoteRow[]>(initialQuotes)
   const [filter, setFilter]     = useState<Filter>('all')
@@ -314,11 +327,15 @@ export default function QuotesView({
 
   // Builder form state
   const [siteId, setSiteId]           = useState('')
+  const [stageId, setStageId]         = useState('')
   const [reference, setReference]     = useState('')
   const [description, setDescription] = useState('')
   const [status, setStatus]           = useState<'draft' | 'sent' | 'accepted'>('draft')
   const [lineItems, setLineItems]     = useState<LineItem[]>([emptyLine()])
   const [notes, setNotes]             = useState('')
+  const [formStages, setFormStages]   = useState<{ id: string; name: string }[]>([])
+  const [loadingFormStages, setLoadingFormStages] = useState(false)
+  const [convertValidation, setConvertValidation] = useState(false)
 
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set())
   const [saving, setSaving]             = useState(false)
@@ -327,23 +344,41 @@ export default function QuotesView({
   const [batchGenerating, setBatchGenerating] = useState(false)
   const [actionError, setActionError]   = useState<string | null>(null)
 
+  // Conversion state
+  const [conversions, setConversions]         = useState<ConversionMap>(initialConversions)
+  const [convertingQuoteId, setConvertingQuoteId] = useState<string | null>(null)
+  const [convertSiteId, setConvertSiteId]     = useState('')
+  const [convertStageId, setConvertStageId]   = useState('')
+  const [convertStages, setConvertStages]     = useState<{ id: string; name: string }[]>([])
+  const [converting, setConverting]           = useState(false)
+  const [convertError, setConvertError]       = useState<string | null>(null)
+  const [loadingStages, setLoadingStages]     = useState(false)
+
   // ── Navigation ─────────────────────────────────────────────────────────────
 
   function openNew() {
-    setSiteId(''); setReference(''); setDescription('')
+    setSiteId(''); setStageId(''); setReference(''); setDescription('')
     setStatus('draft'); setLineItems([{ description: 'Administration & Preliminary', qty: 1, unit: 'item', rate: 500 }]); setNotes('')
+    setFormStages([]); setConvertValidation(false)
     setActionError(null); setView('new')
   }
 
   function openEdit(q: QuoteRow) {
     setSiteId(q.siteId ?? '')
+    setStageId(q.stageId ?? '')
     setReference(q.reference)
     setDescription(q.description)
     setStatus(q.status)
     setLineItems(q.lineItems.length > 0 ? q.lineItems : [emptyLine()])
     setNotes(q.notes)
+    setConvertValidation(false)
     setActionError(null)
     setView(q.id)
+    if (q.siteId) {
+      fetchFormStages(q.siteId)
+    } else {
+      setFormStages([])
+    }
   }
 
   function closeBuilder() {
@@ -377,6 +412,7 @@ export default function QuotesView({
     const fd = new FormData()
     if (view !== 'new' && view !== 'list') fd.set('id', view)
     fd.set('site_id', siteId)
+    fd.set('stage_id', stageId)
     fd.set('reference', reference)
     fd.set('description', description)
     fd.set('status', status)
@@ -392,18 +428,19 @@ export default function QuotesView({
     }
 
     const resolvedSiteName = sites.find((s) => s.id === siteId)?.name ?? null
+    const resolvedStageName = formStages.find((s) => s.id === stageId)?.name ?? null
 
     if (view === 'new') {
       const newId = ('id' in (result ?? {})) ? (result as { id: string }).id : crypto.randomUUID()
       setQuotes((prev) => [
-        { id: newId, siteId: siteId || null, siteName: resolvedSiteName, reference, description, status, lineItems, notes, createdAt: new Date().toISOString() },
+        { id: newId, siteId: siteId || null, siteName: resolvedSiteName, stageId: stageId || null, stageName: resolvedStageName, reference, description, status, lineItems, notes, createdAt: new Date().toISOString() },
         ...prev,
       ])
     } else {
       setQuotes((prev) =>
         prev.map((q) =>
           q.id === view
-            ? { ...q, siteId: siteId || null, siteName: resolvedSiteName, reference, description, status, lineItems, notes }
+            ? { ...q, siteId: siteId || null, siteName: resolvedSiteName, stageId: stageId || null, stageName: resolvedStageName, reference, description, status, lineItems, notes }
             : q
         )
       )
@@ -440,6 +477,77 @@ export default function QuotesView({
       if (next.has(id)) { next.delete(id) } else { next.add(id) }
       return next
     })
+  }
+
+  // ── Form stage fetching ─────────────────────────────────────────────────────
+
+  async function fetchFormStages(sid: string) {
+    if (!sid) { setFormStages([]); return }
+    setLoadingFormStages(true)
+    const stages = await getStagesForSite(sid)
+    setFormStages(stages)
+    setLoadingFormStages(false)
+  }
+
+  function handleFormSiteChange(newSiteId: string) {
+    setSiteId(newSiteId)
+    setStageId('')
+    setConvertValidation(false)
+    fetchFormStages(newSiteId)
+  }
+
+  // ── Conversion ─────────────────────────────────────────────────────────────
+
+  async function fetchStages(sid: string) {
+    if (!sid) { setConvertStages([]); return }
+    setLoadingStages(true)
+    const stages = await getStagesForSite(sid)
+    setConvertStages(stages)
+    setLoadingStages(false)
+  }
+
+  async function openConvertModal(quoteId: string, quoteSiteId: string, quoteStageId: string) {
+    setConvertingQuoteId(quoteId)
+    setConvertSiteId(quoteSiteId)
+    setConvertStageId(quoteStageId)
+    setConvertError(null)
+    fetchStages(quoteSiteId)
+  }
+
+  async function handleSiteChangeForConvert(newSiteId: string) {
+    setConvertSiteId(newSiteId)
+    setConvertStageId('')
+    fetchStages(newSiteId)
+  }
+
+  async function handleConvert() {
+    if (!convertingQuoteId || !convertStageId || !convertSiteId) return
+    setConverting(true)
+    setConvertError(null)
+
+    const fd = new FormData()
+    fd.set('quote_id', convertingQuoteId)
+    fd.set('stage_id', convertStageId)
+    fd.set('site_id', convertSiteId)
+
+    const result = await convertQuoteToExtraJob(fd)
+    setConverting(false)
+
+    if ('error' in result) {
+      setConvertError(result.error)
+      return
+    }
+
+    setConversions((prev) => ({
+      ...prev,
+      [convertingQuoteId]: {
+        extraJobId: result.extraJobId,
+        stageName:  result.stageName,
+        siteId:     result.siteId,
+        stageId:    result.stageId,
+      },
+    }))
+    setConvertingQuoteId(null)
   }
 
   function handleExportCombined() {
@@ -509,17 +617,37 @@ export default function QuotesView({
         {/* Form card */}
         <div className="rounded-xl border border-stone-200 bg-white p-5 space-y-5">
 
-          {/* Site + Reference */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Site + Stage + Reference */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Site</label>
+              <label className={`text-xs font-semibold uppercase tracking-wide ${convertValidation && !siteId ? 'text-red-500' : 'text-stone-500'}`}>Site</label>
               <select
                 value={siteId}
-                onChange={(e) => setSiteId(e.target.value)}
-                className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 focus:border-stone-400 focus:outline-none"
+                onChange={(e) => handleFormSiteChange(e.target.value)}
+                className={`w-full rounded-lg border bg-white px-3 py-2 text-sm text-stone-900 focus:outline-none ${
+                  convertValidation && !siteId ? 'border-red-400 focus:border-red-500' : 'border-stone-200 focus:border-stone-400'
+                }`}
               >
                 <option value="">— No site —</option>
                 {sites.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className={`text-xs font-semibold uppercase tracking-wide ${convertValidation && !stageId ? 'text-red-500' : 'text-stone-500'}`}>Stage</label>
+              <select
+                value={stageId}
+                onChange={(e) => { setStageId(e.target.value); setConvertValidation(false) }}
+                disabled={!siteId || loadingFormStages}
+                className={`w-full rounded-lg border bg-white px-3 py-2 text-sm text-stone-900 focus:outline-none disabled:opacity-50 ${
+                  convertValidation && !stageId ? 'border-red-400 focus:border-red-500' : 'border-stone-200 focus:border-stone-400'
+                }`}
+              >
+                <option value="">
+                  {!siteId ? '— Select site first —' : loadingFormStages ? 'Loading…' : formStages.length === 0 ? '— No stages —' : '— No stage —'}
+                </option>
+                {formStages.map((s) => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
@@ -535,6 +663,11 @@ export default function QuotesView({
               />
             </div>
           </div>
+          {convertValidation && (!siteId || !stageId) && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+              Please select a site and stage before converting.
+            </p>
+          )}
 
           {/* Description */}
           <div className="space-y-1.5">
@@ -717,6 +850,22 @@ export default function QuotesView({
           )}
         </div>
 
+        {/* Conversion indicator (edit view) */}
+        {!isNew && conversions[view] && (
+          <a
+            href={`/sites/${conversions[view].siteId}/stages/${conversions[view].stageId}`}
+            className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 hover:bg-green-100 transition-colors"
+          >
+            <svg className="h-4 w-4 shrink-0 text-green-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>Converted to extra job &mdash; {conversions[view].stageName}</span>
+            <svg className="h-3.5 w-3.5 shrink-0 ml-auto" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+            </svg>
+          </a>
+        )}
+
         {/* Action buttons */}
         <div className="flex items-center gap-3 flex-wrap">
           <button
@@ -736,6 +885,18 @@ export default function QuotesView({
             {pdfGenerating ? <Spinner /> : <PdfIcon />}
             {pdfGenerating ? 'Generating…' : 'Download PDF'}
           </button>
+          {!isNew && status === 'accepted' && !conversions[view] && canEdit && (
+            <button
+              type="button"
+              onClick={() => openConvertModal(view, siteId || '', stageId || '')}
+              className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-100 transition-colors"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5L7.5 3m0 0L12 7.5M7.5 3v13.5m13.5-3L16.5 18m0 0L12 13.5m4.5 4.5V4.5" />
+              </svg>
+              Convert to extra job
+            </button>
+          )}
           <button
             type="button"
             onClick={closeBuilder}
@@ -816,44 +977,61 @@ export default function QuotesView({
               day: 'numeric', month: 'short', year: 'numeric',
             })
             const selected = selectedIds.has(q.id)
+            const conv = conversions[q.id]
             return (
               <div
                 key={q.id}
-                className={`flex items-center gap-3 px-5 py-4 transition-colors ${selected ? 'bg-green-50' : 'hover:bg-stone-50'}`}
+                className={`px-5 py-4 transition-colors ${selected ? 'bg-green-50' : 'hover:bg-stone-50'}`}
               >
-                <input
-                  type="checkbox"
-                  checked={selected}
-                  onChange={() => toggleSelection(q.id)}
-                  className="h-4 w-4 rounded border-stone-300 text-green-700 focus:ring-green-600 cursor-pointer shrink-0"
-                />
-                <button
-                  type="button"
-                  onClick={() => openEdit(q)}
-                  className="flex flex-1 items-center gap-4 text-left min-w-0"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {q.reference && (
-                        <span className="font-semibold text-stone-900 text-sm">{q.reference}</span>
-                      )}
-                      {q.siteName && (
-                        <span className="text-xs text-stone-400">{q.siteName}</span>
-                      )}
-                      {!q.reference && !q.siteName && (
-                        <span className="text-sm text-stone-400 italic">Untitled</span>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={selected}
+                    onChange={() => toggleSelection(q.id)}
+                    className="h-4 w-4 rounded border-stone-300 text-green-700 focus:ring-green-600 cursor-pointer shrink-0"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => openEdit(q)}
+                    className="flex flex-1 items-center gap-4 text-left min-w-0"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {q.reference && (
+                          <span className="font-semibold text-stone-900 text-sm">{q.reference}</span>
+                        )}
+                        {q.siteName && (
+                          <span className="text-xs text-stone-400">{q.siteName}</span>
+                        )}
+                        {!q.reference && !q.siteName && (
+                          <span className="text-sm text-stone-400 italic">Untitled</span>
+                        )}
+                      </div>
+                      {q.description && (
+                        <p className="text-sm text-stone-500 mt-0.5 truncate">{q.description}</p>
                       )}
                     </div>
-                    {q.description && (
-                      <p className="text-sm text-stone-500 mt-0.5 truncate">{q.description}</p>
-                    )}
-                  </div>
-                  <span className="text-xs text-stone-400 shrink-0 hidden sm:block">{date}</span>
-                  <span className="text-sm tabular-nums font-semibold text-stone-900 shrink-0">{fmt(rowSubtotal)}</span>
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium shrink-0 ${statusClass(q.status)}`}>
-                    {statusLabel(q.status)}
-                  </span>
-                </button>
+                    <span className="text-xs text-stone-400 shrink-0 hidden sm:block">{date}</span>
+                    <span className="text-sm tabular-nums font-semibold text-stone-900 shrink-0">{fmt(rowSubtotal)}</span>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium shrink-0 ${statusClass(q.status)}`}>
+                      {statusLabel(q.status)}
+                    </span>
+                  </button>
+                </div>
+                {conv && (
+                  <a
+                    href={`/sites/${conv.siteId}/stages/${conv.stageId}`}
+                    className="ml-10 mt-1 inline-flex items-center gap-1.5 rounded-full bg-green-50 border border-green-200 px-2.5 py-0.5 text-xs font-medium text-green-700 hover:bg-green-100 transition-colors"
+                  >
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Converted to extra job &mdash; {conv.stageName}
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                    </svg>
+                  </a>
+                )}
               </div>
             )
           })}
@@ -889,6 +1067,71 @@ export default function QuotesView({
 
       {actionError && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{actionError}</p>
+      )}
+
+      {/* Conversion modal */}
+      {convertingQuoteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-xl border border-stone-200 bg-white p-5 shadow-lg space-y-4">
+            <h2 className="text-lg font-semibold text-stone-900">Convert to extra job</h2>
+            <p className="text-sm text-stone-500">
+              This will create a new extra job on the selected stage with the quote&apos;s line items copied as pricing estimates.
+            </p>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Site</label>
+              <select
+                value={convertSiteId}
+                onChange={(e) => handleSiteChangeForConvert(e.target.value)}
+                className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 focus:border-stone-400 focus:outline-none"
+              >
+                <option value="">— Select site —</option>
+                {sites.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Stage</label>
+              <select
+                value={convertStageId}
+                onChange={(e) => setConvertStageId(e.target.value)}
+                disabled={!convertSiteId || loadingStages}
+                className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 focus:border-stone-400 focus:outline-none disabled:opacity-50"
+              >
+                <option value="">
+                  {!convertSiteId ? '— Select a site first —' : loadingStages ? 'Loading stages…' : convertStages.length === 0 ? '— No stages found —' : '— Select stage —'}
+                </option>
+                {convertStages.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {convertError && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{convertError}</p>
+            )}
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={handleConvert}
+                disabled={converting || !convertStageId}
+                className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-60 transition-colors"
+              >
+                {converting ? 'Converting…' : 'Convert'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setConvertingQuoteId(null); setConvertError(null) }}
+                className="text-sm text-stone-500 hover:text-stone-700 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

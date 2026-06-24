@@ -98,8 +98,8 @@ export default function DrillDownSection({ sites }: { sites: SiteAnalytics[] }) 
         <p className="text-xs font-medium text-stone-500">{activeSite.name} — overview</p>
         <p className="mt-1 text-sm text-stone-700">
           {activeSite.summary.lotCount} lot{activeSite.summary.lotCount === 1 ? '' : 's'} ·{' '}
-          {fmtNumber(activeSite.summary.completionPct, 0)}% complete ·{' '}
-          {fmtCurrency(activeSite.summary.revenue.total)} revenue
+          {fmtNumber(activeSite.summary.completionPct, 0)}% complete
+          {activeSite.summary.revenue.total > 0 && <> · {fmtCurrency(activeSite.summary.revenue.total)} revenue</>}
         </p>
       </div>
 

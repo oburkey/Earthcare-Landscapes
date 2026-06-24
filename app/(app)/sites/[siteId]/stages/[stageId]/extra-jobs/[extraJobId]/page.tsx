@@ -9,6 +9,7 @@ import { uploadExtraJobPhoto } from './actions'
 import EditExtraJobForm from './EditExtraJobForm'
 import ExtraJobPricing from './ExtraJobPricing'
 import PhotoUpload from '@/app/_components/PhotoUpload'
+import SourceQuotePdf from './SourceQuotePdf'
 
 interface Props {
   params: Promise<{ siteId: string; stageId: string; extraJobId: string }>
@@ -46,7 +47,7 @@ export default async function ExtraJobPage({ params }: Props) {
     supabase
       .from('extra_jobs')
       .select(`
-        id, title, description, status, notes,
+        id, title, description, status, notes, source_quote_id,
         stages!inner(
           id, name,
           sites!inner(id, name)
@@ -83,6 +84,38 @@ export default async function ExtraJobPage({ params }: Props) {
   const site = Array.isArray(stage.sites)
     ? stage.sites[0]
     : (stage.sites as { id: string; name: string })
+
+  // Fetch source quote if this job was converted from a quote
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sourceQuoteId = (job as any).source_quote_id as string | null
+  let sourceQuote: {
+    siteName: string | null; reference: string; description: string;
+    lineItems: { description: string; qty: number; unit: string; rate: number }[];
+    notes: string;
+  } | null = null
+
+  if (sourceQuoteId) {
+    try {
+      const { data: sq } = await supabase
+        .from('quotes')
+        .select('reference, description, line_items, notes, sites(name)')
+        .eq('id', sourceQuoteId)
+        .single()
+      if (sq) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const sqAny = sq as any
+        sourceQuote = {
+          siteName:    sqAny.sites?.name ?? null,
+          reference:   sqAny.reference ?? '',
+          description: sqAny.description ?? '',
+          lineItems:   Array.isArray(sqAny.line_items) ? sqAny.line_items : [],
+          notes:       sqAny.notes ?? '',
+        }
+      }
+    } catch {
+      // quotes table may not exist yet
+    }
+  }
 
   const status = job.status as ExtraJobStatus
   const cfg = EXTRA_JOB_STATUS_CONFIG[status] ?? EXTRA_JOB_STATUS_CONFIG.not_started
@@ -140,6 +173,17 @@ export default async function ExtraJobPage({ params }: Props) {
             <p className="text-xs font-medium text-stone-500 mb-1">Notes</p>
             <p className="text-sm text-stone-800 whitespace-pre-wrap">{job.notes}</p>
           </div>
+        )}
+
+        {/* Source quote link */}
+        {sourceQuote && (
+          <SourceQuotePdf
+            siteName={sourceQuote.siteName}
+            reference={sourceQuote.reference}
+            description={sourceQuote.description}
+            lineItems={sourceQuote.lineItems}
+            notes={sourceQuote.notes}
+          />
         )}
 
         {/* Photos */}
@@ -235,6 +279,7 @@ export default async function ExtraJobPage({ params }: Props) {
               currentStatus={status}
               currentNotes={job.notes}
               canManage={canManage}
+              isAdmin={profile.role === 'admin'}
             />
           </div>
         </div>

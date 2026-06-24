@@ -9,11 +9,14 @@ interface Props {
   stageId: string
   name: string
   isAdmin?: boolean
+  isContractPricing?: boolean
+  defaultContractPrice?: number | null
 }
 
-export default function EditStageForm({ siteId, stageId, name, isAdmin }: Props) {
+export default function EditStageForm({ siteId, stageId, name, isAdmin, isContractPricing = false, defaultContractPrice }: Props) {
   const [open, setOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [contractPricing, setContractPricing] = useState(isContractPricing)
   const [state, action, pending] = useActionState<EditState, FormData>(updateStage, null)
   const [deleteState, deleteAction, deletePending] = useActionState<ActionState, FormData>(deleteStage, null)
 
@@ -30,30 +33,68 @@ export default function EditStageForm({ siteId, stageId, name, isAdmin }: Props)
 
   return (
     <div className="flex flex-col gap-2 w-full">
-      <form action={action} className="flex items-center gap-2 flex-wrap">
+      <form action={action} className="space-y-3">
         <input type="hidden" name="site_id"  value={siteId} />
         <input type="hidden" name="stage_id" value={stageId} />
-        <input
-          name="name"
-          type="text"
-          required
-          defaultValue={name}
-          className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 w-44"
-        />
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50 shrink-0"
-        >
-          {pending ? 'Saving…' : 'Save'}
-        </button>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm font-medium text-stone-600 hover:bg-stone-50 shrink-0"
-        >
-          Cancel
-        </button>
+        <input type="hidden" name="is_contract_pricing" value={contractPricing ? 'true' : 'false'} />
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <input
+            name="name"
+            type="text"
+            required
+            defaultValue={name}
+            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 w-44"
+          />
+          <button
+            type="submit"
+            disabled={pending}
+            className="rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50 shrink-0"
+          >
+            {pending ? 'Saving…' : 'Save'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm font-medium text-stone-600 hover:bg-stone-50 shrink-0"
+          >
+            Cancel
+          </button>
+        </div>
+
+        {/* Contract pricing toggle */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-stone-500">Contract pricing</span>
+            <button
+              type="button"
+              onClick={() => setContractPricing((v) => !v)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                contractPricing ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-500'
+              }`}
+            >
+              {contractPricing ? 'On' : 'Off'}
+            </button>
+          </div>
+          {contractPricing && (
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-stone-500 shrink-0">Default price per lot</label>
+              <div className="relative w-36">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-stone-400">$</span>
+                <input
+                  name="default_contract_price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  defaultValue={defaultContractPrice ?? ''}
+                  placeholder="0.00"
+                  className="w-full rounded-lg border border-stone-300 pl-6 pr-3 py-1.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
         {state?.error && (
           <p className="text-sm text-red-600 w-full">{state.error}</p>
         )}

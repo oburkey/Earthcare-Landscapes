@@ -8,6 +8,7 @@ import { uploadLotPhoto } from './actions'
 import EditLotForm from './EditLotForm'
 import PhotoUpload from '@/app/_components/PhotoUpload'
 import LotDocumentUpload from './LotDocumentUpload'
+import LotDocumentRow from './LotDocumentRow'
 import LotQuantities from './LotQuantities'
 import LotStatusToggles from './LotStatusToggles'
 import TradeStatusSection from './TradeStatusSection'
@@ -57,8 +58,8 @@ export default async function LotPage({ params }: Props) {
       .from('lots')
       .select(`
         id, lot_number, status, due_date, scheduled_date, completion_date, notes,
-        build_complete, quant_done, invoiced, has_client_extras, extras_notes,
-        stages!inner(id, name, sites!inner(id, name, has_client_extras))
+        build_complete, quant_done, invoiced, has_client_extras, extras_notes, contract_price,
+        stages!inner(id, name, is_contract_pricing, default_contract_price, sites!inner(id, name, has_client_extras))
       `)
       .eq('id', lotId)
       .single(),
@@ -132,8 +133,13 @@ export default async function LotPage({ params }: Props) {
   const invoiced        = lotAny?.invoiced          ?? false
   const lotClientExtras = lotAny?.has_client_extras ?? true
   const extrasNotes     = lotAny?.extras_notes      ?? null
+  const contractPrice   = lotAny?.contract_price != null ? Number(lotAny.contract_price) : null
 
   const stage = Array.isArray(lot.stages) ? lot.stages[0] : lot.stages as { id: string; name: string; sites: unknown }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const stageAny = stage as any
+  const stageIsContractPricing   = stageAny?.is_contract_pricing ?? false
+  const stageDefaultContractPrice = stageAny?.default_contract_price != null ? Number(stageAny.default_contract_price) : null
   const site             = Array.isArray(stage.sites) ? stage.sites[0] : stage.sites as { id: string; name: string; has_client_extras?: boolean }
   const siteClientExtras = (site as { has_client_extras?: boolean }).has_client_extras ?? true
   const showClientExtras = siteClientExtras && lotClientExtras
@@ -327,6 +333,7 @@ export default async function LotPage({ params }: Props) {
               sections={sections}
               estimatedQuote={shapeQuote(estimatedQuote)}
               finalQuote={shapeQuote(finalQuote)}
+              contractPrice={contractPrice}
               showClientExtras={showClientExtras}
             />
           </div>
@@ -382,16 +389,17 @@ export default async function LotPage({ params }: Props) {
           {documents.length > 0 ? (
             <div className="rounded-xl border border-stone-200 bg-white overflow-hidden divide-y divide-stone-100">
               {documents.map((doc) => (
-                <div key={doc.id} className="flex items-center gap-3 px-4 py-3.5">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-stone-900 truncate">{doc.document_name}</p>
-                    <p className="text-xs text-stone-500">{DOC_TYPE_LABELS[doc.document_type] ?? doc.document_type}</p>
-                  </div>
-                  <a href={doc.url} target="_blank" rel="noopener noreferrer"
-                    className="shrink-0 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50">
-                    View PDF
-                  </a>
-                </div>
+                <LotDocumentRow
+                  key={doc.id}
+                  docId={doc.id}
+                  documentName={doc.document_name}
+                  documentTypeLabel={DOC_TYPE_LABELS[doc.document_type] ?? doc.document_type}
+                  url={doc.url}
+                  lotId={lotId}
+                  siteId={siteId}
+                  stageId={stageId}
+                  isAdmin={isAdmin}
+                />
               ))}
             </div>
           ) : (
@@ -415,6 +423,9 @@ export default async function LotPage({ params }: Props) {
               currentScheduledDate={lot.scheduled_date}
               canManage={canManage}
               isAdmin={isAdmin}
+              isContractPricing={stageIsContractPricing}
+              contractPrice={contractPrice}
+              defaultContractPrice={stageDefaultContractPrice}
             />
           </div>
         </div>

@@ -8,6 +8,7 @@ import SafetyView, {
   type StaffOption,
   type VehicleOption,
   type ToolboxMeetingRow,
+  type IncidentRow,
 } from './SafetyView'
 
 export const metadata = { title: 'Safety — Earthcare Landscapes' }
@@ -176,7 +177,7 @@ export default async function SafetyPage() {
     docsExist = false
   }
 
-  // ── Toolbox meetings ─────────────────────────────────────────────────────────
+  // ── Toolbox meetings ──────────────────────────────────────────────────────────
   let toolboxMeetings: ToolboxMeetingRow[] = []
   let toolboxMeetingsExist = true
 
@@ -209,6 +210,62 @@ export default async function SafetyPage() {
     toolboxMeetingsExist = false
   }
 
+  // ── Incidents ─────────────────────────────────────────────────────────────────
+  let incidents: IncidentRow[] = []
+  let incidentsExist = true
+
+  try {
+    const { data, error } = await supabase
+      .from('incidents')
+      .select(`
+        id, site_id, date, time, type, description,
+        people_involved, immediate_action, reported_by, admin_notes, created_at,
+        sites(name), profiles(full_name)
+      `)
+      .order('date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(300)
+
+    if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
+      incidentsExist = false
+    } else if (!error) {
+      const incidentIds = (data ?? []).map((r: { id: string }) => r.id)
+      const photosByIncident: Record<string, string[]> = {}
+      if (incidentIds.length > 0) {
+        try {
+          const { data: photosRaw } = await supabase
+            .from('incident_photos')
+            .select('incident_id, storage_path')
+            .in('incident_id', incidentIds)
+          for (const p of (photosRaw ?? [])) {
+            if (!photosByIncident[p.incident_id]) photosByIncident[p.incident_id] = []
+            photosByIncident[p.incident_id].push(p.storage_path)
+          }
+        } catch { /* table may not exist yet */ }
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      incidents = (data ?? []).map((r: any): IncidentRow => ({
+        id:              r.id,
+        siteId:          r.site_id,
+        siteName:        r.sites?.name ?? 'Unknown',
+        date:            r.date,
+        time:            r.time ?? null,
+        type:            r.type,
+        description:     r.description,
+        peopleInvolved:  r.people_involved ?? null,
+        immediateAction: r.immediate_action ?? null,
+        reportedBy:      r.reported_by,
+        reporterName:    r.profiles?.full_name ?? 'Unknown',
+        adminNotes:      r.admin_notes ?? null,
+        photoPaths:      photosByIncident[r.id] ?? [],
+        createdAt:       r.created_at,
+      }))
+    }
+  } catch {
+    incidentsExist = false
+  }
+
   return (
     <div className="min-h-screen bg-stone-50">
       <div className="mx-auto max-w-5xl px-4 py-6">
@@ -223,7 +280,13 @@ export default async function SafetyPage() {
           mySignoffIds={mySignoffIds}
           signoffs={signoffs}
           toolboxMeetings={toolboxMeetings}
-          tablesExist={{ preStarts: preStartsExist, safetyDocuments: docsExist, toolboxMeetings: toolboxMeetingsExist }}
+          incidents={incidents}
+          tablesExist={{
+            preStarts: preStartsExist,
+            safetyDocuments: docsExist,
+            toolboxMeetings: toolboxMeetingsExist,
+            incidents: incidentsExist,
+          }}
         />
       </div>
     </div>

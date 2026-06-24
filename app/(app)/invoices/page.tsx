@@ -17,8 +17,8 @@ export default async function InvoicesPage() {
     .from('sites')
     .select(`
       id, name, client_contact, completed_at, has_client_extras,
-      stages(id, name, order,
-        lots(id, lot_number, build_complete, quant_done, invoiced, has_client_extras),
+      stages(id, name, order, is_contract_pricing,
+        lots(id, lot_number, build_complete, quant_done, invoiced, has_client_extras, contract_price),
         extra_jobs(id, title, status)
       )
     `)
@@ -200,6 +200,7 @@ export default async function InvoicesPage() {
                 clientExtrasAmount: showClientExtras ? amounts.extras : 0,
                 sections:           amounts.sections,
                 showClientExtras,
+                contractPrice:      lot.contract_price != null ? Number(lot.contract_price) : null,
               }
             })
             .sort((a, b) =>
