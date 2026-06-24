@@ -99,6 +99,7 @@ export async function uploadLotDocument(
   }
 
   revalidatePath(`/sites/${siteId}/stages/${stageId}/lots/${lotId}`)
+  revalidateTag('schedule')
   return null
 }
 
