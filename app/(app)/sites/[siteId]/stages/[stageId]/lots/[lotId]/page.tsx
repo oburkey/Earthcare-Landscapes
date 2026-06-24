@@ -8,6 +8,7 @@ import { uploadLotPhoto } from './actions'
 import EditLotForm from './EditLotForm'
 import PhotoUpload from '@/app/_components/PhotoUpload'
 import LotDocumentUpload from './LotDocumentUpload'
+import LotDocumentRow from './LotDocumentRow'
 import LotQuantities from './LotQuantities'
 import LotStatusToggles from './LotStatusToggles'
 import TradeStatusSection from './TradeStatusSection'
@@ -388,16 +389,17 @@ export default async function LotPage({ params }: Props) {
           {documents.length > 0 ? (
             <div className="rounded-xl border border-stone-200 bg-white overflow-hidden divide-y divide-stone-100">
               {documents.map((doc) => (
-                <div key={doc.id} className="flex items-center gap-3 px-4 py-3.5">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-stone-900 truncate">{doc.document_name}</p>
-                    <p className="text-xs text-stone-500">{DOC_TYPE_LABELS[doc.document_type] ?? doc.document_type}</p>
-                  </div>
-                  <a href={doc.url} target="_blank" rel="noopener noreferrer"
-                    className="shrink-0 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50">
-                    View PDF
-                  </a>
-                </div>
+                <LotDocumentRow
+                  key={doc.id}
+                  docId={doc.id}
+                  documentName={doc.document_name}
+                  documentTypeLabel={DOC_TYPE_LABELS[doc.document_type] ?? doc.document_type}
+                  url={doc.url}
+                  lotId={lotId}
+                  siteId={siteId}
+                  stageId={stageId}
+                  isAdmin={isAdmin}
+                />
               ))}
             </div>
           ) : (

@@ -177,6 +177,37 @@ export async function deleteLot(
   redirect(`/sites/${siteId}/stages/${stageId}`)
 }
 
+export async function deleteLotDocument(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Only admins can delete documents.' }
+
+  const documentId = formData.get('document_id') as string
+  const siteId     = formData.get('site_id') as string
+  const stageId    = formData.get('stage_id') as string
+  const lotId      = formData.get('lot_id') as string
+
+  const supabase = await createClient()
+
+  const { data: doc } = await supabase
+    .from('lot_documents')
+    .select('storage_path')
+    .eq('id', documentId)
+    .single()
+
+  if (doc?.storage_path) {
+    await deleteFromR2(doc.storage_path).catch(() => null)
+  }
+
+  const { error } = await supabase.from('lot_documents').delete().eq('id', documentId)
+  if (error) return { error: error.message }
+
+  revalidatePath(`/sites/${siteId}/stages/${stageId}/lots/${lotId}`)
+  return null
+}
+
 export async function updateTradeStatus(
   _prev: ActionState,
   formData: FormData
