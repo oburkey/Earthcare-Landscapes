@@ -19,13 +19,26 @@ function parseRatios(formData: FormData): { front: number; rear: number } | { er
   return { front, rear }
 }
 
-function parsePotSplit(formData: FormData): { split: Record<string, number> } | { error: string } {
-  const small = parseFloat(formData.get('pot_small') as string)
-  const large = parseFloat(formData.get('pot_large') as string)
-  if (isNaN(small) || isNaN(large)) return { error: 'Pot size percentages are required.' }
-  if (small < 0 || large < 0) return { error: 'Pot size percentages cannot be negative.' }
-  if (Math.round((small + large) * 100) / 100 !== 100) return { error: 'Pot size percentages must sum to 100.' }
-  return { split: { '130mm': small, '200mm': large } }
+function parsePotSplits(formData: FormData): {
+  frontSplit: Record<string, number>
+  rearSplit: Record<string, number>
+} | { error: string } {
+  const frontSmall = parseFloat(formData.get('front_pot_small') as string)
+  const frontLarge = parseFloat(formData.get('front_pot_large') as string)
+  const rearSmall = parseFloat(formData.get('rear_pot_small') as string)
+  const rearLarge = parseFloat(formData.get('rear_pot_large') as string)
+  if ([frontSmall, frontLarge, rearSmall, rearLarge].some(isNaN))
+    return { error: 'Pot size percentages are required.' }
+  if ([frontSmall, frontLarge, rearSmall, rearLarge].some((v) => v < 0))
+    return { error: 'Pot size percentages cannot be negative.' }
+  if (Math.round((frontSmall + frontLarge) * 100) / 100 !== 100)
+    return { error: 'Front pot size percentages must sum to 100.' }
+  if (Math.round((rearSmall + rearLarge) * 100) / 100 !== 100)
+    return { error: 'Rear pot size percentages must sum to 100.' }
+  return {
+    frontSplit: { '130mm': frontSmall, '200mm': frontLarge },
+    rearSplit: { '130mm': rearSmall, '200mm': rearLarge },
+  }
 }
 
 // ── Global default ───────────────────────────────────────────────────────────
@@ -40,7 +53,7 @@ export async function saveGlobalRatios(
   const ratios = parseRatios(formData)
   if ('error' in ratios) return { error: ratios.error }
 
-  const potResult = parsePotSplit(formData)
+  const potResult = parsePotSplits(formData)
   if ('error' in potResult) return { error: potResult.error }
 
   const supabase = await createClient()
@@ -54,7 +67,9 @@ export async function saveGlobalRatios(
   const payload = {
     front_ratio: ratios.front,
     rear_ratio: ratios.rear,
-    pot_size_split: potResult.split,
+    front_pot_split: potResult.frontSplit,
+    rear_pot_split: potResult.rearSplit,
+    pot_size_split: potResult.frontSplit,
     updated_by: profile.id,
   }
 
@@ -83,7 +98,7 @@ export async function saveSiteOverride(
   const ratios = parseRatios(formData)
   if ('error' in ratios) return { error: ratios.error }
 
-  const potResult = parsePotSplit(formData)
+  const potResult = parsePotSplits(formData)
   if ('error' in potResult) return { error: potResult.error }
 
   const supabase = await createClient()
@@ -97,7 +112,9 @@ export async function saveSiteOverride(
   const payload = {
     front_ratio: ratios.front,
     rear_ratio: ratios.rear,
-    pot_size_split: potResult.split,
+    front_pot_split: potResult.frontSplit,
+    rear_pot_split: potResult.rearSplit,
+    pot_size_split: potResult.frontSplit,
     updated_by: profile.id,
   }
 

@@ -12,6 +12,8 @@ export type RatioRow = {
   front_ratio: number
   rear_ratio: number
   pot_size_split: PotSizeSplit
+  front_pot_split: PotSizeSplit | null
+  rear_pot_split: PotSizeSplit | null
   updated_at: string | null
 }
 
@@ -29,19 +31,58 @@ function potValue(split: PotSizeSplit | null | undefined, key: string, fallback:
 
 // ── Shared ratio + pot split form ─────────────────────────────────────────────
 
+function PotSplitInputs({
+  label, smallName, largeName, small, large, onSmallChange, onLargeChange,
+}: {
+  label: string; smallName: string; largeName: string
+  small: number; large: number
+  onSmallChange: (v: number) => void; onLargeChange: (v: number) => void
+}) {
+  const total = Math.round((small + large) * 100) / 100
+  return (
+    <div>
+      <p className="block text-xs font-medium text-stone-500 mb-1">{label}</p>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs text-stone-400 mb-1">130/140mm</label>
+          <input
+            name={smallName} type="number" step="1" min="0" max="100" value={small}
+            onChange={(e) => onSmallChange(Number(e.target.value))}
+            className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-stone-400 mb-1">200mm</label>
+          <input
+            name={largeName} type="number" step="1" min="0" max="100" value={large}
+            onChange={(e) => onLargeChange(Number(e.target.value))}
+            className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+          />
+        </div>
+      </div>
+      <p className={`mt-1 text-xs ${total === 100 ? 'text-stone-400' : 'text-red-600'}`}>
+        Total: {total}%{total !== 100 && ' — must equal 100%'}
+      </p>
+    </div>
+  )
+}
+
 function RatioForm({
   action, defaults, submitLabel, onCancel, topSlot,
 }: {
   action: (prev: ActionState, formData: FormData) => Promise<ActionState>
-  defaults: { front: number; rear: number; small: number; large: number }
+  defaults: { front: number; rear: number; frontSmall: number; frontLarge: number; rearSmall: number; rearLarge: number }
   submitLabel: string
   onCancel?: () => void
   topSlot?: React.ReactNode
 }) {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(action, null)
-  const [small, setSmall] = useState(defaults.small)
-  const [large, setLarge] = useState(defaults.large)
-  const total = Math.round((small + large) * 100) / 100
+  const [frontSmall, setFrontSmall] = useState(defaults.frontSmall)
+  const [frontLarge, setFrontLarge] = useState(defaults.frontLarge)
+  const [rearSmall, setRearSmall] = useState(defaults.rearSmall)
+  const [rearLarge, setRearLarge] = useState(defaults.rearLarge)
+  const frontTotal = Math.round((frontSmall + frontLarge) * 100) / 100
+  const rearTotal = Math.round((rearSmall + rearLarge) * 100) / 100
 
   return (
     <form action={formAction} className="space-y-3">
@@ -63,37 +104,25 @@ function RatioForm({
         </div>
       </div>
 
-      <div>
-        <p className="block text-xs font-medium text-stone-500 mb-1">Pot size split (%)</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs text-stone-400 mb-1">130/140mm</label>
-            <input
-              name="pot_small" type="number" step="1" min="0" max="100" value={small}
-              onChange={(e) => setSmall(Number(e.target.value))}
-              className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-stone-400 mb-1">200mm</label>
-            <input
-              name="pot_large" type="number" step="1" min="0" max="100" value={large}
-              onChange={(e) => setLarge(Number(e.target.value))}
-              className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
-            />
-          </div>
-        </div>
-        <p className={`mt-1 text-xs ${total === 100 ? 'text-stone-400' : 'text-red-600'}`}>
-          Total: {total}%{total !== 100 && ' — must equal 100%'}
-        </p>
-      </div>
+      <PotSplitInputs
+        label="Front pot split (%)"
+        smallName="front_pot_small" largeName="front_pot_large"
+        small={frontSmall} large={frontLarge}
+        onSmallChange={setFrontSmall} onLargeChange={setFrontLarge}
+      />
+      <PotSplitInputs
+        label="Rear pot split (%)"
+        smallName="rear_pot_small" largeName="rear_pot_large"
+        small={rearSmall} large={rearLarge}
+        onSmallChange={setRearSmall} onLargeChange={setRearLarge}
+      />
 
       {state?.error && <p className="text-xs text-red-600">{state.error}</p>}
 
       <div className="flex gap-2">
         <button
           type="submit"
-          disabled={pending || total !== 100}
+          disabled={pending || frontTotal !== 100 || rearTotal !== 100}
           className="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50"
         >
           {pending ? 'Saving…' : submitLabel}
@@ -147,8 +176,10 @@ export default function PlantRatiosSettings({ global, overrides, sites }: {
           defaults={{
             front: global?.front_ratio ?? DEFAULT_FRONT,
             rear: global?.rear_ratio ?? DEFAULT_REAR,
-            small: potValue(global?.pot_size_split, '130mm', DEFAULT_SMALL_POT),
-            large: potValue(global?.pot_size_split, '200mm', DEFAULT_LARGE_POT),
+            frontSmall: potValue(global?.front_pot_split ?? global?.pot_size_split, '130mm', DEFAULT_SMALL_POT),
+            frontLarge: potValue(global?.front_pot_split ?? global?.pot_size_split, '200mm', DEFAULT_LARGE_POT),
+            rearSmall: potValue(global?.rear_pot_split ?? global?.pot_size_split, '130mm', DEFAULT_SMALL_POT),
+            rearLarge: potValue(global?.rear_pot_split ?? global?.pot_size_split, '200mm', DEFAULT_LARGE_POT),
           }}
           submitLabel="Save defaults"
         />
@@ -185,8 +216,10 @@ export default function PlantRatiosSettings({ global, overrides, sites }: {
                   defaults={{
                     front: o.front_ratio,
                     rear: o.rear_ratio,
-                    small: potValue(o.pot_size_split, '130mm', DEFAULT_SMALL_POT),
-                    large: potValue(o.pot_size_split, '200mm', DEFAULT_LARGE_POT),
+                    frontSmall: potValue(o.front_pot_split ?? o.pot_size_split, '130mm', DEFAULT_SMALL_POT),
+                    frontLarge: potValue(o.front_pot_split ?? o.pot_size_split, '200mm', DEFAULT_LARGE_POT),
+                    rearSmall: potValue(o.rear_pot_split ?? o.pot_size_split, '130mm', DEFAULT_SMALL_POT),
+                    rearLarge: potValue(o.rear_pot_split ?? o.pot_size_split, '200mm', DEFAULT_LARGE_POT),
                   }}
                   submitLabel="Save"
                   onCancel={() => setEditingId(null)}
@@ -201,7 +234,7 @@ export default function PlantRatiosSettings({ global, overrides, sites }: {
               <div className="min-w-0">
                 <p className="text-sm font-medium text-stone-800 truncate">{site?.name ?? 'Unknown site'}</p>
                 <p className="text-xs text-stone-500">
-                  Front {o.front_ratio} / Rear {o.rear_ratio} · Pots {potValue(o.pot_size_split, '130mm', DEFAULT_SMALL_POT)}% / {potValue(o.pot_size_split, '200mm', DEFAULT_LARGE_POT)}%
+                  Front {o.front_ratio} / Rear {o.rear_ratio} · Front pots {potValue(o.front_pot_split ?? o.pot_size_split, '130mm', DEFAULT_SMALL_POT)}%/{potValue(o.front_pot_split ?? o.pot_size_split, '200mm', DEFAULT_LARGE_POT)}% · Rear pots {potValue(o.rear_pot_split ?? o.pot_size_split, '130mm', DEFAULT_SMALL_POT)}%/{potValue(o.rear_pot_split ?? o.pot_size_split, '200mm', DEFAULT_LARGE_POT)}%
                 </p>
               </div>
               <div className="flex gap-1.5 shrink-0">
@@ -227,7 +260,7 @@ export default function PlantRatiosSettings({ global, overrides, sites }: {
           <div className="rounded-lg border border-dashed border-stone-300 p-3 bg-stone-50">
             <RatioForm
               action={addOverrideAction}
-              defaults={{ front: DEFAULT_FRONT, rear: DEFAULT_REAR, small: DEFAULT_SMALL_POT, large: DEFAULT_LARGE_POT }}
+              defaults={{ front: DEFAULT_FRONT, rear: DEFAULT_REAR, frontSmall: DEFAULT_SMALL_POT, frontLarge: DEFAULT_LARGE_POT, rearSmall: DEFAULT_SMALL_POT, rearLarge: DEFAULT_LARGE_POT }}
               submitLabel="Add override"
               onCancel={() => setAddingOverride(false)}
               topSlot={

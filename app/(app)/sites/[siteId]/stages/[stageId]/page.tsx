@@ -200,7 +200,7 @@ export default async function StagePage({ params }: Props) {
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cfg.badge}`}>
                           {cfg.label}
                         </span>
-                        {tradeBadge && (
+                        {tradeBadge && !(lot as unknown as { build_complete?: boolean }).build_complete && (
                           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${tradeBadge.badge}`}>
                             {tradeBadge.label}
                           </span>

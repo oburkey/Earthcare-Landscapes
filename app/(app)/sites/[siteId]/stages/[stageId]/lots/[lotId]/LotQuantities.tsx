@@ -33,6 +33,13 @@ type QuoteData = {
   items: { template_item_id: string; quantity: number | null; unit_price_snapshot: number | null }[]
 } | null
 
+type PlantRatios = {
+  frontRatio: number
+  rearRatio: number
+  frontPotSplit: Record<string, number>
+  rearPotSplit: Record<string, number>
+}
+
 type Props = {
   lotId: string
   siteId: string
@@ -44,6 +51,7 @@ type Props = {
   finalQuote: QuoteData
   showClientExtras?: boolean
   contractPrice?: number | null
+  plantRatios?: PlantRatios
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -107,13 +115,15 @@ function commonPrefix(strings: string[]): string {
   return prefix.trimEnd()
 }
 
+// Bed m² items used to derive garden bed area for plant auto-calc
+const FRONT_BED_NAMES = ['Mulch Limestone 32mm', 'Black Mulch', 'White Mulch']
+const FRONT_SECTION = 'Softscape Works — Front'
+const REAR_BED_NAMES = ['Limestone Mulch', 'Black Mulch']
+const REAR_SECTION = 'Rear & Side Lot'
+
 // Toggle items that should default to YES on a fresh (unsaved) lot
-const DEFAULT_YES_TOGGLES = new Set([
-  'Dripper Irrigation front',
-  'Solenoid / Plumber cut in',
-  'Pre-lay and cables',
-  'Controller and cables',
-])
+// (Irrigation items moved to ITEM type — always included, no longer toggles)
+const DEFAULT_YES_TOGGLES = new Set<string>([])
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -123,6 +133,7 @@ export default function LotQuantities({
   sections, estimatedQuote, finalQuote,
   showClientExtras = true,
   contractPrice,
+  plantRatios,
 }: Props) {
   const [open, setOpen] = useState(false)
   // Default to Final once estimate data has been saved, so leading hands don't
@@ -170,6 +181,52 @@ export default function LotQuantities({
   )
   const isCornerLot = cornerFlagItem ? values[cornerFlagItem.id] === '1' : false
 
+  // Plant auto-calc: map bed m² and plant item IDs
+  const plantCalcIds = useMemo(() => {
+    const frontBedIds: string[] = []
+    const rearBedIds: string[] = []
+    const frontPlantIds: Record<string, string> = {}
+    const rearPlantIds: Record<string, string> = {}
+
+    for (const section of sections) {
+      for (const item of section.items) {
+        if (section.name === FRONT_SECTION && FRONT_BED_NAMES.includes(item.name))
+          frontBedIds.push(item.id)
+        if (section.name === REAR_SECTION && REAR_BED_NAMES.includes(item.name))
+          rearBedIds.push(item.id)
+        if (item.plant_category === 'front' && item.name === '130mm plants')
+          frontPlantIds['130mm'] = item.id
+        if (item.plant_category === 'front' && item.name === '200mm plants')
+          frontPlantIds['200mm'] = item.id
+        if (item.plant_category === 'rear' && item.name === '130mm plants')
+          rearPlantIds['130mm'] = item.id
+        if (item.plant_category === 'rear' && item.name === '200mm plants')
+          rearPlantIds['200mm'] = item.id
+      }
+    }
+    return { frontBedIds, rearBedIds, frontPlantIds, rearPlantIds }
+  }, [sections])
+
+  function computePlantValues(vals: Record<string, string>): Record<string, string> {
+    if (!plantRatios) return {}
+    const { frontBedIds, rearBedIds, frontPlantIds, rearPlantIds } = plantCalcIds
+    const frontM2 = frontBedIds.reduce((s, id) => s + (parseFloat(vals[id] || '0') || 0), 0)
+    const rearM2 = rearBedIds.reduce((s, id) => s + (parseFloat(vals[id] || '0') || 0), 0)
+    const fp = Math.ceil(frontM2 * plantRatios.frontRatio)
+    const rp = Math.ceil(rearM2 * plantRatios.rearRatio)
+    const updates: Record<string, string> = {}
+    if (frontPlantIds['130mm']) updates[frontPlantIds['130mm']] = String(Math.ceil(fp * (plantRatios.frontPotSplit['130mm'] ?? 75) / 100))
+    if (frontPlantIds['200mm']) updates[frontPlantIds['200mm']] = String(Math.ceil(fp * (plantRatios.frontPotSplit['200mm'] ?? 25) / 100))
+    if (rearPlantIds['130mm']) updates[rearPlantIds['130mm']] = String(Math.ceil(rp * (plantRatios.rearPotSplit['130mm'] ?? 75) / 100))
+    if (rearPlantIds['200mm']) updates[rearPlantIds['200mm']] = String(Math.ceil(rp * (plantRatios.rearPotSplit['200mm'] ?? 25) / 100))
+    return updates
+  }
+
+  function recalculatePlants() {
+    setSaved(false)
+    setValues((prev) => ({ ...prev, ...computePlantValues(prev) }))
+  }
+
   function switchMode(estimated: boolean) {
     const quote = estimated ? estimatedQuote : finalQuote
     setIsEstimated(estimated)
@@ -187,7 +244,23 @@ export default function LotQuantities({
 
   function setVal(itemId: string, value: string) {
     setSaved(false)
-    setValues((prev) => ({ ...prev, [itemId]: value }))
+    setValues((prev) => {
+      const next = { ...prev, [itemId]: value }
+
+      if (isEstimated && plantRatios) {
+        const { frontBedIds, rearBedIds, frontPlantIds, rearPlantIds } = plantCalcIds
+        const isBedItem = frontBedIds.includes(itemId) || rearBedIds.includes(itemId)
+        if (isBedItem) {
+          const allPlantIds = [...Object.values(frontPlantIds), ...Object.values(rearPlantIds)]
+          const allEmpty = allPlantIds.every((id) => !next[id] || next[id] === '' || next[id] === '0')
+          if (allEmpty) {
+            Object.assign(next, computePlantValues(next))
+          }
+        }
+      }
+
+      return next
+    })
   }
 
   function selectVariant(groupName: string, itemId: string) {
@@ -283,6 +356,17 @@ export default function LotQuantities({
           )
         })}
       </div>
+
+      {/* Recalculate plants button — estimate mode only */}
+      {isEstimated && plantRatios && !disabled && (
+        <button
+          type="button"
+          onClick={recalculatePlants}
+          className="rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 transition-colors"
+        >
+          Recalculate plants from garden bed
+        </button>
+      )}
 
       {/* Status badge */}
       {activeQuote && (

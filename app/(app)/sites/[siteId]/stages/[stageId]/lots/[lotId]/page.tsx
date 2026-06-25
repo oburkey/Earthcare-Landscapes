@@ -14,6 +14,7 @@ import LotStatusToggles from './LotStatusToggles'
 import TradeStatusSection from './TradeStatusSection'
 import ChecklistSection from './ChecklistSection'
 import { getR2SignedUrlSafe } from '@/lib/r2'
+import { getCachedPlantRatioSettings } from '@/lib/data'
 
 interface Props {
   params: Promise<{ siteId: string; stageId: string; lotId: string }>
@@ -146,6 +147,24 @@ export default async function LotPage({ params }: Props) {
 
   const status = lot.status as LotStatus
   const cfg    = STATUS_CONFIG[status] ?? STATUS_CONFIG.not_started
+
+  // Plant ratios for auto-calc
+  const ratioSettings = await getCachedPlantRatioSettings()
+  const plantRatios = (() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const override = ratioSettings.find((s: any) => s.site_id === site.id)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const global = ratioSettings.find((s: any) => s.site_id === null)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const src = (override ?? global) as any
+    const DEFAULT_POT = { '130mm': 75, '200mm': 25 }
+    return {
+      frontRatio: src?.front_ratio ?? 2.0,
+      rearRatio: src?.rear_ratio ?? 1.75,
+      frontPotSplit: (src?.front_pot_split ?? src?.pot_size_split ?? DEFAULT_POT) as Record<string, number>,
+      rearPotSplit: (src?.rear_pot_split ?? src?.pot_size_split ?? DEFAULT_POT) as Record<string, number>,
+    }
+  })()
 
   // Photos
   type PhotoWithUrl = { id: string; url: string; photo_type: string }
@@ -335,6 +354,7 @@ export default async function LotPage({ params }: Props) {
               finalQuote={shapeQuote(finalQuote)}
               contractPrice={contractPrice}
               showClientExtras={showClientExtras}
+              plantRatios={plantRatios}
             />
           </div>
         )}

@@ -49,12 +49,9 @@ export default async function MaterialsSummary({ stageId, siteId }: Props) {
     lot_quote_items: { template_item_id: string; quantity: number | null }[]
   }
 
-  function bestQuote(quotes: LotQuote[]) {
+  function estimateQuote(quotes: LotQuote[]) {
     if (!quotes || quotes.length === 0) return null
-    const score = (q: LotQuote) =>
-      (q.status === 'approved' ? 3 : q.status === 'submitted' ? 2 : 1) * 10 +
-      (q.is_estimated ? 0 : 1)
-    return [...quotes].sort((a, b) => score(b) - score(a))[0]
+    return quotes.find((q) => q.is_estimated) ?? null
   }
 
   // Aggregate: template_item_id → total quantity across all lots
@@ -62,7 +59,7 @@ export default async function MaterialsSummary({ stageId, siteId }: Props) {
   let quotedLots = 0
 
   for (const lot of lots) {
-    const quote = bestQuote(lot.lot_quotes as LotQuote[])
+    const quote = estimateQuote(lot.lot_quotes as LotQuote[])
     if (!quote) continue
     quotedLots++
     for (const qi of quote.lot_quote_items) {
@@ -85,8 +82,8 @@ export default async function MaterialsSummary({ stageId, siteId }: Props) {
 
   // PLANTS & TREES
   const smallPlants   = sumWhere((i) => !!i.plant_category && /130mm|200mm|300mm|5L/i.test(i.name))
-  const trees90L      = sumWhere((i) => !!i.plant_category && /90L/i.test(i.name))
-  const trees45L      = sumWhere((i) => !!i.plant_category && /45L/i.test(i.name))
+  const treesLarge    = sumWhere((i) => !!i.plant_category && /90L|75L/i.test(i.name))
+  const treesSmall    = sumWhere((i) => !!i.plant_category && /45L|30L/i.test(i.name))
   const smallTrees    = sumWhere((i) => /small\s+tree/i.test(i.name))
   const fruitTrees    = sumWhere((i) => /fruit\s+tree/i.test(i.name))
 
@@ -106,7 +103,7 @@ export default async function MaterialsSummary({ stageId, siteId }: Props) {
   const totalPlants = sumWhere((i) => !!i.plant_category)
   const dripperTube = Math.round(totalPlants * 0.5 * 10) / 10
 
-  const hasPlants     = smallPlants > 0 || trees90L > 0 || trees45L > 0 || smallTrees > 0 || fruitTrees > 0
+  const hasPlants     = smallPlants > 0 || treesLarge > 0 || treesSmall > 0 || smallTrees > 0 || fruitTrees > 0
   const hasHardscape  = steppers > 0 || edging > 0 || turf > 0 || boulders > 0
   const hasMulch      = limestoneMulch > 0 || lateriteMulch > 0 || blackMulch > 0 || whiteMulch > 0
   const hasIrrigation = totalPlants > 0
@@ -127,7 +124,7 @@ export default async function MaterialsSummary({ stageId, siteId }: Props) {
   function fmtLm(n: number)  { return n % 1 === 0 ? String(n) : n.toFixed(1) }
   function fmtTon(n: number) { return n % 1 === 0 ? String(n) : n.toFixed(2) }
 
-  const unquotedLots = lots.filter((l) => !bestQuote(l.lot_quotes as LotQuote[]))
+  const unquotedLots = lots.filter((l) => !estimateQuote(l.lot_quotes as LotQuote[]))
 
   return (
     <div className="space-y-3">
@@ -141,8 +138,8 @@ export default async function MaterialsSummary({ stageId, siteId }: Props) {
       {hasPlants && (
         <Section title="Plants & Trees">
           {smallPlants > 0  && <Row label="Plants (130/200/300mm)" value={fmtNo(smallPlants)}  unit="No." />}
-          {trees90L > 0     && <Row label="Feature trees 90L"      value={fmtNo(trees90L)}     unit="No." />}
-          {trees45L > 0     && <Row label="Feature trees 45L"      value={fmtNo(trees45L)}     unit="No." />}
+          {treesLarge > 0   && <Row label="Feature trees (large)"   value={fmtNo(treesLarge)}   unit="No." />}
+          {treesSmall > 0   && <Row label="Feature trees (small)"  value={fmtNo(treesSmall)}   unit="No." />}
           {smallTrees > 0   && <Row label="Small trees"            value={fmtNo(smallTrees)}   unit="No." />}
           {fruitTrees > 0   && <Row label="Fruit trees"            value={fmtNo(fruitTrees)}   unit="No." />}
         </Section>

@@ -118,17 +118,23 @@ BEGIN
   VALUES
     (s_soft_f, '130mm plants',            'No.',  18.50, 'front', 0),
     (s_soft_f, '200mm plants',            'No.',  29.00, 'front', 1),
-    (s_soft_f, '300mm plants',            'No.',  75.00, 'front', 2),
-    (s_soft_f, 'Feature Trees 90L',       'No.', 465.00, 'front', 3),
-    (s_soft_f, 'Feature Trees 45L',       'No.', 245.00, 'front', 4);
+    (s_soft_f, '300mm plants',            'No.',  75.00, 'front', 2);
+
+  INSERT INTO quote_template_items
+    (section_id, name, unit, unit_price, plant_category, auto_calc_formula, order_index)
+  VALUES
+    (s_soft_f, 'Feature Trees 90L',       'No.', 465.00, 'front', 'variant_group:front_large_trees', 3),
+    (s_soft_f, 'Feature Trees 75L',       'No.', 465.00, 'front', 'variant_group:front_large_trees', 4),
+    (s_soft_f, 'Feature Trees 45L',       'No.', 245.00, 'front', 'variant_group:front_small_trees', 5),
+    (s_soft_f, 'Feature Trees 30L',       'No.', 245.00, 'front', 'variant_group:front_small_trees', 6);
 
   INSERT INTO quote_template_items
     (section_id, name, unit, unit_price, order_index)
   VALUES
-    (s_soft_f, 'Mulch Limestone 32mm',        'm²',  22.00, 5),
-    (s_soft_f, 'Laterite compacted gravel',   'm²',  28.00, 6),
-    (s_soft_f, 'Black Mulch',                 'm²',  42.00, 7),
-    (s_soft_f, 'White Mulch',                 'm²', 130.00, 8);
+    (s_soft_f, 'Mulch Limestone 32mm',        'm²',  22.00, 7),
+    (s_soft_f, 'Laterite compacted gravel',   'm²',  28.00, 8),
+    (s_soft_f, 'Black Mulch',                 'm²',  42.00, 9),
+    (s_soft_f, 'White Mulch',                 'm²', 130.00, 10);
 
 
   -- ── Irrigation — Front (toggle: included / excluded) ─────────────────────────
@@ -138,10 +144,10 @@ BEGIN
   INSERT INTO quote_template_items
     (section_id, name, unit, unit_price, order_index)
   VALUES
-    (s_irr_f, 'Dripper Irrigation front',  'toggle', 550.00, 0),
-    (s_irr_f, 'Solenoid / Plumber cut in', 'toggle', 345.00, 1),
-    (s_irr_f, 'Pre-lay and cables',        'toggle', 145.00, 2),
-    (s_irr_f, 'Controller and cables',     'toggle', 290.00, 3);
+    (s_irr_f, 'Dripper Irrigation front',  'ITEM', 550.00, 0),
+    (s_irr_f, 'Solenoid / Plumber cut in', 'ITEM', 345.00, 1),
+    (s_irr_f, 'Pre-lay and cables',        'ITEM', 145.00, 2),
+    (s_irr_f, 'Controller and cables',     'ITEM', 290.00, 3);
 
   INSERT INTO quote_template_items
     (section_id, name, unit, unit_price, auto_calc_formula, order_index)
@@ -162,7 +168,7 @@ BEGIN
     (section_id, name, unit, unit_price, plant_category, order_index)
   VALUES
     (s_rear, '130mm plants',  'No.',  18.50, 'rear', 1),
-    (s_rear, '5L plants',     'No.',  28.50, 'rear', 2),
+    (s_rear, '200mm plants',  'No.',  28.50, 'rear', 2),
     (s_rear, '300mm plants',  'No.',  75.00, 'rear', 3);
 
   INSERT INTO quote_template_items
@@ -185,7 +191,7 @@ BEGIN
     (s_rear, 'Edging',                'Lm',   50.00, 10),
     (s_rear, 'Small Trees',           'No.', 140.00, 11),
     (s_rear, 'Fruit Trees',           'No.',  55.00, 12),
-    (s_rear, 'Rear & Side Irrigation','toggle', 350.00, 13);
+    (s_rear, 'Rear & Side Irrigation','ITEM', 350.00, 13);
 
 
   -- ── Client Extras ─────────────────────────────────────────────────────────────

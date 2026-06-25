@@ -60,7 +60,7 @@ async function _stage(db: Db, stageId: string) {
       .select(`
         id, name, site_plan_path, is_contract_pricing, default_contract_price,
         sites!inner(id, name),
-        lots(id, lot_number, status, due_date, scheduled_date)
+        lots(id, lot_number, status, due_date, scheduled_date, build_complete)
       `)
       .eq('id', stageId)
       .single(),
@@ -168,7 +168,7 @@ async function _tradeStatusByLotIds(db: Db, lotIds: string[]) {
 async function _plantRatioSettings(db: Db) {
   const { data, error } = await db
     .from('plant_ratio_settings')
-    .select('id, site_id, front_ratio, rear_ratio, pot_size_split, updated_at')
+    .select('id, site_id, front_ratio, rear_ratio, pot_size_split, front_pot_split, rear_pot_split, updated_at')
     .order('site_id', { ascending: true, nullsFirst: true })
   if (error || !data) return []
   return data

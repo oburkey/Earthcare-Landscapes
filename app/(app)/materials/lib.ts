@@ -64,6 +64,8 @@ export type RatioSettingRow = {
   front_ratio: number
   rear_ratio: number
   pot_size_split: Record<string, number> | null
+  front_pot_split: Record<string, number> | null
+  rear_pot_split: Record<string, number> | null
 }
 
 // ── Output shapes ──────────────────────────────────────────────────────────
@@ -169,7 +171,8 @@ function sumExtraJobItems(items: ExtraJobItem[] | null | undefined, names: strin
 function resolveRatios(siteId: string, settings: RatioSettingRow[]): {
   frontRatio: number
   rearRatio: number
-  potSplit: Record<string, number>
+  frontPotSplit: Record<string, number>
+  rearPotSplit: Record<string, number>
 } {
   const override = settings.find((s) => s.site_id === siteId)
   const global = settings.find((s) => s.site_id === null)
@@ -177,7 +180,8 @@ function resolveRatios(siteId: string, settings: RatioSettingRow[]): {
   return {
     frontRatio: source?.front_ratio ?? DEFAULT_FRONT_RATIO,
     rearRatio: source?.rear_ratio ?? DEFAULT_REAR_RATIO,
-    potSplit: source?.pot_size_split ?? DEFAULT_POT_SIZE_SPLIT,
+    frontPotSplit: source?.front_pot_split ?? source?.pot_size_split ?? DEFAULT_POT_SIZE_SPLIT,
+    rearPotSplit: source?.rear_pot_split ?? source?.pot_size_split ?? DEFAULT_POT_SIZE_SPLIT,
   }
 }
 
@@ -270,15 +274,21 @@ export function buildMaterialsPlan(
 
     const sites = Array.from(siteGroups.values())
       .map((group) => {
-        const { frontRatio, rearRatio, potSplit } = resolveRatios(group.siteId, ratioSettings)
+        const { frontRatio, rearRatio, frontPotSplit, rearPotSplit } = resolveRatios(group.siteId, ratioSettings)
         const frontPlants = Math.round(group.totals.frontM2 * frontRatio)
         const rearPlants = Math.round(group.totals.rearM2 * rearRatio)
         const totalPlants = frontPlants + rearPlants
-        const potSplitLines: PotSplitLine[] = Object.entries(potSplit).map(([k, pct]) => ({
-          label: POT_SIZE_LABELS[k] ?? k,
-          pct,
-          count: Math.round(totalPlants * (pct / 100)),
-        }))
+        const potSizeKeys = new Set([...Object.keys(frontPotSplit), ...Object.keys(rearPotSplit)])
+        const potSplitLines: PotSplitLine[] = Array.from(potSizeKeys).map((k) => {
+          const frontCount = Math.round(frontPlants * ((frontPotSplit[k] ?? 0) / 100))
+          const rearCount = Math.round(rearPlants * ((rearPotSplit[k] ?? 0) / 100))
+          const count = frontCount + rearCount
+          return {
+            label: POT_SIZE_LABELS[k] ?? k,
+            pct: totalPlants > 0 ? Math.round((count / totalPlants) * 100) : 0,
+            count,
+          }
+        })
         return {
           ...group,
           totals: { ...group.totals, frontPlants, rearPlants, totalPlants, potSplit: potSplitLines },
