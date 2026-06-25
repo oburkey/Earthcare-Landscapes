@@ -269,6 +269,11 @@ export default async function StagePage({ params }: Props) {
                       {job.description && (
                         <p className="mt-0.5 text-xs text-stone-500 truncate">{job.description}</p>
                       )}
+                      {(job as unknown as { due_date?: string }).due_date && (
+                        <p className="mt-0.5 text-xs text-stone-500">
+                          Due {formatDate((job as unknown as { due_date: string }).due_date)}
+                        </p>
+                      )}
                     </div>
                     <svg className="h-4 w-4 shrink-0 text-stone-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />

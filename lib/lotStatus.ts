@@ -88,3 +88,19 @@ export function tradeStatusBadge(status: TradeStatusSummary | null | undefined):
   const reason = outstanding.length > 0 ? `waiting on ${outstanding.join(', ')}` : 'see notes'
   return { label: `Blocked — ${reason}`, badge: 'bg-amber-100 text-amber-700' }
 }
+
+// ── Site colours & abbreviations ──────────────────────────────────────────────
+
+export const SITE_COLOURS: Record<string, { abbr: string; badge: string }> = {
+  'Tuart Lakes':   { abbr: 'TL', badge: 'bg-sky-100 text-sky-700' },
+  'Henley Brook':  { abbr: 'HB', badge: 'bg-violet-100 text-violet-700' },
+  'Piara Waters':  { abbr: 'PW', badge: 'bg-teal-100 text-teal-700' },
+  'Mandurah':      { abbr: 'MH', badge: 'bg-rose-100 text-rose-700' },
+}
+
+export function siteColour(siteName: string): { abbr: string; badge: string } {
+  return SITE_COLOURS[siteName] ?? {
+    abbr: siteName.slice(0, 2).toUpperCase(),
+    badge: 'bg-stone-100 text-stone-600',
+  }
+}

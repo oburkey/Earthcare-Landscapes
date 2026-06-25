@@ -14,6 +14,7 @@ interface Props {
   currentDescription: string | null
   currentStatus: ExtraJobStatus
   currentNotes: string | null
+  currentDueDate: string | null
   canManage: boolean
   isAdmin?: boolean
 }
@@ -27,6 +28,7 @@ export default function EditExtraJobForm({
   currentDescription,
   currentStatus,
   currentNotes,
+  currentDueDate,
   canManage,
   isAdmin,
 }: Props) {
@@ -94,6 +96,21 @@ export default function EditExtraJobForm({
           ))}
         </select>
       </div>
+
+      {canManage && (
+        <div>
+          <label htmlFor="due_date" className="block text-sm font-medium text-stone-700">
+            Due date
+          </label>
+          <input
+            id="due_date"
+            name="due_date"
+            type="date"
+            defaultValue={currentDueDate ?? ''}
+            className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+          />
+        </div>
+      )}
 
       <div>
         <label htmlFor="notes" className="block text-sm font-medium text-stone-700">

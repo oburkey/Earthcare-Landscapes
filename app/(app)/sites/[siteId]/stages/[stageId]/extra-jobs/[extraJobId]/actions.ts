@@ -31,6 +31,7 @@ export async function updateExtraJob(
       title,
       description: (formData.get('description') as string)?.trim() || null,
       status:      formData.get('status') as string,
+      due_date:    (formData.get('due_date') as string) || null,
       notes:       (formData.get('notes') as string)?.trim() || null,
     })
     .eq('id', extraJobId)

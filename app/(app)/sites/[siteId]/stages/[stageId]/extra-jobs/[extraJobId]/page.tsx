@@ -4,7 +4,7 @@ import { requireAuth } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { getR2SignedUrlSafe } from '@/lib/r2'
 import type { ExtraJobStatus } from '@/types/database'
-import { EXTRA_JOB_STATUS_CONFIG, PHOTO_TYPE_LABELS } from '@/lib/lotStatus'
+import { EXTRA_JOB_STATUS_CONFIG, PHOTO_TYPE_LABELS, formatDate } from '@/lib/lotStatus'
 import { uploadExtraJobPhoto } from './actions'
 import EditExtraJobForm from './EditExtraJobForm'
 import ExtraJobPricing from './ExtraJobPricing'
@@ -47,7 +47,7 @@ export default async function ExtraJobPage({ params }: Props) {
     supabase
       .from('extra_jobs')
       .select(`
-        id, title, description, status, notes, source_quote_id,
+        id, title, description, status, notes, due_date, source_quote_id,
         stages!inner(
           id, name,
           sites!inner(id, name)
@@ -175,6 +175,15 @@ export default async function ExtraJobPage({ params }: Props) {
           </div>
         )}
 
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        {(job as any).due_date && (
+          <div className="rounded-xl border border-stone-200 bg-white px-4 py-3">
+            <p className="text-xs font-medium text-stone-500 mb-1">Due date</p>
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            <p className="text-sm text-stone-800">{formatDate((job as any).due_date)}</p>
+          </div>
+        )}
+
         {/* Source quote link */}
         {sourceQuote && (
           <SourceQuotePdf
@@ -278,6 +287,7 @@ export default async function ExtraJobPage({ params }: Props) {
               currentDescription={job.description}
               currentStatus={status}
               currentNotes={job.notes}
+              currentDueDate={(job as unknown as { due_date?: string | null }).due_date ?? null}
               canManage={canManage}
               isAdmin={profile.role === 'admin'}
             />

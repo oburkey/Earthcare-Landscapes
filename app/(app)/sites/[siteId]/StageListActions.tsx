@@ -105,8 +105,8 @@ export default function StageListActions({
                     {stage.total > 0 && (
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
                         {stage.completed > 0 && <StatusPill label={`${stage.completed} complete`} color="green" />}
-                        {stage.inProgress > 0 && <StatusPill label={`${stage.inProgress} in progress`} color="blue" />}
-                        {stage.scheduled   > 0 && <StatusPill label={`${stage.scheduled} scheduled`} color="amber" />}
+                        {stage.inProgress > 0 && <StatusPill label={`${stage.inProgress} in progress`} color="amber" />}
+                        {stage.scheduled   > 0 && <StatusPill label={`${stage.scheduled} scheduled`} color="blue" />}
                         {notStarted        > 0 && <StatusPill label={`${notStarted} not started`} color="stone" />}
                       </div>
                     )}

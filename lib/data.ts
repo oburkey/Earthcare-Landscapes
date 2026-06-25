@@ -66,7 +66,7 @@ async function _stage(db: Db, stageId: string) {
       .single(),
     db
       .from('extra_jobs')
-      .select('id, title, status, description')
+      .select('id, title, status, description, due_date')
       .eq('stage_id', stageId)
       .order('created_at', { ascending: true }),
   ])

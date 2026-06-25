@@ -66,6 +66,18 @@ export default function ExtraJobForm({ stageId, siteId }: Props) {
       </div>
 
       <div>
+        <label htmlFor="due_date" className="block text-sm font-medium text-stone-700">
+          Due date
+        </label>
+        <input
+          id="due_date"
+          name="due_date"
+          type="date"
+          className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+        />
+      </div>
+
+      <div>
         <label htmlFor="notes" className="block text-sm font-medium text-stone-700">
           Notes
         </label>
