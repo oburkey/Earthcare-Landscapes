@@ -1,293 +1,331 @@
 import Link from 'next/link'
 import { requireAuth } from '@/lib/auth'
-import { getCachedDashboardData } from '@/lib/data'
+import { createClient } from '@/lib/supabase/server'
+import { getCachedDashboardData, getCachedTradeStatusByLotIds, getCachedMaterialsPlanningData, getCachedPlantRatioSettings } from '@/lib/data'
+import { FRONT_BED_ITEMS, REAR_BED_ITEMS, DEFAULT_FRONT_RATIO, DEFAULT_REAR_RATIO } from '@/app/(app)/materials/lib'
 import Greeting from './Greeting'
+import FortnightCalendar, { type CalendarItem } from './FortnightCalendar'
+import ExtraJobsList, { type ExtraJobItem } from './ExtraJobsList'
+import PreStartsWeek, { type PreStartDay } from './PreStartsWeek'
+import type { ExtraJobStatus } from '@/types/database'
 
 export const metadata = { title: 'Dashboard — Earthcare Landscapes' }
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-type UpcomingLot = {
-  id: string
-  lot_number: string
-  due_date: string
-  stages: {
-    id: string
-    name: string
-    sites: {
-      id: string
-      name: string
-    }
-  }
+function pad(n: number): string {
+  return String(n).padStart(2, '0')
 }
 
-type SiteRow = {
-  id: string
-  name: string
-  stages: {
-    lots: {
-      id: string
-      status: string
-    }[]
-  }[]
+function toYmd(d: Date): string {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function getDaysUntilDue(dueDateStr: string): number {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const due = new Date(dueDateStr)
-  due.setHours(0, 0, 0, 0)
-  return Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-}
-
-function deadlineStyle(days: number) {
-  if (days < 0)
-    return {
-      row: 'bg-red-50 border-red-200',
-      badge: 'bg-red-600 text-white',
-      label: 'Overdue',
-      dot: 'bg-red-600',
-    }
-  if (days <= 3)
-    return {
-      row: 'bg-red-50 border-red-200',
-      badge: 'bg-red-500 text-white',
-      label: days === 0 ? 'Today' : `${days}d`,
-      dot: 'bg-red-500',
-    }
-  if (days <= 8)
-    return {
-      row: 'bg-amber-50 border-amber-200',
-      badge: 'bg-amber-500 text-white',
-      label: `${days}d`,
-      dot: 'bg-amber-500',
-    }
-  return {
-    row: 'bg-green-50 border-green-200',
-    badge: 'bg-green-600 text-white',
-    label: `${days}d`,
-    dot: 'bg-green-600',
-  }
-}
-
-// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default async function DashboardPage() {
   const profile = await requireAuth()
+  const isLeadingHand = ['leading_hand', 'supervisor', 'admin'].includes(profile.role)
+  const isSupervisor = ['supervisor', 'admin'].includes(profile.role)
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
+  const todayStr = toYmd(today)
 
   const fortnight = new Date(today)
   fortnight.setDate(fortnight.getDate() + 14)
-  const fortnightStr = fortnight.toISOString().split('T')[0]
+  const fortnightStr = toYmd(fortnight)
 
-  // ── Fetch upcoming & overdue lots (cached) ─────────────────────────────────
-  let upcomingLots: UpcomingLot[] = []
-  let sitesData: SiteRow[] = []
+  // ── Data fetching ──────────────────────────────────────────────────────────
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let lotsData: any[] = []
+  let tradeStatus: Record<string, { trades_completed: string[]; ready_for_landscaping: boolean }> = {}
+  let totalPlants = 0
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let extraJobs: any[] = []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let preStarts: any[] = []
+  let vehicleAlertCount = 0
+  let incidentCount = 0
 
   try {
-    const { lotsData, sitesData: sites } = await getCachedDashboardData(fortnightStr)
-    upcomingLots = lotsData as unknown as UpcomingLot[]
-    sitesData = sites as unknown as SiteRow[]
+    const { lotsData: ld } = await getCachedDashboardData(fortnightStr)
+    lotsData = ld
+    tradeStatus = await getCachedTradeStatusByLotIds(lotsData.map((l: { id: string }) => l.id))
   } catch {
-    // Supabase not configured or service key missing — renders with empty data
+    // graceful fallback
   }
 
-  // ── Derive metrics ────────────────────────────────────────────────────────
-  const overdueLots = upcomingLots.filter(
-    (l) => getDaysUntilDue(l.due_date) < 0
-  )
-  const dueFortnight = upcomingLots.filter(
-    (l) => getDaysUntilDue(l.due_date) >= 0
-  )
+  if (isLeadingHand) {
+    // Plant count for next 2 weeks
+    try {
+      const { lots: matLots } = await getCachedMaterialsPlanningData(todayStr, fortnightStr)
+      const ratioSettings = await getCachedPlantRatioSettings()
 
-  // Active sites = sites with at least one non-complete lot
-  const siteProgress = sitesData.map((site) => {
-    const allLots = site.stages.flatMap((s) => s.lots)
-    const total = allLots.length
-    const completed = allLots.filter((l) => l.status === 'complete').length
-    return { id: site.id, name: site.name, total, completed }
+      for (const lot of matLots) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const lotAny = lot as any
+        const estimate = lotAny.lot_quotes?.find((q: { is_estimated: boolean }) => q.is_estimated)
+        const items = estimate?.lot_quote_items ?? []
+        const stage = Array.isArray(lotAny.stages) ? lotAny.stages[0] : lotAny.stages
+        const site = stage ? (Array.isArray(stage.sites) ? stage.sites[0] : stage.sites) : null
+        const siteId = site?.id ?? ''
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const override = ratioSettings.find((s: any) => s.site_id === siteId)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const global = ratioSettings.find((s: any) => s.site_id === null)
+        const src = override ?? global
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const frontRatio = (src as any)?.front_ratio ?? DEFAULT_FRONT_RATIO
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rearRatio = (src as any)?.rear_ratio ?? DEFAULT_REAR_RATIO
+
+        let frontM2 = 0, rearM2 = 0
+        for (const item of items) {
+          const qty = Number(item.quantity ?? 0)
+          if (FRONT_BED_ITEMS.includes(item.item_name)) frontM2 += qty
+          if (REAR_BED_ITEMS.includes(item.item_name)) rearM2 += qty
+        }
+        totalPlants += Math.round(frontM2 * frontRatio) + Math.round(rearM2 * rearRatio)
+      }
+    } catch {
+      // graceful fallback
+    }
+
+    // Extra jobs
+    try {
+      const supabase = await createClient()
+      const { data } = await supabase
+        .from('extra_jobs')
+        .select('id, title, status, due_date, stages!inner(id, name, sites!inner(id, name))')
+        .neq('status', 'complete')
+        .order('due_date', { ascending: true, nullsFirst: false })
+      extraJobs = data ?? []
+    } catch {
+      // graceful fallback
+    }
+  }
+
+  if (isSupervisor) {
+    const supabase = await createClient()
+
+    // Pre-starts this week (Mon-Fri)
+    const dayOfWeek = today.getDay()
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+    const monday = new Date(today)
+    monday.setDate(monday.getDate() + mondayOffset)
+    const friday = new Date(monday)
+    friday.setDate(friday.getDate() + 4)
+
+    try {
+      const { data } = await supabase
+        .from('pre_starts')
+        .select('id, site_id, date, sites(name)')
+        .gte('date', toYmd(monday))
+        .lte('date', toYmd(friday))
+        .order('date')
+      preStarts = data ?? []
+    } catch {
+      // table may not exist
+    }
+
+    // Vehicles with rego/service due in 7 days
+    const weekAhead = new Date(today)
+    weekAhead.setDate(weekAhead.getDate() + 7)
+    const weekAheadStr = toYmd(weekAhead)
+
+    try {
+      const { data } = await supabase
+        .from('vehicles')
+        .select('id, rego_expiry_date, next_service_due_date')
+        .or(`rego_expiry_date.lte.${weekAheadStr},next_service_due_date.lte.${weekAheadStr}`)
+      vehicleAlertCount = (data ?? []).length
+    } catch {
+      // graceful fallback
+    }
+
+    // Recent incidents
+    const weekAgo = new Date(today)
+    weekAgo.setDate(weekAgo.getDate() - 7)
+
+    try {
+      const { data } = await supabase
+        .from('incidents')
+        .select('id')
+        .gte('date', toYmd(weekAgo))
+      incidentCount = (data ?? []).length
+    } catch {
+      // table may not exist
+    }
+  }
+
+  // ── Derive metrics ─────────────────────────────────────────────────────────
+
+  const blockedCount = lotsData.filter((lot: { id: string }) => {
+    const ts = tradeStatus[lot.id]
+    return ts && !ts.ready_for_landscaping
+  }).length
+
+  // ── Calendar items ─────────────────────────────────────────────────────────
+
+  const calendarItems: CalendarItem[] = []
+
+  for (const lot of lotsData) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const lotAny = lot as any
+    const stage = lotAny.stages
+    const site = stage?.sites
+    if (!site || !lotAny.due_date) continue
+    calendarItems.push({
+      date: lotAny.due_date,
+      label: `Lot ${lotAny.lot_number}`,
+      siteName: site.name,
+      type: 'lot',
+      href: `/sites/${site.id}/stages/${stage.id}/lots/${lotAny.id}`,
+    })
+  }
+
+  for (const job of extraJobs) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const jobAny = job as any
+    const stage = Array.isArray(jobAny.stages) ? jobAny.stages[0] : jobAny.stages
+    const site = stage ? (Array.isArray(stage.sites) ? stage.sites[0] : stage.sites) : null
+    if (!site || !jobAny.due_date) continue
+    calendarItems.push({
+      date: jobAny.due_date,
+      label: jobAny.title,
+      siteName: site.name,
+      type: 'job',
+      href: `/sites/${site.id}/stages/${stage.id}/extra-jobs/${jobAny.id}`,
+    })
+  }
+
+  // ── Extra jobs list ────────────────────────────────────────────────────────
+
+  const extraJobItems: ExtraJobItem[] = extraJobs.map((job) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const jobAny = job as any
+    const stage = Array.isArray(jobAny.stages) ? jobAny.stages[0] : jobAny.stages
+    const site = stage ? (Array.isArray(stage.sites) ? stage.sites[0] : stage.sites) : null
+    return {
+      id: jobAny.id,
+      title: jobAny.title,
+      siteName: site?.name ?? '',
+      siteId: site?.id ?? '',
+      stageId: stage?.id ?? '',
+      dueDate: jobAny.due_date ?? null,
+      status: jobAny.status as ExtraJobStatus,
+    }
   })
 
-  const activeSites = siteProgress.filter((s) => s.completed < s.total)
+  // ── Pre-starts week ────────────────────────────────────────────────────────
 
-  // ── Group upcoming lots by site → stage ───────────────────────────────────
-  type StageGroup = {
-    stageId: string
-    stageName: string
-    lots: (UpcomingLot & { days: number })[]
-  }
-  type SiteGroup = {
-    siteId: string
-    siteName: string
-    stages: StageGroup[]
-  }
+  const preStartDays: PreStartDay[] = []
+  if (isSupervisor) {
+    const dayOfWeek = today.getDay()
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+    const monday = new Date(today)
+    monday.setDate(monday.getDate() + mondayOffset)
 
-  const groupMap = new Map<string, SiteGroup>()
+    for (let i = 0; i < 5; i++) {
+      const d = new Date(monday)
+      d.setDate(d.getDate() + i)
+      const dateStr = toYmd(d)
+      const dayLabel = d.toLocaleDateString('en-AU', { weekday: 'short' })
 
-  for (const lot of upcomingLots) {
-    const { id: siteId, name: siteName } = lot.stages.sites
-    const { id: stageId, name: stageName } = lot.stages
-    const days = getDaysUntilDue(lot.due_date)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const daySites = preStarts
+        .filter((ps: { date: string }) => ps.date === dateStr)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .map((ps: any) => {
+          const site = Array.isArray(ps.sites) ? ps.sites[0] : ps.sites
+          return site?.name ?? ''
+        })
+        .filter(Boolean)
 
-    if (!groupMap.has(siteId)) {
-      groupMap.set(siteId, { siteId, siteName, stages: [] })
+      const uniqueSites = [...new Set(daySites)]
+      const isFuture = dateStr > todayStr
+
+      preStartDays.push({ label: dayLabel, date: dateStr, sites: uniqueSites, isFuture })
     }
-    const siteGroup = groupMap.get(siteId)!
-
-    let stageGroup = siteGroup.stages.find((s) => s.stageId === stageId)
-    if (!stageGroup) {
-      stageGroup = { stageId, stageName, lots: [] }
-      siteGroup.stages.push(stageGroup)
-    }
-    stageGroup.lots.push({ ...lot, days })
   }
 
-  const deadlineGroups = Array.from(groupMap.values())
+  // ── Render ─────────────────────────────────────────────────────────────────
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-stone-50">
       <div className="mx-auto max-w-4xl px-4 py-6 space-y-6">
 
-        {/* Greeting */}
         <Greeting name={profile.full_name} />
 
-        {/* Metric cards */}
-        <div className="grid grid-cols-3 gap-3">
-          <MetricCard
-            label="Active sites"
-            value={activeSites.length}
-            color="blue"
-          />
-          <MetricCard
-            label="Due this fortnight"
-            value={dueFortnight.length}
-            color="amber"
-            href="/schedule"
-          />
-          <MetricCard
-            label="Overdue"
-            value={overdueLots.length}
-            color={overdueLots.length > 0 ? 'red' : 'green'}
-            href="/schedule"
-          />
-        </div>
+        {/* Section 1 — Summary cards (leading_hand+) */}
+        {isLeadingHand && (
+          <div className="grid grid-cols-3 gap-3">
+            <MetricCard
+              label="Due this fortnight"
+              value={lotsData.length}
+              color="blue"
+              href="/schedule"
+            />
+            <MetricCard
+              label="Blocked lots"
+              value={blockedCount}
+              color={blockedCount > 0 ? 'amber' : 'green'}
+              href="/schedule"
+            />
+            <MetricCard
+              label="Upcoming plants"
+              value={totalPlants}
+              color="green"
+              href="/materials"
+            />
+          </div>
+        )}
 
-        {/* Upcoming deadlines */}
-        <section>
-          <h2 className="text-base font-semibold text-stone-800 mb-3">
-            Upcoming deadlines
-          </h2>
+        {/* Section 2 — Fortnight calendar (leading_hand+) */}
+        {isLeadingHand && (
+          <section>
+            <h2 className="text-base font-semibold text-stone-800 mb-3">Next 2 weeks</h2>
+            <FortnightCalendar items={calendarItems} />
+          </section>
+        )}
 
-          {deadlineGroups.length === 0 ? (
-            <div className="rounded-xl border border-stone-200 bg-white px-4 py-8 text-center">
-              <p className="text-sm text-stone-500">
-                No lots due in the next two weeks.
-              </p>
+        {/* Section 3 — Extra jobs to complete (leading_hand+, hidden if empty) */}
+        {isLeadingHand && <ExtraJobsList jobs={extraJobItems} />}
+
+        {/* Section 4 — Pre-starts this week (supervisor+) */}
+        {isSupervisor && preStartDays.length > 0 && (
+          <PreStartsWeek days={preStartDays} />
+        )}
+
+        {/* Section 5 — Needs attention (supervisor+, hidden if nothing) */}
+        {isSupervisor && (vehicleAlertCount > 0 || incidentCount > 0) && (
+          <section>
+            <h2 className="text-base font-semibold text-stone-800 mb-3">Needs attention</h2>
+            <div className="grid grid-cols-2 gap-3">
+              {vehicleAlertCount > 0 && (
+                <Link href="/vehicles" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 hover:bg-amber-100 transition-colors">
+                  <p className="text-xl font-bold text-amber-700">{vehicleAlertCount}</p>
+                  <p className="text-xs text-amber-600">Rego / service due in 7 days</p>
+                </Link>
+              )}
+              {incidentCount > 0 && (
+                <Link href="/safety" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 hover:bg-red-100 transition-colors">
+                  <p className="text-xl font-bold text-red-700">{incidentCount}</p>
+                  <p className="text-xs text-red-600">Incident{incidentCount !== 1 ? 's' : ''} in last 7 days</p>
+                </Link>
+              )}
             </div>
-          ) : (
-            <div className="space-y-3">
-              {deadlineGroups.map((site) => (
-                <div
-                  key={site.siteId}
-                  className="rounded-xl border border-stone-200 bg-white overflow-hidden"
-                >
-                  {/* Site header */}
-                  <div className="px-4 py-2.5 bg-stone-100 border-b border-stone-200">
-                    <span className="text-sm font-semibold text-stone-800">
-                      {site.siteName}
-                    </span>
-                  </div>
-
-                  {/* Stages */}
-                  {site.stages.map((stage) => (
-                    <div key={stage.stageId} className="px-4 py-3 border-b border-stone-100 last:border-b-0">
-                      <p className="text-xs font-medium text-stone-500 uppercase tracking-wide mb-2">
-                        {stage.stageName} — {stage.lots.length} lot{stage.lots.length !== 1 ? 's' : ''}
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {stage.lots.map((lot) => {
-                          const style = deadlineStyle(lot.days)
-                          return (
-                            <Link
-                              key={lot.id}
-                              href={`/sites/${lot.stages.sites.id}/stages/${lot.stages.id}/lots/${lot.id}`}
-                              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 ${style.row} hover:opacity-75 transition-opacity`}
-                            >
-                              <span className={`inline-block h-2 w-2 rounded-full shrink-0 ${style.dot}`} />
-                              <span className="text-sm font-medium text-stone-800">
-                                Lot {lot.lot_number}
-                              </span>
-                              <span className={`rounded-full px-1.5 py-0.5 text-xs font-semibold ${style.badge}`}>
-                                {style.label}
-                              </span>
-                            </Link>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* Active sites */}
-        <section>
-          <h2 className="text-base font-semibold text-stone-800 mb-3">
-            Active sites
-          </h2>
-
-          {activeSites.length === 0 ? (
-            <div className="rounded-xl border border-stone-200 bg-white px-4 py-8 text-center">
-              <p className="text-sm text-stone-500">No active sites.</p>
-            </div>
-          ) : (
-            <div className="rounded-xl border border-stone-200 bg-white divide-y divide-stone-100 overflow-hidden">
-              {activeSites.map((site) => {
-                const pct = site.total > 0
-                  ? Math.round((site.completed / site.total) * 100)
-                  : 0
-                return (
-                  <Link key={site.id} href={`/sites/${site.id}`} className="block px-4 py-3.5 hover:bg-stone-50 transition-colors">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-stone-900">
-                        {site.name}
-                      </span>
-                      <span className="text-xs text-stone-500">
-                        {site.completed} / {site.total} lots complete
-                      </span>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-stone-100">
-                      <div
-                        className="h-2 rounded-full bg-green-600 transition-all"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </Link>
-                )
-              })}
-            </div>
-          )}
-        </section>
+          </section>
+        )}
 
       </div>
     </div>
   )
 }
 
-// ── Metric card component ─────────────────────────────────────────────────────
+// ── Metric card ──────────────────────────────────────────────────────────────
 
 function MetricCard({
-  label,
-  value,
-  color,
-  href,
+  label, value, color, href,
 }: {
   label: string
   value: number
@@ -295,16 +333,16 @@ function MetricCard({
   href?: string
 }) {
   const colors = {
-    blue:  'text-blue-700 bg-blue-50',
-    amber: 'text-amber-700 bg-amber-50',
-    red:   'text-red-700 bg-red-50',
-    green: 'text-green-700 bg-green-50',
+    blue:  'text-blue-700',
+    amber: 'text-amber-700',
+    red:   'text-red-700',
+    green: 'text-green-700',
   }
 
   const inner = (
     <div className={`rounded-xl border border-stone-200 bg-white px-3 py-3.5 flex flex-col gap-1${href ? ' hover:bg-stone-50 transition-colors' : ''}`}>
-      <span className={`text-2xl font-bold ${colors[color].split(' ')[0]}`}>
-        {value}
+      <span className={`text-2xl font-bold ${colors[color]}`}>
+        {value.toLocaleString('en-AU')}
       </span>
       <span className="text-xs text-stone-500 leading-tight">{label}</span>
     </div>
