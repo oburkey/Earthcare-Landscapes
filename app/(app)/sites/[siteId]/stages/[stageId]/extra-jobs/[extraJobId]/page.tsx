@@ -35,6 +35,7 @@ export default async function ExtraJobPage({ params }: Props) {
   const { siteId, stageId, extraJobId } = await params
   const profile = await requireAuth()
   const canManage = profile.role === 'leading_hand' || profile.role === 'supervisor' || profile.role === 'admin'
+  const isAdmin   = profile.role === 'admin'
 
   const supabase = await createClient()
 
@@ -108,7 +109,10 @@ export default async function ExtraJobPage({ params }: Props) {
           siteName:    sqAny.sites?.name ?? null,
           reference:   sqAny.reference ?? '',
           description: sqAny.description ?? '',
-          lineItems:   Array.isArray(sqAny.line_items) ? sqAny.line_items : [],
+          lineItems:   (Array.isArray(sqAny.line_items) ? sqAny.line_items : []).map(
+            (li: { description: string; qty: number; unit: string; rate: number }) =>
+              isAdmin ? li : { description: li.description, qty: li.qty, unit: li.unit, rate: 0 }
+          ),
           notes:       sqAny.notes ?? '',
         }
       }
@@ -192,6 +196,7 @@ export default async function ExtraJobPage({ params }: Props) {
             description={sourceQuote.description}
             lineItems={sourceQuote.lineItems}
             notes={sourceQuote.notes}
+            isAdmin={isAdmin}
           />
         )}
 
@@ -251,6 +256,7 @@ export default async function ExtraJobPage({ params }: Props) {
             extraJobId={extraJobId}
             siteId={siteId}
             stageId={stageId}
+            isAdmin={isAdmin}
             sections={(sectionsData ?? []).map((s) => ({
               id:          s.id,
               name:        s.name,
@@ -259,14 +265,15 @@ export default async function ExtraJobPage({ params }: Props) {
                 id: string; name: string; unit: string; unit_price: number | null;
                 is_auto_calculated: boolean; order_index: number
               }[] ?? [])]
-                .sort((a, b) => a.order_index - b.order_index),
+                .sort((a, b) => a.order_index - b.order_index)
+                .map((item) => ({ ...item, unit_price: isAdmin ? item.unit_price : null })),
             }))}
             existingItems={(existingItems ?? []).map((i) => ({
               template_item_id: i.template_item_id ?? null,
               description:      i.description ?? null,
               unit:             i.unit,
               quantity:         i.quantity !== null ? Number(i.quantity) : null,
-              unit_price:       i.unit_price !== null ? Number(i.unit_price) : null,
+              unit_price:       isAdmin && i.unit_price !== null ? Number(i.unit_price) : null,
               item_type:        i.item_type,
             }))}
             canManage={canManage}

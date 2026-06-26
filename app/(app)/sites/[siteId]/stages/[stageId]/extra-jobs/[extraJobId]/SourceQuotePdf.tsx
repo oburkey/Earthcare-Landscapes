@@ -10,15 +10,41 @@ export default function SourceQuotePdf({
   description,
   lineItems,
   notes,
+  isAdmin,
 }: {
   siteName: string | null
   reference: string
   description: string
   lineItems: LineItem[]
   notes: string
+  isAdmin: boolean
 }) {
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Non-admins see a price-stripped on-page list (no rates, no totals)
+  if (!isAdmin) {
+    return (
+      <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
+        <div className="px-4 py-2.5 bg-stone-50 border-b border-stone-200">
+          <p className="text-xs font-medium text-stone-500">Source quote</p>
+          <p className="text-sm text-stone-800 truncate">{reference || description || 'Converted from quote'}</p>
+        </div>
+        {lineItems.length > 0 ? (
+          <div className="divide-y divide-stone-100">
+            {lineItems.map((li, i) => (
+              <div key={i} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                <span className="text-sm text-stone-800">{li.description}</span>
+                <span className="text-sm text-stone-500 tabular-nums shrink-0">{li.qty} {li.unit}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="px-4 py-3 text-sm text-stone-400">No line items.</p>
+        )}
+      </div>
+    )
+  }
 
   function handleDownload() {
     const filename = `Quote-${reference || 'source'}.pdf`

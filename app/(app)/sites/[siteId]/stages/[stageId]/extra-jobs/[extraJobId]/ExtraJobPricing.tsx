@@ -36,6 +36,7 @@ interface Props {
   sections: TemplateSection[]
   existingItems: ExistingItem[]
   canManage: boolean
+  isAdmin: boolean
 }
 
 type AddItem = { desc: string; qty: string; unit: string; rate: string }
@@ -50,7 +51,7 @@ function fmt(n: number) {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ExtraJobPricing({
-  extraJobId, siteId, stageId, sections, existingItems, canManage,
+  extraJobId, siteId, stageId, sections, existingItems, canManage, isAdmin,
 }: Props) {
 
   // Initialise template values from existing items
@@ -167,9 +168,9 @@ export default function ExtraJobPricing({
             <div className="divide-y divide-stone-100">
               {usableItems.map((item) => {
                 const qty  = parseFloat(templateValues[item.id] || '0') || 0
-                const line = item.unit_price != null && qty > 0 ? qty * item.unit_price : null
+                const line = isAdmin && item.unit_price != null && qty > 0 ? qty * item.unit_price : null
                 return (
-                  <div key={item.id} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center px-4 py-2.5">
+                  <div key={item.id} className={`grid ${isAdmin ? 'grid-cols-[1fr_auto_auto_auto]' : 'grid-cols-[1fr_auto]'} gap-2 items-center px-4 py-2.5`}>
                     <span className="text-sm text-stone-700">{item.name}</span>
                     <div className="flex items-center gap-1.5">
                       <input
@@ -182,12 +183,14 @@ export default function ExtraJobPricing({
                       />
                       <span className="text-xs text-stone-400 w-8 shrink-0">{item.unit}</span>
                     </div>
-                    {item.unit_price != null
+                    {isAdmin && (item.unit_price != null
                       ? <span className="text-xs text-stone-400 tabular-nums">${item.unit_price.toFixed(2)}/unit</span>
-                      : <span />}
-                    <span className="text-sm font-medium text-stone-700 tabular-nums min-w-[64px] text-right">
-                      {line != null ? fmt(line) : <span className="text-stone-300">—</span>}
-                    </span>
+                      : <span />)}
+                    {isAdmin && (
+                      <span className="text-sm font-medium text-stone-700 tabular-nums min-w-[64px] text-right">
+                        {line != null ? fmt(line) : <span className="text-stone-300">—</span>}
+                      </span>
+                    )}
                   </div>
                 )
               })}
@@ -209,9 +212,9 @@ export default function ExtraJobPricing({
             const label    = type === 'bobcat' ? 'Bobcat' : 'Labour'
             const hrs  = parseFloat(state.hours || '0') || 0
             const rate = parseFloat(state.rate  || '0') || 0
-            const line = hrs > 0 && rate > 0 ? hrs * rate : null
+            const line = isAdmin && hrs > 0 && rate > 0 ? hrs * rate : null
             return (
-              <div key={type} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center px-4 py-2.5">
+              <div key={type} className={`grid ${isAdmin ? 'grid-cols-[1fr_auto_auto_auto]' : 'grid-cols-[1fr_auto]'} gap-2 items-center px-4 py-2.5`}>
                 <span className="text-sm text-stone-700">{label}</span>
                 <div className="flex items-center gap-1.5">
                   <input
@@ -224,21 +227,25 @@ export default function ExtraJobPricing({
                   />
                   <span className="text-xs text-stone-400 w-8 shrink-0">hr</span>
                 </div>
-                <div className="flex items-center gap-1">
-                  <span className="text-xs text-stone-400">$</span>
-                  <input
-                    type="number" min="0" step="1"
-                    value={state.rate}
-                    onChange={(e) => { setSaved(false); setState({ ...state, rate: e.target.value }) }}
-                    disabled={!canManage}
-                    placeholder="rate"
-                    className={`${INPUT} w-16 text-right tabular-nums`}
-                  />
-                  <span className="text-xs text-stone-400">/hr</span>
-                </div>
-                <span className="text-sm font-medium text-stone-700 tabular-nums min-w-[64px] text-right">
-                  {line != null ? fmt(line) : <span className="text-stone-300">—</span>}
-                </span>
+                {isAdmin && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-stone-400">$</span>
+                    <input
+                      type="number" min="0" step="1"
+                      value={state.rate}
+                      onChange={(e) => { setSaved(false); setState({ ...state, rate: e.target.value }) }}
+                      disabled={!canManage}
+                      placeholder="rate"
+                      className={`${INPUT} w-16 text-right tabular-nums`}
+                    />
+                    <span className="text-xs text-stone-400">/hr</span>
+                  </div>
+                )}
+                {isAdmin && (
+                  <span className="text-sm font-medium text-stone-700 tabular-nums min-w-[64px] text-right">
+                    {line != null ? fmt(line) : <span className="text-stone-300">—</span>}
+                  </span>
+                )}
               </div>
             )
           })}
@@ -256,7 +263,7 @@ export default function ExtraJobPricing({
             const label  = `Additional Item ${idx + 1}`
             const qty    = parseFloat(add.qty  || '0') || 0
             const rate   = parseFloat(add.rate || '0') || 0
-            const line   = qty > 0 && rate > 0 ? qty * rate : null
+            const line   = isAdmin && qty > 0 && rate > 0 ? qty * rate : null
             return (
               <div key={idx} className="px-4 py-3 space-y-2">
                 <div className="flex items-center gap-2">
@@ -287,18 +294,22 @@ export default function ExtraJobPricing({
                     placeholder="Unit"
                     className={`${INPUT} w-14`}
                   />
-                  <span className="text-xs text-stone-400">@ $</span>
-                  <input
-                    type="number" min="0" step="any"
-                    value={add.rate}
-                    onChange={(e) => { setSaved(false); setAdd({ ...add, rate: e.target.value }) }}
-                    disabled={!canManage}
-                    placeholder="Rate"
-                    className={`${INPUT} w-20 text-right tabular-nums`}
-                  />
-                  <span className="text-sm font-medium text-stone-700 tabular-nums ml-auto min-w-[64px] text-right">
-                    {line != null ? fmt(line) : <span className="text-stone-300">—</span>}
-                  </span>
+                  {isAdmin && (
+                    <>
+                      <span className="text-xs text-stone-400">@ $</span>
+                      <input
+                        type="number" min="0" step="any"
+                        value={add.rate}
+                        onChange={(e) => { setSaved(false); setAdd({ ...add, rate: e.target.value }) }}
+                        disabled={!canManage}
+                        placeholder="Rate"
+                        className={`${INPUT} w-20 text-right tabular-nums`}
+                      />
+                      <span className="text-sm font-medium text-stone-700 tabular-nums ml-auto min-w-[64px] text-right">
+                        {line != null ? fmt(line) : <span className="text-stone-300">—</span>}
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
             )
@@ -306,8 +317,8 @@ export default function ExtraJobPricing({
         </div>
       </div>
 
-      {/* Grand total */}
-      {grandTotal > 0 && (
+      {/* Grand total — admin only */}
+      {isAdmin && grandTotal > 0 && (
         <div className="rounded-xl border border-stone-200 bg-white px-4 py-3 flex items-center justify-between">
           <span className="text-sm font-semibold text-stone-700">Grand Total (ex GST)</span>
           <span className="text-lg font-bold text-stone-900">{fmt(grandTotal)}</span>

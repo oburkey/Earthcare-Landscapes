@@ -23,6 +23,20 @@ export async function saveExtraJobPricing(
   if (!extraJobId) return { error: 'Extra job ID is missing.' }
 
   const supabase = await createClient()
+  const isAdmin = profile.role === 'admin'
+
+  // For non-admins, preserve existing rates from DB so admin-set rates are never clobbered
+  const preservedRates: Record<string, number | null> = {}
+  if (!isAdmin) {
+    const { data: rateRows } = await supabase
+      .from('extra_job_quote_items')
+      .select('item_type, unit_price')
+      .eq('extra_job_id', extraJobId)
+      .in('item_type', ['bobcat', 'labour', 'additional_1', 'additional_2'])
+    for (const r of rateRows ?? []) {
+      preservedRates[r.item_type] = r.unit_price
+    }
+  }
 
   // Replace all existing items for this job
   await supabase.from('extra_job_quote_items').delete().eq('extra_job_id', extraJobId)
@@ -47,14 +61,16 @@ export async function saveExtraJobPricing(
 
   // Bobcat
   const bobcatHours = parseFloat((formData.get('bobcat_hours') as string) || '')
-  const bobcatRate  = parseFloat((formData.get('bobcat_rate')  as string) || '95')
+  const bobcatRate  = isAdmin
+    ? parseFloat((formData.get('bobcat_rate') as string) || '95')
+    : (preservedRates['bobcat'] ?? 95)
   if (bobcatHours > 0) {
     toInsert.push({
       extra_job_id: extraJobId,
       description:  'Bobcat',
       unit:         'hr',
       quantity:     bobcatHours,
-      unit_price:   isNaN(bobcatRate) ? 95 : bobcatRate,
+      unit_price:   isNaN(Number(bobcatRate)) ? 95 : bobcatRate,
       item_type:    'bobcat',
       sort_order:   100,
     })
@@ -62,14 +78,16 @@ export async function saveExtraJobPricing(
 
   // Labour
   const labourHours = parseFloat((formData.get('labour_hours') as string) || '')
-  const labourRate  = parseFloat((formData.get('labour_rate')  as string) || '65')
+  const labourRate  = isAdmin
+    ? parseFloat((formData.get('labour_rate') as string) || '65')
+    : (preservedRates['labour'] ?? 65)
   if (labourHours > 0) {
     toInsert.push({
       extra_job_id: extraJobId,
       description:  'Labour',
       unit:         'hr',
       quantity:     labourHours,
-      unit_price:   isNaN(labourRate) ? 65 : labourRate,
+      unit_price:   isNaN(Number(labourRate)) ? 65 : labourRate,
       item_type:    'labour',
       sort_order:   101,
     })
@@ -80,7 +98,9 @@ export async function saveExtraJobPricing(
     const desc = ((formData.get(`add${i}_desc`) as string) ?? '').trim()
     const qty  = parseFloat((formData.get(`add${i}_qty`)  as string) || '')
     const unit = (formData.get(`add${i}_unit`) as string) || 'No.'
-    const rate = parseFloat((formData.get(`add${i}_rate`) as string) || '')
+    const rate = isAdmin
+      ? parseFloat((formData.get(`add${i}_rate`) as string) || '')
+      : (preservedRates[`additional_${i}`] ?? NaN)
     if (desc && qty > 0) {
       toInsert.push({
         extra_job_id: extraJobId,

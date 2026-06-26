@@ -6,7 +6,7 @@ export const metadata = { title: 'Quotes — Earthcare Landscapes' }
 
 export default async function QuotesPage() {
   const profile = await requireAuth()
-  requireRole(profile, 'supervisor')
+  requireRole(profile, 'admin')
 
   const supabase = await createClient()
 
@@ -66,7 +66,7 @@ export default async function QuotesPage() {
     tableExists = false
   }
 
-  const canEdit = profile.role === 'admin' || profile.role === 'supervisor'
+  const canEdit = profile.role === 'admin'
 
   // Fetch conversion data — which quotes have been converted to extra jobs
   const conversions: ConversionMap = {}
