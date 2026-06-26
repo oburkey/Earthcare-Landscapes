@@ -194,11 +194,11 @@ export default function LotQuantities({
           frontBedIds.push(item.id)
         if (section.name === REAR_SECTION && REAR_BED_NAMES.includes(item.name))
           rearBedIds.push(item.id)
-        if (item.plant_category === 'front' && item.name === '130mm plants')
+        if (item.plant_category === 'front' && item.name === '130/140mm plants')
           frontPlantIds['130mm'] = item.id
         if (item.plant_category === 'front' && item.name === '200mm plants')
           frontPlantIds['200mm'] = item.id
-        if (item.plant_category === 'rear' && item.name === '130mm plants')
+        if (item.plant_category === 'rear' && item.name === '130/140mm plants')
           rearPlantIds['130mm'] = item.id
         if (item.plant_category === 'rear' && item.name === '200mm plants')
           rearPlantIds['200mm'] = item.id

@@ -82,7 +82,7 @@ export default async function LotPage({ params }: Props) {
             id, name, order_index, admin_only, is_client_extra,
             quote_template_items (
               id, name, unit, unit_price,
-              is_auto_calculated, auto_calc_formula, plant_category, order_index
+              is_auto_calculated, auto_calc_formula, plant_category, order_index, is_active
             )
           `)
           .eq('is_active', true)
@@ -212,8 +212,9 @@ export default async function LotPage({ params }: Props) {
             items: [...((s.quote_template_items as unknown[]) as {
               id: string; name: string; unit: string; unit_price?: number | null;
               is_auto_calculated: boolean; auto_calc_formula: string | null;
-              plant_category: 'front' | 'rear' | null; order_index: number
+              plant_category: 'front' | 'rear' | null; order_index: number; is_active: boolean
             }[] ?? [])]
+              .filter((i) => i.is_active !== false)
               .sort((a, b) => a.order_index - b.order_index)
               .map((i) => ({
                 ...i,
