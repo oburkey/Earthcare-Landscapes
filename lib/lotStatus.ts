@@ -99,8 +99,9 @@ export const SITE_COLOURS: Record<string, { abbr: string; badge: string }> = {
 }
 
 export function siteColour(siteName: string): { abbr: string; badge: string } {
-  return SITE_COLOURS[siteName] ?? {
-    abbr: siteName.slice(0, 2).toUpperCase(),
-    badge: 'bg-stone-100 text-stone-600',
-  }
+  if (SITE_COLOURS[siteName]) return SITE_COLOURS[siteName]
+  const match = Object.entries(SITE_COLOURS).find(([key]) => siteName.includes(key))
+  return match
+    ? match[1]
+    : { abbr: siteName.slice(0, 2).toUpperCase(), badge: 'bg-stone-100 text-stone-600' }
 }
