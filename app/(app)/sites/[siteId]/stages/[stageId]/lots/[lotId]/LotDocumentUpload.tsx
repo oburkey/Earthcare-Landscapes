@@ -30,7 +30,7 @@ export default function LotDocumentUpload({ lotId, siteId, stageId }: Props) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label htmlFor="doc-name" className="block text-sm font-medium text-stone-700">
+          <label htmlFor="doc-name" className="block text-sm font-medium text-fg-secondary">
             Document name <span className="text-red-500">*</span>
           </label>
           <input
@@ -39,18 +39,18 @@ export default function LotDocumentUpload({ lotId, siteId, stageId }: Props) {
             type="text"
             required
             placeholder="e.g. Approved Drawing Rev 3"
-            className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+            className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
           />
         </div>
         <div>
-          <label htmlFor="doc-type" className="block text-sm font-medium text-stone-700">
+          <label htmlFor="doc-type" className="block text-sm font-medium text-fg-secondary">
             Type
           </label>
           <select
             id="doc-type"
             name="document_type"
             defaultValue="site_plan"
-            className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-white"
+            className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-surface"
           >
             {Object.entries(DOC_TYPE_LABELS).map(([val, label]) => (
               <option key={val} value={val}>{label}</option>
@@ -60,7 +60,7 @@ export default function LotDocumentUpload({ lotId, siteId, stageId }: Props) {
       </div>
 
       <div>
-        <label htmlFor="doc-file" className="block text-sm font-medium text-stone-700">
+        <label htmlFor="doc-file" className="block text-sm font-medium text-fg-secondary">
           PDF file <span className="text-red-500">*</span>
         </label>
         <input
@@ -69,7 +69,7 @@ export default function LotDocumentUpload({ lotId, siteId, stageId }: Props) {
           type="file"
           accept="application/pdf"
           required
-          className="mt-1 block w-full text-sm text-stone-600 file:mr-3 file:rounded-lg file:border-0 file:bg-stone-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-stone-700 hover:file:bg-stone-200"
+          className="mt-1 block w-full text-sm text-fg-muted file:mr-3 file:rounded-lg file:border-0 file:bg-surface-raised file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-fg-secondary hover:file:bg-surface-raised"
         />
       </div>
 

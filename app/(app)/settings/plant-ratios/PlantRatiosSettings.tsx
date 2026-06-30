@@ -41,26 +41,26 @@ function PotSplitInputs({
   const total = Math.round((small + large) * 100) / 100
   return (
     <div>
-      <p className="block text-xs font-medium text-stone-500 mb-1">{label}</p>
+      <p className="block text-xs font-medium text-fg-muted mb-1">{label}</p>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs text-stone-400 mb-1">130/140mm</label>
+          <label className="block text-xs text-fg-muted mb-1">130/140mm</label>
           <input
             name={smallName} type="number" step="1" min="0" max="100" value={small}
             onChange={(e) => onSmallChange(Number(e.target.value))}
-            className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
           />
         </div>
         <div>
-          <label className="block text-xs text-stone-400 mb-1">200mm</label>
+          <label className="block text-xs text-fg-muted mb-1">200mm</label>
           <input
             name={largeName} type="number" step="1" min="0" max="100" value={large}
             onChange={(e) => onLargeChange(Number(e.target.value))}
-            className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
           />
         </div>
       </div>
-      <p className={`mt-1 text-xs ${total === 100 ? 'text-stone-400' : 'text-red-600'}`}>
+      <p className={`mt-1 text-xs ${total === 100 ? 'text-fg-muted' : 'text-red-600'}`}>
         Total: {total}%{total !== 100 && ' — must equal 100%'}
       </p>
     </div>
@@ -89,17 +89,17 @@ function RatioForm({
       {topSlot}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs font-medium text-stone-500 mb-1">Front ratio (plants/m²)</label>
+          <label className="block text-xs font-medium text-fg-muted mb-1">Front ratio (plants/m²)</label>
           <input
             name="front_ratio" type="number" step="0.01" min="0" defaultValue={defaults.front}
-            className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-stone-500 mb-1">Rear ratio (plants/m²)</label>
+          <label className="block text-xs font-medium text-fg-muted mb-1">Rear ratio (plants/m²)</label>
           <input
             name="rear_ratio" type="number" step="0.01" min="0" defaultValue={defaults.rear}
-            className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
           />
         </div>
       </div>
@@ -131,7 +131,7 @@ function RatioForm({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-lg border border-stone-200 px-4 py-2 text-sm font-medium text-stone-600 hover:bg-stone-100"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-fg-muted hover:bg-surface-raised"
           >
             Cancel
           </button>
@@ -169,8 +169,8 @@ export default function PlantRatiosSettings({ global, overrides, sites }: {
   return (
     <div className="space-y-5">
       {/* Global default */}
-      <div className="rounded-xl border border-stone-200 bg-white p-5">
-        <h2 className="text-sm font-semibold text-stone-800 mb-3">Global default</h2>
+      <div className="rounded-xl border border-border bg-surface p-5">
+        <h2 className="text-sm font-semibold text-fg-secondary mb-3">Global default</h2>
         <RatioForm
           action={saveGlobalRatios}
           defaults={{
@@ -186,14 +186,14 @@ export default function PlantRatiosSettings({ global, overrides, sites }: {
       </div>
 
       {/* Site overrides */}
-      <div className="rounded-xl border border-stone-200 bg-white p-5 space-y-3">
+      <div className="rounded-xl border border-border bg-surface p-5 space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-stone-800">Site overrides</h2>
+          <h2 className="text-sm font-semibold text-fg-secondary">Site overrides</h2>
           {!addingOverride && availableSites.length > 0 && (
             <button
               type="button"
               onClick={() => setAddingOverride(true)}
-              className="rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-100"
+              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-muted hover:bg-surface-raised"
             >
               + Add site override
             </button>
@@ -201,7 +201,7 @@ export default function PlantRatiosSettings({ global, overrides, sites }: {
         </div>
 
         {overrides.length === 0 && !addingOverride && (
-          <p className="text-sm text-stone-400">No site-specific overrides — all sites use the global default.</p>
+          <p className="text-sm text-fg-muted">No site-specific overrides — all sites use the global default.</p>
         )}
 
         {overrides.map((o) => {
@@ -209,8 +209,8 @@ export default function PlantRatiosSettings({ global, overrides, sites }: {
 
           if (editingId === o.id) {
             return (
-              <div key={o.id} className="rounded-lg border border-stone-200 p-3 bg-stone-50">
-                <p className="text-sm font-medium text-stone-700 mb-2">{site?.name ?? 'Unknown site'}</p>
+              <div key={o.id} className="rounded-lg border border-border p-3 bg-surface-raised">
+                <p className="text-sm font-medium text-fg-secondary mb-2">{site?.name ?? 'Unknown site'}</p>
                 <RatioForm
                   action={editOverrideAction}
                   defaults={{
@@ -230,10 +230,10 @@ export default function PlantRatiosSettings({ global, overrides, sites }: {
           }
 
           return (
-            <div key={o.id} className="flex items-center justify-between gap-3 rounded-lg border border-stone-200 p-3">
+            <div key={o.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
               <div className="min-w-0">
-                <p className="text-sm font-medium text-stone-800 truncate">{site?.name ?? 'Unknown site'}</p>
-                <p className="text-xs text-stone-500">
+                <p className="text-sm font-medium text-fg-secondary truncate">{site?.name ?? 'Unknown site'}</p>
+                <p className="text-xs text-fg-muted">
                   Front {o.front_ratio} / Rear {o.rear_ratio} · Front pots {potValue(o.front_pot_split ?? o.pot_size_split, '130mm', DEFAULT_SMALL_POT)}%/{potValue(o.front_pot_split ?? o.pot_size_split, '200mm', DEFAULT_LARGE_POT)}% · Rear pots {potValue(o.rear_pot_split ?? o.pot_size_split, '130mm', DEFAULT_SMALL_POT)}%/{potValue(o.rear_pot_split ?? o.pot_size_split, '200mm', DEFAULT_LARGE_POT)}%
                 </p>
               </div>
@@ -241,7 +241,7 @@ export default function PlantRatiosSettings({ global, overrides, sites }: {
                 <button
                   type="button"
                   onClick={() => setEditingId(o.id)}
-                  className="rounded px-2 py-1 text-xs text-stone-500 hover:bg-stone-100"
+                  className="rounded px-2 py-1 text-xs text-fg-muted hover:bg-surface-raised"
                 >
                   Edit
                 </button>
@@ -257,7 +257,7 @@ export default function PlantRatiosSettings({ global, overrides, sites }: {
         })}
 
         {addingOverride && (
-          <div className="rounded-lg border border-dashed border-stone-300 p-3 bg-stone-50">
+          <div className="rounded-lg border border-dashed border-border p-3 bg-surface-raised">
             <RatioForm
               action={addOverrideAction}
               defaults={{ front: DEFAULT_FRONT, rear: DEFAULT_REAR, frontSmall: DEFAULT_SMALL_POT, frontLarge: DEFAULT_LARGE_POT, rearSmall: DEFAULT_SMALL_POT, rearLarge: DEFAULT_LARGE_POT }}
@@ -265,10 +265,10 @@ export default function PlantRatiosSettings({ global, overrides, sites }: {
               onCancel={() => setAddingOverride(false)}
               topSlot={
                 <div>
-                  <label className="block text-xs font-medium text-stone-500 mb-1">Site</label>
+                  <label className="block text-xs font-medium text-fg-muted mb-1">Site</label>
                   <select
                     name="site_id" required defaultValue=""
-                    className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm bg-white focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm text-fg bg-surface focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
                   >
                     <option value="" disabled>Select a site…</option>
                     {availableSites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}

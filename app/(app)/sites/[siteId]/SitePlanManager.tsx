@@ -30,8 +30,8 @@ export default function SitePlanManager({ siteId, isAdmin, plans, legacyPlanUrl 
     <div className="space-y-3">
       {allPlans.length === 0 ? (
         isAdmin ? null : (
-          <div className="rounded-xl border border-stone-200 bg-white p-5">
-            <p className="text-sm text-stone-400 text-center py-4">No site plan uploaded yet.</p>
+          <div className="rounded-xl border border-border bg-surface p-5">
+            <p className="text-sm text-fg-muted text-center py-4">No site plan uploaded yet.</p>
           </div>
         )
       ) : (
@@ -43,8 +43,8 @@ export default function SitePlanManager({ siteId, isAdmin, plans, legacyPlanUrl 
       )}
 
       {isAdmin && (
-        <div className="rounded-xl border border-stone-200 bg-white p-5">
-          <p className="text-sm font-medium text-stone-700 mb-3">
+        <div className="rounded-xl border border-border bg-surface p-5">
+          <p className="text-sm font-medium text-fg-secondary mb-3">
             {allPlans.length > 0 ? 'Add another plan' : 'Upload site plan'}
           </p>
           <UploadForm siteId={siteId} />
@@ -90,7 +90,7 @@ function PlanCard({ plan, siteId, isAdmin, isLegacy }: { plan: Plan; siteId: str
   const showAdminControls = isAdmin && !isLegacy
 
   return (
-    <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
+    <div className="rounded-xl border border-border bg-surface overflow-hidden">
       <a href={plan.url} target="_blank" rel="noopener noreferrer">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -102,7 +102,7 @@ function PlanCard({ plan, siteId, isAdmin, isLegacy }: { plan: Plan; siteId: str
 
       {/* Footer — always shown for admin non-legacy plans; shown for labelled plans otherwise */}
       {(plan.label || showAdminControls) && (
-        <div className="px-4 py-3 border-t border-stone-100">
+        <div className="px-4 py-3 border-t border-border-subtle">
 
           {/* ── Editing mode ── */}
           {mode === 'editing' && showAdminControls ? (
@@ -113,7 +113,7 @@ function PlanCard({ plan, siteId, isAdmin, isLegacy }: { plan: Plan; siteId: str
                 onChange={(e) => setLabelInput(e.target.value)}
                 placeholder="Label (optional)"
                 autoFocus
-                className="block w-full rounded-lg border border-stone-300 px-3 py-1.5 text-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+                className="block w-full rounded-lg border border-border px-3 py-1.5 text-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-surface text-fg"
               />
               {renameError && <p className="text-xs text-red-600">{renameError}</p>}
               <div className="flex items-center gap-2">
@@ -129,7 +129,7 @@ function PlanCard({ plan, siteId, isAdmin, isLegacy }: { plan: Plan; siteId: str
                   type="button"
                   onClick={() => { setMode('view'); setLabelInput(plan.label ?? ''); setRenameError(null) }}
                   disabled={isPending}
-                  className="text-xs text-stone-500 hover:text-stone-700"
+                  className="text-xs text-fg-muted hover:text-fg-secondary"
                 >
                   Cancel
                 </button>
@@ -139,7 +139,7 @@ function PlanCard({ plan, siteId, isAdmin, isLegacy }: { plan: Plan; siteId: str
           ) : mode === 'deleting' && showAdminControls ? (
             /* ── Delete confirmation mode ── */
             <div className="flex items-center gap-3 flex-wrap">
-              <span className="text-xs text-stone-600">Delete this plan?</span>
+              <span className="text-xs text-fg-secondary">Delete this plan?</span>
               <form action={deleteAction} className="flex items-center gap-2">
                 <input type="hidden" name="site_id" value={siteId} />
                 <input type="hidden" name="doc_id"  value={plan.id} />
@@ -155,7 +155,7 @@ function PlanCard({ plan, siteId, isAdmin, isLegacy }: { plan: Plan; siteId: str
                 type="button"
                 onClick={() => setMode('view')}
                 disabled={deletePending}
-                className="text-xs text-stone-500 hover:text-stone-700"
+                className="text-xs text-fg-muted hover:text-fg-secondary"
               >
                 Cancel
               </button>
@@ -165,13 +165,13 @@ function PlanCard({ plan, siteId, isAdmin, isLegacy }: { plan: Plan; siteId: str
           ) : (
             /* ── View mode ── */
             <div className="flex items-center justify-between gap-3">
-              <span className="text-sm text-stone-600 truncate">{plan.label ?? ''}</span>
+              <span className="text-sm text-fg-secondary truncate">{plan.label ?? ''}</span>
               <div className="flex items-center gap-1 shrink-0">
                 <a
                   href={plan.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="rounded border border-stone-200 px-2.5 py-1 text-xs font-medium text-stone-600 hover:bg-stone-50 transition-colors"
+                  className="rounded border border-border px-2.5 py-1 text-xs font-medium text-fg-secondary hover:bg-surface-raised transition-colors"
                 >
                   View
                 </a>
@@ -181,7 +181,7 @@ function PlanCard({ plan, siteId, isAdmin, isLegacy }: { plan: Plan; siteId: str
                       type="button"
                       onClick={() => setMode('editing')}
                       title="Edit label"
-                      className="rounded p-1.5 text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors"
+                      className="rounded p-1.5 text-fg-muted hover:text-fg-secondary hover:bg-surface-raised transition-colors"
                     >
                       <PencilIcon />
                     </button>
@@ -189,7 +189,7 @@ function PlanCard({ plan, siteId, isAdmin, isLegacy }: { plan: Plan; siteId: str
                       type="button"
                       onClick={() => setMode('deleting')}
                       title="Delete plan"
-                      className="rounded p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                      className="rounded p-1.5 text-fg-muted hover:text-red-600 hover:bg-red-50 transition-colors"
                     >
                       <TrashIcon />
                     </button>
@@ -269,13 +269,13 @@ function UploadForm({ siteId }: { siteId: string }) {
       <input type="hidden" name="site_id" value={siteId} />
 
       <div>
-        <label className="block text-sm font-medium text-stone-700 mb-1">Label (optional)</label>
+        <label className="block text-sm font-medium text-fg-secondary mb-1">Label (optional)</label>
         <input
           name="label"
           type="text"
           placeholder="e.g. Stage 1 overview"
           disabled={busy}
-          className="block w-full rounded-lg border border-stone-300 px-3 py-2 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 disabled:opacity-50"
+          className="block w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 disabled:opacity-50 bg-surface text-fg"
         />
       </div>
 
@@ -286,7 +286,7 @@ function UploadForm({ siteId }: { siteId: string }) {
           accept="image/*"
           required
           disabled={busy}
-          className="flex-1 min-w-0 text-sm text-stone-500
+          className="flex-1 min-w-0 text-sm text-fg-muted
             file:mr-3 file:py-2 file:px-4
             file:rounded-lg file:border-0
             file:text-sm file:font-medium

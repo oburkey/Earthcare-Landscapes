@@ -13,7 +13,7 @@ export default async function AppLayout({
   const profile = await requireAuth()
 
   return (
-    <div className="min-h-screen bg-stone-50">
+    <div className="min-h-screen bg-bg">
       <AppNav role={profile.role as Role} name={profile.full_name} />
       {/* On mobile: push content below the fixed top bar. On md+: push content right of the fixed sidebar. */}
       <div className="pt-14 md:pt-0 md:ml-60">

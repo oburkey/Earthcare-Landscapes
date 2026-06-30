@@ -15,11 +15,11 @@ export default async function MaterialsSettingsPage() {
   }))
 
   return (
-    <div className="min-h-screen bg-stone-50">
+    <div className="min-h-screen bg-surface-raised">
       <div className="mx-auto max-w-3xl px-4 py-6 space-y-5">
         <div>
-          <h1 className="text-xl font-semibold text-stone-900">Materials Template</h1>
-          <p className="mt-1 text-sm text-stone-500">
+          <h1 className="text-xl font-semibold text-fg">Materials Template</h1>
+          <p className="mt-1 text-sm text-fg-muted">
             Configure the quantity takeoff template. Changes apply to all new lot quotes.
           </p>
         </div>

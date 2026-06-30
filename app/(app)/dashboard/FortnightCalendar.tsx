@@ -49,18 +49,18 @@ export default function FortnightCalendar({ items }: { items: CalendarItem[] }) 
   }
 
   return (
-    <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
+    <div className="rounded-xl border border-border bg-surface overflow-hidden">
       {/* Day headers */}
-      <div className="grid grid-cols-7 border-b border-stone-200 bg-stone-50">
+      <div className="grid grid-cols-7 border-b border-border bg-surface-raised">
         {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
-          <div key={d} className="px-1 py-1.5 text-center text-xs font-medium text-stone-400">
+          <div key={d} className="px-1 py-1.5 text-center text-xs font-medium text-fg-muted">
             {d}
           </div>
         ))}
       </div>
 
       {/* Week 1 */}
-      <div className="grid grid-cols-7 border-b border-stone-100">
+      <div className="grid grid-cols-7 border-b border-border-subtle">
         {days.slice(0, 7).map((day) => (
           <DayCell key={day.date} day={day} items={itemsByDate.get(day.date) ?? []} />
         ))}
@@ -85,11 +85,11 @@ function DayCell({
 }) {
   return (
     <div
-      className={`min-h-[72px] border-r border-stone-100 last:border-r-0 p-1 ${
-        day.isToday ? 'bg-green-50 ring-1 ring-inset ring-green-200' : ''
+      className={`min-h-[72px] border-r border-border-subtle last:border-r-0 p-1 ${
+        day.isToday ? 'bg-accent-dim ring-1 ring-inset ring-green-200' : ''
       }`}
     >
-      <div className={`text-xs font-medium mb-0.5 ${day.isToday ? 'text-green-700' : 'text-stone-500'}`}>
+      <div className={`text-xs font-medium mb-0.5 ${day.isToday ? 'text-accent-fg' : 'text-fg-muted'}`}>
         {day.dayNum}
       </div>
       <div className="space-y-0.5">
@@ -99,19 +99,19 @@ function DayCell({
             <Link
               key={i}
               href={item.href}
-              className="flex items-center gap-0.5 rounded px-1 py-0.5 hover:bg-stone-100 transition-colors"
+              className="flex items-center gap-0.5 rounded px-1 py-0.5 hover:bg-surface-raised transition-colors"
             >
               <span className={`shrink-0 rounded px-1 text-[10px] font-bold leading-tight ${sc.badge}`}>
                 {sc.abbr}
               </span>
-              <span className="text-[10px] text-stone-700 truncate leading-tight">
+              <span className="text-[10px] text-fg-secondary truncate leading-tight">
                 {item.label}
               </span>
             </Link>
           )
         })}
         {items.length > 4 && (
-          <span className="text-[10px] text-stone-400 px-1">+{items.length - 4} more</span>
+          <span className="text-[10px] text-fg-muted px-1">+{items.length - 4} more</span>
         )}
       </div>
     </div>

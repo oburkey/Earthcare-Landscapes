@@ -11,6 +11,7 @@ import {
   Legend,
 } from 'chart.js'
 import { CATEGORY_LABELS, type VarianceTrendPoint } from '../lib'
+import { useChartTheme } from '../useChartTheme'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend)
 
@@ -24,13 +25,14 @@ const CATEGORY_COLORS: Record<keyof typeof CATEGORY_LABELS, string> = {
 }
 
 export default function VarianceTrendChart({ trend }: { trend: VarianceTrendPoint[] }) {
+  const theme = useChartTheme()
   const hasData = trend.some((m) => Object.keys(CATEGORY_LABELS).some((k) => m[k as keyof typeof CATEGORY_LABELS] !== null))
 
   if (trend.length === 0 || !hasData) {
     return (
-      <div className="rounded-xl border border-stone-200 bg-white p-4">
-        <h3 className="text-sm font-semibold text-stone-800">Variance trend</h3>
-        <p className="mt-4 text-sm text-stone-400">
+      <div className="rounded-xl border border-border bg-surface p-4">
+        <h3 className="text-sm font-semibold text-fg-secondary">Variance trend</h3>
+        <p className="mt-4 text-sm text-fg-muted">
           No lots with both estimate and final quant data in this range.
         </p>
       </div>
@@ -50,19 +52,23 @@ export default function VarianceTrendChart({ trend }: { trend: VarianceTrendPoin
   }
 
   return (
-    <div className="rounded-xl border border-stone-200 bg-white p-4">
-      <h3 className="text-sm font-semibold text-stone-800">Variance trend</h3>
-      <p className="mt-1 text-xs text-stone-400">Average % difference (final vs estimate), by due date month</p>
+    <div className="rounded-xl border border-border bg-surface p-4">
+      <h3 className="text-sm font-semibold text-fg-secondary">Variance trend</h3>
+      <p className="mt-1 text-xs text-fg-muted">Average % difference (final vs estimate), by due date month</p>
       <div className="mt-3 h-64">
         <Line
           data={data}
           options={{
             responsive: true,
             maintainAspectRatio: false,
-            scales: { y: { ticks: { callback: (v) => `${v}%` } } },
+            scales: {
+              x: { grid: { color: theme.grid }, ticks: { color: theme.ticks } },
+              y: { grid: { color: theme.grid }, ticks: { color: theme.ticks, callback: (v) => `${v}%` } },
+            },
             plugins: {
-              legend: { position: 'bottom' },
+              legend: { position: 'bottom', labels: { color: theme.legend } },
               tooltip: {
+                ...theme.tooltip,
                 callbacks: {
                   label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? '—' : `${Number(ctx.parsed.y).toFixed(1)}%`}`,
                 },

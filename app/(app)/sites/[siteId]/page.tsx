@@ -80,13 +80,13 @@ export default async function SitePage({ params }: Props) {
     .map((s) => ({ id: s.id, name: s.name, ...stageStats(s) }))
 
   return (
-    <div className="min-h-screen bg-stone-50">
+    <div className="min-h-screen bg-bg">
       <div className="mx-auto max-w-2xl px-4 py-6 space-y-5">
 
         {/* Back */}
         <Link
           href="/sites"
-          className="inline-flex items-center gap-1 text-sm text-stone-500 hover:text-stone-700"
+          className="inline-flex items-center gap-1 text-sm text-fg-muted hover:text-fg-secondary"
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
@@ -95,15 +95,15 @@ export default async function SitePage({ params }: Props) {
         </Link>
 
         {/* Site header */}
-        <div className="rounded-xl border border-stone-200 bg-white p-5">
+        <div className="rounded-xl border border-border bg-surface p-5">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <h1 className="text-xl font-semibold text-stone-900">{site.name}</h1>
+              <h1 className="text-xl font-semibold text-fg">{site.name}</h1>
               {site.address && (
-                <p className="mt-0.5 text-sm text-stone-500">{site.address}</p>
+                <p className="mt-0.5 text-sm text-fg-muted">{site.address}</p>
               )}
               {site.client_contact && (
-                <p className="mt-0.5 text-sm text-stone-500">
+                <p className="mt-0.5 text-sm text-fg-muted">
                   Contact: {site.client_contact}
                 </p>
               )}
@@ -122,16 +122,16 @@ export default async function SitePage({ params }: Props) {
 
           {/* Overall progress */}
           {totalLots > 0 && (
-            <div className="mt-4 pt-4 border-t border-stone-100">
+            <div className="mt-4 pt-4 border-t border-border-subtle">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-medium text-stone-500">
+                <span className="text-xs font-medium text-fg-muted">
                   Overall progress
                 </span>
-                <span className="text-xs text-stone-500">
+                <span className="text-xs text-fg-muted">
                   {completedLots}/{totalLots} lots complete
                 </span>
               </div>
-              <div className="h-2 w-full rounded-full bg-stone-100">
+              <div className="h-2 w-full rounded-full bg-surface-raised">
                 <div
                   className="h-2 rounded-full bg-green-600 transition-all"
                   style={{
@@ -145,7 +145,7 @@ export default async function SitePage({ params }: Props) {
 
         {/* ── Site plan ──────────────────────────────────────────────────────── */}
         <div>
-          <h2 className="text-base font-semibold text-stone-800 mb-3">Site plan</h2>
+          <h2 className="text-base font-semibold text-fg-secondary mb-3">Site plan</h2>
           <SitePlanManager
             siteId={siteId}
             isAdmin={isAdmin}
@@ -157,7 +157,7 @@ export default async function SitePage({ params }: Props) {
         {/* Stages section */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-semibold text-stone-800">Stages</h2>
+            <h2 className="text-base font-semibold text-fg-secondary">Stages</h2>
             {canManage && (
               <Link
                 href={`/sites/${siteId}/new-stage`}

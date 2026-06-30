@@ -65,12 +65,12 @@ export default function StageListActions({
 
   if (activeStages.length === 0 && completedStages.length === 0) {
     return (
-      <div className="rounded-xl border border-stone-200 bg-white px-4 py-10 text-center">
-        <p className="text-sm text-stone-500">No stages yet.</p>
+      <div className="rounded-xl border border-border bg-surface px-4 py-10 text-center">
+        <p className="text-sm text-fg-muted">No stages yet.</p>
         {canManage && (
           <Link
             href={`/sites/${siteId}/new-stage`}
-            className="mt-3 inline-block text-sm font-medium text-green-700 hover:underline"
+            className="mt-3 inline-block text-sm font-medium text-accent-fg hover:underline"
           >
             Add the first stage →
           </Link>
@@ -84,23 +84,23 @@ export default function StageListActions({
 
       {/* Active stages */}
       {activeStages.length === 0 ? (
-        <div className="rounded-xl border border-stone-200 bg-white px-4 py-8 text-center">
-          <p className="text-sm text-stone-500">No active stages.</p>
+        <div className="rounded-xl border border-border bg-surface px-4 py-8 text-center">
+          <p className="text-sm text-fg-muted">No active stages.</p>
         </div>
       ) : (
-        <div className="rounded-xl border border-stone-200 bg-white overflow-hidden divide-y divide-stone-100">
+        <div className="rounded-xl border border-border bg-surface overflow-hidden divide-y divide-border-subtle">
           {activeStages.map((stage) => {
             const pct          = stage.total > 0 ? Math.round((stage.completed / stage.total) * 100) : 0
             const isConfirming = confirmId === stage.id
             const notStarted   = stage.total - stage.completed - stage.inProgress - stage.scheduled
 
             return (
-              <div key={stage.id} className="flex items-center gap-4 px-4 py-4 hover:bg-stone-50 transition-colors">
+              <div key={stage.id} className="flex items-center gap-4 px-4 py-4 hover:bg-surface-raised transition-colors">
 
                 {/* Navigable area */}
                 <PrefetchLink href={`/sites/${siteId}/stages/${stage.id}`} className="min-w-0 flex-1 flex items-center gap-4">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-stone-900">{stage.name}</p>
+                    <p className="text-sm font-semibold text-fg">{stage.name}</p>
 
                     {stage.total > 0 && (
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -113,18 +113,18 @@ export default function StageListActions({
 
                     {stage.total > 0 && (
                       <div className="mt-2.5 flex items-center gap-2">
-                        <div className="flex-1 h-1.5 rounded-full bg-stone-100">
+                        <div className="flex-1 h-1.5 rounded-full bg-surface-raised">
                           <div className="h-1.5 rounded-full bg-green-600" style={{ width: `${pct}%` }} />
                         </div>
-                        <span className="text-xs text-stone-400 shrink-0">{pct}%</span>
+                        <span className="text-xs text-fg-muted shrink-0">{pct}%</span>
                       </div>
                     )}
 
                     {stage.total === 0 && (
-                      <p className="mt-0.5 text-xs text-stone-400">No lots yet</p>
+                      <p className="mt-0.5 text-xs text-fg-muted">No lots yet</p>
                     )}
                   </div>
-                  <svg className="h-4 w-4 shrink-0 text-stone-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <svg className="h-4 w-4 shrink-0 text-fg-muted" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                   </svg>
                 </PrefetchLink>
@@ -136,13 +136,13 @@ export default function StageListActions({
                       <button
                         type="button"
                         onClick={() => { setConfirmId(stage.id); setActionError(null) }}
-                        className="rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs font-medium text-stone-500 hover:bg-stone-50 transition-colors"
+                        className="rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-fg-muted hover:bg-surface-raised transition-colors"
                       >
                         Mark complete
                       </button>
                     ) : (
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-stone-600 hidden sm:inline">Complete?</span>
+                        <span className="text-xs text-fg-secondary hidden sm:inline">Complete?</span>
                         <button
                           type="button"
                           onClick={() => handleComplete(stage.id)}
@@ -155,7 +155,7 @@ export default function StageListActions({
                           type="button"
                           onClick={() => setConfirmId(null)}
                           disabled={isPending}
-                          className="text-xs text-stone-400 hover:text-stone-600"
+                          className="text-xs text-fg-muted hover:text-fg-secondary"
                         >
                           Cancel
                         </button>
@@ -180,7 +180,7 @@ export default function StageListActions({
           <button
             type="button"
             onClick={() => setShowCompleted((v) => !v)}
-            className="flex items-center gap-1.5 text-sm text-stone-400 hover:text-stone-600 transition-colors"
+            className="flex items-center gap-1.5 text-sm text-fg-muted hover:text-fg-secondary transition-colors"
           >
             <svg
               className={`h-3.5 w-3.5 transition-transform ${showCompleted ? '' : '-rotate-90'}`}
@@ -192,33 +192,33 @@ export default function StageListActions({
           </button>
 
           {showCompleted && (
-            <div className="mt-3 rounded-xl border border-stone-200 bg-white overflow-hidden divide-y divide-stone-100">
+            <div className="mt-3 rounded-xl border border-border bg-surface overflow-hidden divide-y divide-border-subtle">
               {completedStages.map((stage) => {
                 const pct = stage.total > 0 ? Math.round((stage.completed / stage.total) * 100) : 0
                 return (
-                  <div key={stage.id} className="flex items-center gap-4 px-4 py-4 hover:bg-stone-50 transition-colors">
+                  <div key={stage.id} className="flex items-center gap-4 px-4 py-4 hover:bg-surface-raised transition-colors">
 
                     <PrefetchLink href={`/sites/${siteId}/stages/${stage.id}`} className="min-w-0 flex-1 flex items-center gap-4">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <p className="text-sm font-semibold text-stone-500 truncate">{stage.name}</p>
-                          <span className="shrink-0 rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-400">
+                          <p className="text-sm font-semibold text-fg-muted truncate">{stage.name}</p>
+                          <span className="shrink-0 rounded-full bg-surface-raised px-2 py-0.5 text-xs text-fg-muted">
                             Complete
                           </span>
                         </div>
                         {stage.total > 0 && (
                           <div className="mt-2.5 flex items-center gap-2">
-                            <div className="flex-1 h-1.5 rounded-full bg-stone-100">
-                              <div className="h-1.5 rounded-full bg-stone-400" style={{ width: `${pct}%` }} />
+                            <div className="flex-1 h-1.5 rounded-full bg-surface-raised">
+                              <div className="h-1.5 rounded-full bg-fg-muted" style={{ width: `${pct}%` }} />
                             </div>
-                            <span className="text-xs text-stone-400 shrink-0">{pct}%</span>
+                            <span className="text-xs text-fg-muted shrink-0">{pct}%</span>
                           </div>
                         )}
                         {stage.total === 0 && (
-                          <p className="mt-0.5 text-xs text-stone-400">No lots</p>
+                          <p className="mt-0.5 text-xs text-fg-muted">No lots</p>
                         )}
                       </div>
-                      <svg className="h-4 w-4 shrink-0 text-stone-300" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <svg className="h-4 w-4 shrink-0 text-fg-muted" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                       </svg>
                     </PrefetchLink>
@@ -229,7 +229,7 @@ export default function StageListActions({
                         type="button"
                         onClick={() => handleActivate(stage.id)}
                         disabled={isPending}
-                        className="shrink-0 rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs font-medium text-stone-500 hover:bg-stone-50 disabled:opacity-50 transition-colors"
+                        className="shrink-0 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-fg-muted hover:bg-surface-raised disabled:opacity-50 transition-colors"
                       >
                         Mark active
                       </button>
@@ -247,10 +247,10 @@ export default function StageListActions({
 
 function StatusPill({ label, color }: { label: string; color: 'green' | 'blue' | 'amber' | 'stone' }) {
   const styles = {
-    green: 'bg-green-100 text-green-700',
-    blue:  'bg-blue-100 text-blue-700',
-    amber: 'bg-amber-100 text-amber-700',
-    stone: 'bg-stone-100 text-stone-500',
+    green: 'bg-accent-dim text-accent-fg',
+    blue:  'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+    amber: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+    stone: 'bg-surface-raised text-fg-muted',
   }
   return (
     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${styles[color]}`}>

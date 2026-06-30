@@ -323,10 +323,10 @@ export default function LotQuantities({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50 transition-colors"
+        className="flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium text-fg-secondary hover:bg-surface-raised transition-colors"
       >
         <svg
-          className={`h-4 w-4 text-stone-400 transition-transform ${open ? '' : '-rotate-90'}`}
+          className={`h-4 w-4 text-fg-muted transition-transform ${open ? '' : '-rotate-90'}`}
           fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
@@ -337,7 +337,7 @@ export default function LotQuantities({
       {open && (<>
 
       {/* Estimate / Final toggle */}
-      <div className="flex items-center gap-1 bg-stone-100 rounded-lg p-1 self-start w-fit">
+      <div className="flex items-center gap-1 bg-surface-raised rounded-lg p-1 self-start w-fit">
         {(['Estimate', 'Final'] as const).map((label) => {
           const est = label === 'Estimate'
           return (
@@ -347,8 +347,8 @@ export default function LotQuantities({
               onClick={() => switchMode(est)}
               className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                 isEstimated === est
-                  ? 'bg-white text-stone-900 shadow-sm'
-                  : 'text-stone-500 hover:text-stone-700'
+                  ? 'bg-surface text-fg shadow-sm'
+                  : 'text-fg-muted hover:text-fg-secondary'
               }`}
             >
               {label}
@@ -362,7 +362,7 @@ export default function LotQuantities({
         <button
           type="button"
           onClick={recalculatePlants}
-          className="rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 transition-colors"
+          className="rounded-lg border border-green-200 bg-accent-dim px-3 py-1.5 text-xs font-medium text-accent-fg hover:bg-accent-dim transition-colors"
         >
           Recalculate plants from garden bed
         </button>
@@ -372,9 +372,9 @@ export default function LotQuantities({
       {activeQuote && (
         <div>
           <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
-            currentStatus === 'approved'  ? 'bg-green-100 text-green-700' :
+            currentStatus === 'approved'  ? 'bg-accent-dim text-accent-fg' :
             currentStatus === 'submitted' ? 'bg-blue-100 text-blue-700'   :
-            'bg-stone-100 text-stone-600'
+            'bg-surface-raised text-fg-muted'
           }`}>
             {currentStatus === 'approved' ? 'Approved' :
              currentStatus === 'submitted' ? 'Submitted' : 'Draft'}
@@ -386,15 +386,15 @@ export default function LotQuantities({
       {sections.map((section) => {
         if (!showClientExtras && section.isClientExtra) return null
         return (
-        <div key={section.id} className="rounded-xl border border-stone-200 bg-white overflow-hidden">
+        <div key={section.id} className="rounded-xl border border-border bg-surface overflow-hidden">
 
           {/* Section header */}
-          <div className="px-4 py-2.5 bg-stone-50 border-b border-stone-200">
-            <h3 className="text-sm font-semibold text-stone-700">{section.name}</h3>
+          <div className="px-4 py-2.5 bg-surface-raised border-b border-border">
+            <h3 className="text-sm font-semibold text-fg-secondary">{section.name}</h3>
           </div>
 
           {/* Column headers */}
-          <div className={`grid gap-3 px-4 py-2 border-b border-stone-100 text-xs font-medium text-stone-400 ${colClass}`}>
+          <div className={`grid gap-3 px-4 py-2 border-b border-border-subtle text-xs font-medium text-fg-muted ${colClass}`}>
             <span>Item</span>
             <span className="text-right">Qty</span>
             {isAdmin && <><span className="text-right">$/unit</span><span className="text-right">Total</span></>}
@@ -425,9 +425,9 @@ export default function LotQuantities({
                 : null
 
               return (
-                <div key={item.id} className={`grid gap-3 px-4 py-3 border-b border-stone-100 items-start ${colClass}`}>
+                <div key={item.id} className={`grid gap-3 px-4 py-3 border-b border-border-subtle items-start ${colClass}`}>
                   <div className="min-w-0 space-y-1.5">
-                    <span className="text-sm text-stone-800">{prefix || item.name}</span>
+                    <span className="text-sm text-fg-secondary">{prefix || item.name}</span>
                     <div className="flex flex-wrap gap-1">
                       {group.map((gi) => {
                         const label = prefix ? gi.name.slice(prefix.length).trim() : gi.name
@@ -440,7 +440,7 @@ export default function LotQuantities({
                             className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${
                               selectedId === gi.id
                                 ? 'bg-green-700 text-white'
-                                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                                : 'bg-surface-raised text-fg-muted hover:bg-surface-raised'
                             } disabled:opacity-50`}
                           >
                             {label}
@@ -459,22 +459,22 @@ export default function LotQuantities({
                       onChange={(e) => setVal(selectedId, e.target.value)}
                       disabled={disabled}
                       placeholder="0"
-                      className="w-16 rounded-lg border border-stone-300 px-2 py-2 text-sm text-right tabular-nums focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 disabled:bg-stone-50 disabled:text-stone-400"
+                      className="w-16 rounded-lg border border-border bg-surface px-2 py-2 text-sm text-fg text-right tabular-nums focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 disabled:bg-surface-raised disabled:text-fg-muted"
                     />
-                    <span className="text-xs text-stone-400 shrink-0">No.</span>
+                    <span className="text-xs text-fg-muted shrink-0">No.</span>
                   </div>
 
                   {isAdmin && (
                     <>
-                      <div className="text-right text-sm text-stone-500 tabular-nums pt-0.5">
+                      <div className="text-right text-sm text-fg-muted tabular-nums pt-0.5">
                         {selItem?.unit_price != null
                           ? `$${selItem.unit_price.toFixed(2)}`
-                          : <span className="text-stone-300">—</span>}
+                          : <span className="text-fg-muted">—</span>}
                       </div>
-                      <div className="text-right text-sm font-medium text-stone-700 tabular-nums pt-0.5">
+                      <div className="text-right text-sm font-medium text-fg-secondary tabular-nums pt-0.5">
                         {lineTotal != null
                           ? `$${lineTotal.toFixed(2)}`
-                          : <span className="text-stone-300">—</span>}
+                          : <span className="text-fg-muted">—</span>}
                       </div>
                     </>
                   )}
@@ -486,22 +486,22 @@ export default function LotQuantities({
             if (item.unit === 'ITEM') {
               const lineTotal = isAdmin && item.unit_price != null ? item.unit_price : null
               return (
-                <div key={item.id} className={`grid gap-3 px-4 py-3 border-b border-stone-100 items-center ${colClass}`}>
-                  <span className="text-sm text-stone-800">{item.name}</span>
+                <div key={item.id} className={`grid gap-3 px-4 py-3 border-b border-border-subtle items-center ${colClass}`}>
+                  <span className="text-sm text-fg-secondary">{item.name}</span>
                   <div className="flex justify-end">
                     <span className="text-xs font-medium text-green-600">✓ Included</span>
                   </div>
                   {isAdmin && (
                     <>
-                      <div className="text-right text-sm text-stone-500 tabular-nums">
+                      <div className="text-right text-sm text-fg-muted tabular-nums">
                         {item.unit_price != null
                           ? `$${item.unit_price.toFixed(2)}`
-                          : <span className="text-stone-300">—</span>}
+                          : <span className="text-fg-muted">—</span>}
                       </div>
-                      <div className="text-right text-sm font-medium text-stone-700 tabular-nums">
+                      <div className="text-right text-sm font-medium text-fg-secondary tabular-nums">
                         {lineTotal != null
                           ? `$${lineTotal.toFixed(2)}`
-                          : <span className="text-stone-300">—</span>}
+                          : <span className="text-fg-muted">—</span>}
                       </div>
                     </>
                   )}
@@ -516,11 +516,11 @@ export default function LotQuantities({
                 ? item.unit_price
                 : null
               return (
-                <div key={item.id} className={`grid gap-3 px-4 py-3 border-b border-stone-100 items-center ${colClass}`}>
+                <div key={item.id} className={`grid gap-3 px-4 py-3 border-b border-border-subtle items-center ${colClass}`}>
                   <div className="min-w-0">
-                    <span className="text-sm text-stone-800">{item.name}</span>
+                    <span className="text-sm text-fg-secondary">{item.name}</span>
                     {formula === 'corner_lot_flag' && (
-                      <span className="ml-1.5 text-xs text-stone-400">— controls corner lot items</span>
+                      <span className="ml-1.5 text-xs text-fg-muted">— controls corner lot items</span>
                     )}
                   </div>
                   <div className="flex justify-end">
@@ -529,7 +529,7 @@ export default function LotQuantities({
                       onClick={() => toggle(item.id)}
                       disabled={disabled}
                       className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                        isYes ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-500'
+                        isYes ? 'bg-accent-dim text-accent-fg' : 'bg-surface-raised text-fg-muted'
                       } disabled:opacity-50`}
                     >
                       {isYes ? 'YES' : 'NO'}
@@ -537,15 +537,15 @@ export default function LotQuantities({
                   </div>
                   {isAdmin && (
                     <>
-                      <div className="text-right text-sm text-stone-500 tabular-nums">
+                      <div className="text-right text-sm text-fg-muted tabular-nums">
                         {item.unit_price != null && item.unit_price > 0
                           ? `$${item.unit_price.toFixed(2)}`
-                          : <span className="text-stone-300">—</span>}
+                          : <span className="text-fg-muted">—</span>}
                       </div>
-                      <div className="text-right text-sm font-medium text-stone-700 tabular-nums">
+                      <div className="text-right text-sm font-medium text-fg-secondary tabular-nums">
                         {lineTotal != null
                           ? `$${lineTotal.toFixed(2)}`
-                          : <span className="text-stone-300">—</span>}
+                          : <span className="text-fg-muted">—</span>}
                       </div>
                     </>
                   )}
@@ -560,8 +560,8 @@ export default function LotQuantities({
               : null
 
             return (
-              <div key={item.id} className={`grid gap-3 px-4 py-3 border-b border-stone-100 items-center ${colClass}`}>
-                <span className="text-sm text-stone-800">{item.name}</span>
+              <div key={item.id} className={`grid gap-3 px-4 py-3 border-b border-border-subtle items-center ${colClass}`}>
+                <span className="text-sm text-fg-secondary">{item.name}</span>
                 <div className="flex justify-end items-center gap-1">
                   <input
                     type="number"
@@ -571,21 +571,21 @@ export default function LotQuantities({
                     onChange={(e) => setVal(item.id, e.target.value)}
                     disabled={disabled}
                     placeholder="0"
-                    className="w-16 rounded-lg border border-stone-300 px-2 py-2 text-sm text-right tabular-nums focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 disabled:bg-stone-50 disabled:text-stone-400"
+                    className="w-16 rounded-lg border border-border bg-surface px-2 py-2 text-sm text-fg text-right tabular-nums focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 disabled:bg-surface-raised disabled:text-fg-muted"
                   />
-                  <span className="text-xs text-stone-400 shrink-0">{item.unit}</span>
+                  <span className="text-xs text-fg-muted shrink-0">{item.unit}</span>
                 </div>
                 {isAdmin && (
                   <>
-                    <div className="text-right text-sm text-stone-500 tabular-nums">
+                    <div className="text-right text-sm text-fg-muted tabular-nums">
                       {item.unit_price != null
                         ? `$${item.unit_price.toFixed(2)}`
-                        : <span className="text-stone-300">—</span>}
+                        : <span className="text-fg-muted">—</span>}
                     </div>
-                    <div className="text-right text-sm font-medium text-stone-700 tabular-nums">
+                    <div className="text-right text-sm font-medium text-fg-secondary tabular-nums">
                       {lineTotal != null && lineTotal > 0
                         ? `$${lineTotal.toFixed(2)}`
-                        : <span className="text-stone-300">—</span>}
+                        : <span className="text-fg-muted">—</span>}
                     </div>
                   </>
                 )}
@@ -607,9 +607,9 @@ export default function LotQuantities({
           grandTotal += qty * item.unit_price
         }
         return grandTotal > 0 ? (
-          <div className="rounded-xl border border-stone-200 bg-white px-4 py-3 flex items-center justify-between">
-            <span className="text-sm font-medium text-stone-700">Estimated total</span>
-            <span className="text-lg font-bold text-stone-900">${grandTotal.toFixed(2)}</span>
+          <div className="rounded-xl border border-border bg-surface px-4 py-3 flex items-center justify-between">
+            <span className="text-sm font-medium text-fg-secondary">Estimated total</span>
+            <span className="text-lg font-bold text-fg">${grandTotal.toFixed(2)}</span>
           </div>
         ) : null
       })()}
@@ -617,13 +617,13 @@ export default function LotQuantities({
       {/* Notes */}
       {canManage && !isApproved && (
         <div>
-          <label className="block text-sm font-medium text-stone-700 mb-1">Notes</label>
+          <label className="block text-sm font-medium text-fg-secondary mb-1">Notes</label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
             placeholder="Any notes about this quantity takeoff…"
-            className="block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 resize-none"
+            className="block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg placeholder:text-fg-muted shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 resize-none"
           />
         </div>
       )}
@@ -632,7 +632,7 @@ export default function LotQuantities({
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
       )}
       {saved && (
-        <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">Saved successfully.</p>
+        <p className="rounded-lg bg-accent-dim px-3 py-2 text-sm text-accent-fg">Saved successfully.</p>
       )}
 
       {/* Actions */}
@@ -642,7 +642,7 @@ export default function LotQuantities({
             type="button"
             onClick={() => handleSave('draft')}
             disabled={isPending}
-            className="flex-1 rounded-lg border border-stone-300 px-4 py-3 text-sm font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50"
+            className="flex-1 rounded-lg border border-border px-4 py-3 text-sm font-medium text-fg-secondary hover:bg-surface-raised disabled:opacity-50"
           >
             {isPending ? 'Saving…' : 'Save draft'}
           </button>

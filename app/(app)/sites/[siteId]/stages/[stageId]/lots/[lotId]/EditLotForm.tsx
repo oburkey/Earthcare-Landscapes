@@ -50,14 +50,14 @@ export default function EditLotForm({
 
       {/* Status — all roles */}
       <div>
-        <label htmlFor="status" className="block text-sm font-medium text-stone-700">
+        <label htmlFor="status" className="block text-sm font-medium text-fg-secondary">
           Status
         </label>
         <select
           id="status"
           name="status"
           defaultValue={currentStatus}
-          className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-white"
+          className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-surface"
         >
           {STATUS_OPTIONS.map(([value, { label }]) => (
             <option key={value} value={value}>
@@ -69,7 +69,7 @@ export default function EditLotForm({
 
       {/* Notes — all roles */}
       <div>
-        <label htmlFor="notes" className="block text-sm font-medium text-stone-700">
+        <label htmlFor="notes" className="block text-sm font-medium text-fg-secondary">
           Notes
         </label>
         <textarea
@@ -78,7 +78,7 @@ export default function EditLotForm({
           rows={4}
           defaultValue={currentNotes ?? ''}
           placeholder="Add notes about this lot…"
-          className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 resize-none"
+          className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 resize-none"
         />
       </div>
 
@@ -86,7 +86,7 @@ export default function EditLotForm({
       {canManage && (
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label htmlFor="due_date" className="block text-sm font-medium text-stone-700">
+            <label htmlFor="due_date" className="block text-sm font-medium text-fg-secondary">
               Due date
             </label>
             <input
@@ -94,11 +94,11 @@ export default function EditLotForm({
               name="due_date"
               type="date"
               defaultValue={currentDueDate ?? ''}
-              className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+              className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
             />
           </div>
           <div>
-            <label htmlFor="scheduled_date" className="block text-sm font-medium text-stone-700">
+            <label htmlFor="scheduled_date" className="block text-sm font-medium text-fg-secondary">
               Scheduled date
             </label>
             <input
@@ -106,7 +106,7 @@ export default function EditLotForm({
               name="scheduled_date"
               type="date"
               defaultValue={currentScheduledDate ?? ''}
-              className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+              className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
             />
           </div>
         </div>
@@ -115,11 +115,11 @@ export default function EditLotForm({
       {/* Contract price — only when stage has contract pricing enabled */}
       {isContractPricing && canManage && (
         <div>
-          <label htmlFor="contract_price" className="block text-sm font-medium text-stone-700">
+          <label htmlFor="contract_price" className="block text-sm font-medium text-fg-secondary">
             Contract price
           </label>
           <div className="relative mt-1">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">$</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-fg-muted">$</span>
             <input
               id="contract_price"
               name="contract_price"
@@ -128,10 +128,10 @@ export default function EditLotForm({
               step="0.01"
               defaultValue={contractPrice ?? defaultContractPrice ?? ''}
               placeholder="0.00"
-              className="block w-full rounded-lg border border-stone-300 pl-7 pr-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+              className="block w-full rounded-lg border border-border pl-7 pr-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
             />
           </div>
-          <p className="mt-1 text-xs text-stone-400">
+          <p className="mt-1 text-xs text-fg-muted">
             Fixed price for this lot (overrides quant sheet total)
           </p>
         </div>
@@ -153,7 +153,7 @@ export default function EditLotForm({
     </form>
 
     {isAdmin && (
-      <div className="mt-4 pt-3 border-t border-stone-100">
+      <div className="mt-4 pt-3 border-t border-border-subtle">
         {!confirmDelete ? (
           <button
             type="button"
@@ -164,7 +164,7 @@ export default function EditLotForm({
           </button>
         ) : (
           <div className="space-y-2">
-            <p className="text-sm text-stone-700">
+            <p className="text-sm text-fg-secondary">
               Permanently delete this lot and all its photos, documents, and quantities?
             </p>
             <div className="flex items-center gap-3">
@@ -183,7 +183,7 @@ export default function EditLotForm({
               <button
                 type="button"
                 onClick={() => setConfirmDelete(false)}
-                className="text-sm text-stone-500 hover:text-stone-700"
+                className="text-sm text-fg-muted hover:text-fg-secondary"
               >
                 Cancel
               </button>

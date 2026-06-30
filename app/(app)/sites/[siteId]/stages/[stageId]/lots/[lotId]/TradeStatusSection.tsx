@@ -44,42 +44,42 @@ export default function TradeStatusSection({
 
   if (!canManage) {
     return (
-      <div className="rounded-xl border border-stone-200 bg-white p-5 space-y-3">
+      <div className="rounded-xl border border-border bg-surface p-5 space-y-3">
         <div>
-          <p className="text-xs font-medium text-stone-500 mb-1.5">Trades completed</p>
+          <p className="text-xs font-medium text-fg-muted mb-1.5">Trades completed</p>
           {tradesCompleted.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">
               {tradesCompleted.map((trade) => (
-                <span key={trade} className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-700">
+                <span key={trade} className="rounded-full bg-surface-raised px-2.5 py-1 text-xs font-medium text-fg-secondary">
                   {trade}
                 </span>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-stone-400">None recorded</p>
+            <p className="text-sm text-fg-muted">None recorded</p>
           )}
         </div>
         <div>
-          <p className="text-xs font-medium text-stone-500 mb-1">Ready for landscaping?</p>
+          <p className="text-xs font-medium text-fg-muted mb-1">Ready for landscaping?</p>
           <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-semibold ${
-            readyForLandscaping ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+            readyForLandscaping ? 'bg-accent-dim text-accent-fg' : 'bg-amber-100 text-amber-700'
           }`}>
             {readyForLandscaping ? 'Yes' : 'No'}
           </span>
         </div>
         {!readyForLandscaping && blockingNotes && (
           <div>
-            <p className="text-xs font-medium text-stone-500 mb-1">What&apos;s blocking us?</p>
-            <p className="text-sm text-stone-800 whitespace-pre-wrap">{blockingNotes}</p>
+            <p className="text-xs font-medium text-fg-muted mb-1">What&apos;s blocking us?</p>
+            <p className="text-sm text-fg-secondary whitespace-pre-wrap">{blockingNotes}</p>
           </div>
         )}
-        {lastUpdated && <p className="text-xs text-stone-400">{lastUpdated}</p>}
+        {lastUpdated && <p className="text-xs text-fg-muted">{lastUpdated}</p>}
       </div>
     )
   }
 
   return (
-    <div className="rounded-xl border border-stone-200 bg-white p-5">
+    <div className="rounded-xl border border-border bg-surface p-5">
       <form action={action} className="space-y-4">
         <input type="hidden" name="lot_id" value={lotId} />
         <input type="hidden" name="site_id" value={siteId} />
@@ -88,19 +88,19 @@ export default function TradeStatusSection({
 
         {/* Trades completed */}
         <div>
-          <p className="block text-sm font-medium text-stone-700 mb-2">Trades completed</p>
+          <p className="block text-sm font-medium text-fg-secondary mb-2">Trades completed</p>
           <div className="flex flex-wrap gap-2">
             {TRADE_OPTIONS.map((trade) => (
-              <label key={trade} className="flex items-center gap-1.5 cursor-pointer rounded-lg border border-stone-200 px-3 py-1.5">
+              <label key={trade} className="flex items-center gap-1.5 cursor-pointer rounded-lg border border-border px-3 py-1.5">
                 <input
                   type="checkbox"
                   name="trades_completed"
                   value={trade}
                   checked={trades.includes(trade)}
                   onChange={() => toggleTrade(trade)}
-                  className="h-4 w-4 rounded border-stone-300 text-green-700 focus:ring-green-600"
+                  className="h-4 w-4 rounded border-border text-accent-fg focus:ring-green-600"
                 />
-                <span className="text-sm text-stone-700">{trade}</span>
+                <span className="text-sm text-fg-secondary">{trade}</span>
               </label>
             ))}
           </div>
@@ -108,13 +108,13 @@ export default function TradeStatusSection({
 
         {/* Ready for landscaping toggle */}
         <div>
-          <p className="block text-sm font-medium text-stone-700 mb-2">Ready for landscaping?</p>
+          <p className="block text-sm font-medium text-fg-secondary mb-2">Ready for landscaping?</p>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => setReady(true)}
               className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                ready ? 'bg-green-700 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                ready ? 'bg-green-700 text-white' : 'bg-surface-raised text-fg-muted hover:bg-surface-raised'
               }`}
             >
               Yes
@@ -123,7 +123,7 @@ export default function TradeStatusSection({
               type="button"
               onClick={() => setReady(false)}
               className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                !ready ? 'bg-amber-600 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                !ready ? 'bg-amber-600 text-white' : 'bg-surface-raised text-fg-muted hover:bg-surface-raised'
               }`}
             >
               No
@@ -134,7 +134,7 @@ export default function TradeStatusSection({
         {/* Blocking notes — required when not ready */}
         {!ready && (
           <div>
-            <label htmlFor="blocking_notes" className="block text-sm font-medium text-stone-700">
+            <label htmlFor="blocking_notes" className="block text-sm font-medium text-fg-secondary">
               What&apos;s blocking us?
             </label>
             <textarea
@@ -144,12 +144,12 @@ export default function TradeStatusSection({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="e.g. Waiting on fencer to finish boundary"
-              className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 resize-none"
+              className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 resize-none"
             />
           </div>
         )}
 
-        {lastUpdated && <p className="text-xs text-stone-400">{lastUpdated}</p>}
+        {lastUpdated && <p className="text-xs text-fg-muted">{lastUpdated}</p>}
 
         {state?.error && (
           <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { Role } from '@/types/database'
+import ThemeToggle from './ThemeToggle'
 
 interface Props {
   role: Role
@@ -99,11 +100,11 @@ function NavLinks({ items, pathname, onClick }: { items: NavItem[]; pathname: st
             onClick={onClick}
             className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
               active
-                ? 'bg-green-700 text-white'
-                : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'
+                ? 'bg-accent text-white'
+                : 'text-fg-secondary hover:bg-surface-raised hover:text-fg'
             }`}
           >
-            <span className={active ? 'text-white' : 'text-stone-400'}>{item.icon}</span>
+            <span className={active ? 'text-white' : 'text-fg-muted'}>{item.icon}</span>
             {item.label}
           </Link>
         )
@@ -128,30 +129,37 @@ export default function AppNav({ role, name }: Props) {
   return (
     <>
       {/* ── Desktop / tablet sidebar (always visible on md+) ─────────────────── */}
-      <aside className="hidden md:flex fixed inset-y-0 left-0 w-60 flex-col bg-white border-r border-stone-200 z-20">
+      <aside className="hidden md:flex fixed inset-y-0 left-0 w-60 flex-col bg-surface border-r border-border z-20">
         {/* Logo */}
-        <div className="flex items-center h-14 px-5 border-b border-stone-200 shrink-0">
-          <Link href="/dashboard" className="text-sm font-bold text-green-700 tracking-tight">
+        <div className="flex items-center h-14 px-5 border-b border-border shrink-0">
+          <Link href="/dashboard" className="text-sm font-bold tracking-tight">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/earthcare-logo.png" alt="Earthcare Landscapes" className="h-8 w-auto" />
+            <img src="/earthcare-logo.png" alt="Earthcare Landscapes" className="h-8 w-auto dark:hidden" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/earthcare-logo-dark.png" alt="Earthcare Landscapes" className="h-8 w-auto hidden dark:block" />
           </Link>
         </div>
 
         <NavLinks items={visibleItems} pathname={pathname} />
 
         {/* User footer */}
-        <div className="shrink-0 px-4 py-3 border-t border-stone-100">
-          <p className="text-xs font-medium text-stone-700 truncate">{name}</p>
-          <p className="text-xs text-stone-400 capitalize">{role.replace('_', ' ')}</p>
+        <div className="shrink-0 px-4 py-3 border-t border-border-subtle">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-fg-secondary truncate">{name}</p>
+              <p className="text-xs text-fg-muted capitalize">{role.replace('_', ' ')}</p>
+            </div>
+            <ThemeToggle />
+          </div>
         </div>
       </aside>
 
       {/* ── Mobile top bar ────────────────────────────────────────────────────── */}
-      <header className="md:hidden fixed top-0 inset-x-0 z-30 h-14 bg-white border-b border-stone-200 flex items-center px-4">
+      <header className="md:hidden fixed top-0 inset-x-0 z-30 h-14 bg-surface border-b border-border flex items-center px-4">
         <button
           onClick={() => setMobileOpen((v) => !v)}
           aria-label="Toggle menu"
-          className="flex items-center justify-center w-9 h-9 rounded-lg text-stone-600 hover:bg-stone-100"
+          className="flex items-center justify-center w-9 h-9 rounded-lg text-fg-secondary hover:bg-surface-raised"
         >
           {mobileOpen ? (
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -164,9 +172,11 @@ export default function AppNav({ role, name }: Props) {
           )}
         </button>
         <div className="flex-1 flex justify-center">
-          <Link href="/dashboard" className="text-sm font-bold text-green-700 tracking-tight">
+          <Link href="/dashboard" className="text-sm font-bold tracking-tight">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/earthcare-logo.png" alt="Earthcare Landscapes" className="h-8 w-auto" />
+            <img src="/earthcare-logo.png" alt="Earthcare Landscapes" className="h-8 w-auto dark:hidden" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/earthcare-logo-dark.png" alt="Earthcare Landscapes" className="h-8 w-auto hidden dark:block" />
           </Link>
         </div>
         {/* Spacer to keep logo visually centred */}
@@ -184,18 +194,20 @@ export default function AppNav({ role, name }: Props) {
 
       {/* Drawer */}
       <div
-        className={`md:hidden fixed inset-y-0 left-0 z-50 w-72 bg-white flex flex-col transform transition-transform duration-200 ease-in-out ${
+        className={`md:hidden fixed inset-y-0 left-0 z-50 w-72 bg-surface flex flex-col transform transition-transform duration-200 ease-in-out ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex items-center justify-between h-14 px-4 border-b border-stone-200 shrink-0">
-          <Link href="/dashboard" className="text-sm font-bold text-green-700 tracking-tight">
+        <div className="flex items-center justify-between h-14 px-4 border-b border-border shrink-0">
+          <Link href="/dashboard" className="text-sm font-bold tracking-tight">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/earthcare-logo.png" alt="Earthcare Landscapes" className="h-8 w-auto" />
+            <img src="/earthcare-logo.png" alt="Earthcare Landscapes" className="h-8 w-auto dark:hidden" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/earthcare-logo-dark.png" alt="Earthcare Landscapes" className="h-8 w-auto hidden dark:block" />
           </Link>
           <button
             onClick={() => setMobileOpen(false)}
-            className="flex items-center justify-center w-8 h-8 rounded-lg text-stone-500 hover:bg-stone-100"
+            className="flex items-center justify-center w-8 h-8 rounded-lg text-fg-muted hover:bg-surface-raised"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -205,9 +217,14 @@ export default function AppNav({ role, name }: Props) {
 
         <NavLinks items={visibleItems} pathname={pathname} onClick={() => setMobileOpen(false)} />
 
-        <div className="shrink-0 px-4 py-3 border-t border-stone-100">
-          <p className="text-xs font-medium text-stone-700 truncate">{name}</p>
-          <p className="text-xs text-stone-400 capitalize">{role.replace('_', ' ')}</p>
+        <div className="shrink-0 px-4 py-3 border-t border-border-subtle">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-fg-secondary truncate">{name}</p>
+              <p className="text-xs text-fg-muted capitalize">{role.replace('_', ' ')}</p>
+            </div>
+            <ThemeToggle />
+          </div>
         </div>
       </div>
     </>

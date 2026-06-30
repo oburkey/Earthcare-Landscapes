@@ -65,9 +65,9 @@ export default async function SchedulePage() {
   const today = new Date().toISOString().split('T')[0]
 
   return (
-    <div className="min-h-screen bg-stone-50">
+    <div className="min-h-screen bg-bg">
       <div className="mx-auto max-w-5xl px-4 py-6 space-y-5">
-        <h1 className="text-xl font-semibold text-stone-900">Schedule</h1>
+        <h1 className="text-xl font-semibold text-fg">Schedule</h1>
         <ScheduleView lotItems={lotItems} jobItems={jobItems} sites={sites} today={today} />
       </div>
     </div>

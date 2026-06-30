@@ -23,7 +23,7 @@ export default function ExtraJobForm({ stageId, siteId }: Props) {
       <input type="hidden" name="site_id"  value={siteId} />
 
       <div>
-        <label htmlFor="title" className="block text-sm font-medium text-stone-700">
+        <label htmlFor="title" className="block text-sm font-medium text-fg-secondary">
           Title <span className="text-red-500">*</span>
         </label>
         <input
@@ -32,12 +32,12 @@ export default function ExtraJobForm({ stageId, siteId }: Props) {
           type="text"
           required
           placeholder="e.g. Clean up drainage channel"
-          className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+          className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
         />
       </div>
 
       <div>
-        <label htmlFor="description" className="block text-sm font-medium text-stone-700">
+        <label htmlFor="description" className="block text-sm font-medium text-fg-secondary">
           Description
         </label>
         <textarea
@@ -45,19 +45,19 @@ export default function ExtraJobForm({ stageId, siteId }: Props) {
           name="description"
           rows={2}
           placeholder="Brief description of the work…"
-          className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 resize-none"
+          className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 resize-none"
         />
       </div>
 
       <div>
-        <label htmlFor="status" className="block text-sm font-medium text-stone-700">
+        <label htmlFor="status" className="block text-sm font-medium text-fg-secondary">
           Status
         </label>
         <select
           id="status"
           name="status"
           defaultValue="not_started"
-          className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-white"
+          className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-surface"
         >
           {EXTRA_JOB_STATUS_OPTIONS.map(({ value, label }) => (
             <option key={value} value={value}>{label}</option>
@@ -66,19 +66,19 @@ export default function ExtraJobForm({ stageId, siteId }: Props) {
       </div>
 
       <div>
-        <label htmlFor="due_date" className="block text-sm font-medium text-stone-700">
+        <label htmlFor="due_date" className="block text-sm font-medium text-fg-secondary">
           Due date
         </label>
         <input
           id="due_date"
           name="due_date"
           type="date"
-          className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+          className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
         />
       </div>
 
       <div>
-        <label htmlFor="notes" className="block text-sm font-medium text-stone-700">
+        <label htmlFor="notes" className="block text-sm font-medium text-fg-secondary">
           Notes
         </label>
         <textarea
@@ -86,7 +86,7 @@ export default function ExtraJobForm({ stageId, siteId }: Props) {
           name="notes"
           rows={3}
           placeholder="Any relevant notes…"
-          className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 resize-none"
+          className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 resize-none"
         />
       </div>
 
@@ -104,7 +104,7 @@ export default function ExtraJobForm({ stageId, siteId }: Props) {
         </button>
         <Link
           href={`/sites/${siteId}/stages/${stageId}`}
-          className="text-sm text-stone-500 hover:text-stone-700"
+          className="text-sm text-fg-muted hover:text-fg-secondary"
         >
           Cancel
         </Link>

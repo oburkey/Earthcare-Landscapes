@@ -163,7 +163,7 @@ function Spinner() {
 function ChevronIcon({ expanded }: { expanded: boolean }) {
   return (
     <svg
-      className={`h-4 w-4 shrink-0 text-stone-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
+      className={`h-4 w-4 shrink-0 text-fg-muted transition-transform ${expanded ? 'rotate-180' : ''}`}
       fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
     >
       <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -173,7 +173,7 @@ function ChevronIcon({ expanded }: { expanded: boolean }) {
 
 function CameraIcon() {
   return (
-    <svg className="h-5 w-5 text-stone-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+    <svg className="h-5 w-5 text-fg-muted" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
     </svg>
@@ -185,8 +185,8 @@ function CameraIcon() {
 function DetailField({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div className="space-y-0.5">
-      <p className="text-xs font-semibold text-stone-400 uppercase tracking-wide">{label}</p>
-      <p className="text-sm text-stone-700 whitespace-pre-wrap">{value ?? <span className="italic text-stone-400">—</span>}</p>
+      <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">{label}</p>
+      <p className="text-sm text-fg-secondary whitespace-pre-wrap">{value ?? <span className="italic text-fg-muted">—</span>}</p>
     </div>
   )
 }
@@ -387,50 +387,50 @@ export default function IncidentsTab({
       <div className="space-y-5">
         <div className="flex items-center gap-3">
           <button type="button" onClick={() => setView('list')}
-            className="flex items-center gap-1 text-sm text-stone-500 hover:text-stone-800 transition-colors">
+            className="flex items-center gap-1 text-sm text-fg-muted hover:text-fg transition-colors">
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
             </svg>
             Incidents
           </button>
-          <span className="text-stone-300">/</span>
-          <h2 className="text-lg font-semibold text-stone-900">New incident report</h2>
+          <span className="text-fg-muted">/</span>
+          <h2 className="text-lg font-semibold text-fg">New incident report</h2>
         </div>
 
-        <div className="rounded-xl border border-stone-200 bg-white p-5 space-y-6">
+        <div className="rounded-xl border border-border bg-surface p-5 space-y-6">
 
           {/* Site / Date / Time */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Site *</label>
+              <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Site *</label>
               <select value={siteId} onChange={e => setSiteId(e.target.value)}
-                className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 focus:border-stone-400 focus:outline-none">
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-border focus:outline-none">
                 <option value="">— Select site —</option>
                 {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Date *</label>
+              <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Date *</label>
               <input type="date" value={date} onChange={e => setDate(e.target.value)}
-                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 focus:border-stone-400 focus:outline-none" />
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-border focus:outline-none" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Time</label>
+              <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Time</label>
               <input type="time" value={time} onChange={e => setTime(e.target.value)}
-                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 focus:border-stone-400 focus:outline-none" />
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-border focus:outline-none" />
             </div>
           </div>
 
           {/* Type */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Type *</label>
+            <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Type *</label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {(Object.entries(TYPE_CONFIG) as [IncidentType, { label: string; cls: string }][]).map(([key, cfg]) => (
                 <button key={key} type="button" onClick={() => setType(key)}
                   className={`rounded-lg border px-3 py-2 text-sm font-medium text-left transition-colors ${
                     type === key
                       ? 'border-stone-900 bg-stone-900 text-white'
-                      : 'border-stone-200 text-stone-700 hover:border-stone-300'
+                      : 'border-border text-fg-secondary hover:border-border'
                   }`}>
                   {cfg.label}
                 </button>
@@ -440,37 +440,37 @@ export default function IncidentsTab({
 
           {/* Description */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Description *</label>
+            <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Description *</label>
             <textarea value={description} onChange={e => setDescription(e.target.value)}
               placeholder="Describe what happened…" rows={4}
-              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none resize-none" />
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-border focus:outline-none resize-none" />
           </div>
 
           {/* People involved */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">People involved</label>
+            <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">People involved</label>
             <textarea value={peopleInvolved} onChange={e => setPeopleInvolved(e.target.value)}
               placeholder="Names of people involved or injured…" rows={2}
-              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none resize-none" />
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-border focus:outline-none resize-none" />
           </div>
 
           {/* Immediate action */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Immediate action taken</label>
+            <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Immediate action taken</label>
             <textarea value={immediateAction} onChange={e => setImmediateAction(e.target.value)}
               placeholder="What was done immediately after the incident…" rows={2}
-              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none resize-none" />
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-border focus:outline-none resize-none" />
           </div>
 
           {/* Photos */}
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Photos (optional)</label>
+            <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Photos (optional)</label>
             {photoPreviews.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {photoPreviews.map((url, i) => (
                   <div key={i} className="relative">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={url} alt="" className="h-20 w-20 rounded-lg object-cover border border-stone-200" />
+                    <img src={url} alt="" className="h-20 w-20 rounded-lg object-cover border border-border" />
                     <button type="button" onClick={() => removePhoto(i)}
                       className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-white text-xs font-bold hover:bg-red-700">
                       ×
@@ -487,7 +487,7 @@ export default function IncidentsTab({
               }} />
             {photos.length < 10 && (
               <button type="button" onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-2 rounded-lg border border-dashed border-stone-300 px-4 py-2.5 text-sm text-stone-500 hover:border-stone-400 hover:text-stone-700 transition-colors">
+                className="flex items-center gap-2 rounded-lg border border-dashed border-border px-4 py-2.5 text-sm text-fg-muted hover:border-border hover:text-fg-secondary transition-colors">
                 <CameraIcon />
                 Add photo
               </button>
@@ -505,7 +505,7 @@ export default function IncidentsTab({
             {saving ? 'Submitting…' : 'Submit incident report'}
           </button>
           <button type="button" onClick={() => setView('list')}
-            className="text-sm text-stone-500 hover:text-stone-700 transition-colors">Cancel</button>
+            className="text-sm text-fg-muted hover:text-fg-secondary transition-colors">Cancel</button>
         </div>
       </div>
     )
@@ -524,7 +524,7 @@ export default function IncidentsTab({
 
       <div className="space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <h2 className="text-sm font-semibold text-stone-700">
+          <h2 className="text-sm font-semibold text-fg-secondary">
             Incidents — {incidents.length} record{incidents.length !== 1 ? 's' : ''}
           </h2>
           {canManage && tableExists && (
@@ -536,31 +536,31 @@ export default function IncidentsTab({
         </div>
 
         {/* Filters */}
-        <div className="rounded-xl border border-stone-200 bg-white p-4">
-          <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-3">Filter</p>
+        <div className="rounded-xl border border-border bg-surface p-4">
+          <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-3">Filter</p>
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 items-end">
             <div className="space-y-1">
-              <label className="text-xs text-stone-500">From</label>
+              <label className="text-xs text-fg-muted">From</label>
               <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
-                className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-sm text-stone-900 focus:border-stone-400 focus:outline-none" />
+                className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-fg focus:border-border focus:outline-none" />
             </div>
             <div className="space-y-1">
-              <label className="text-xs text-stone-500">To</label>
+              <label className="text-xs text-fg-muted">To</label>
               <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
-                className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-sm text-stone-900 focus:border-stone-400 focus:outline-none" />
+                className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-fg focus:border-border focus:outline-none" />
             </div>
             <div className="space-y-1">
-              <label className="text-xs text-stone-500">Site</label>
+              <label className="text-xs text-fg-muted">Site</label>
               <select value={filterSite} onChange={e => setFilterSite(e.target.value)}
-                className="w-full rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-sm text-stone-900 focus:border-stone-400 focus:outline-none">
+                className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-fg focus:border-border focus:outline-none">
                 <option value="">All sites</option>
                 {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
             <div className="space-y-1">
-              <label className="text-xs text-stone-500">Type</label>
+              <label className="text-xs text-fg-muted">Type</label>
               <select value={filterType} onChange={e => setFilterType(e.target.value)}
-                className="w-full rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-sm text-stone-900 focus:border-stone-400 focus:outline-none">
+                className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-fg focus:border-border focus:outline-none">
                 <option value="">All types</option>
                 {(Object.entries(TYPE_CONFIG) as [IncidentType, { label: string }][]).map(([key, cfg]) => (
                   <option key={key} value={key}>{cfg.label}</option>
@@ -570,10 +570,10 @@ export default function IncidentsTab({
             <div className="flex gap-2">
               <button type="button"
                 onClick={() => { setFilterFrom(''); setFilterTo(''); setFilterSite(''); setFilterType('') }}
-                className="text-xs text-stone-400 hover:text-stone-700 transition-colors">Clear</button>
+                className="text-xs text-fg-muted hover:text-fg-secondary transition-colors">Clear</button>
               <button type="button" onClick={handleExportPdf}
                 disabled={pdfGenerating || filtered.length === 0}
-                className="flex items-center gap-1.5 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50 transition-colors">
+                className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-secondary hover:bg-surface-raised disabled:opacity-50 transition-colors">
                 {pdfGenerating ? <Spinner /> : <PdfIcon />}
                 Export PDF
               </button>
@@ -588,15 +588,15 @@ export default function IncidentsTab({
       )}
 
       {filtered.length === 0 ? (
-        <div className="rounded-xl border border-stone-200 bg-white px-4 py-14 text-center">
-          <p className="text-sm font-medium text-stone-600">
+        <div className="rounded-xl border border-border bg-surface px-4 py-14 text-center">
+          <p className="text-sm font-medium text-fg-muted">
             {incidents.length === 0 ? 'No incidents recorded yet.' : 'No incidents match this filter.'}
           </p>
         </div>
       ) : (
-        <div className="rounded-xl border border-stone-200 bg-white overflow-hidden divide-y divide-stone-100">
+        <div className="rounded-xl border border-border bg-surface overflow-hidden divide-y divide-border-subtle">
           {filtered.map(incident => {
-            const cfg = TYPE_CONFIG[incident.type as IncidentType] ?? { label: incident.type, cls: 'bg-stone-100 text-stone-700' }
+            const cfg = TYPE_CONFIG[incident.type as IncidentType] ?? { label: incident.type, cls: 'bg-surface-raised text-fg-secondary' }
             const isExpanded     = expandedId === incident.id
             const isConfirming   = confirmDeleteId === incident.id
             const isEditingNotes = editingNotesId === incident.id
@@ -609,56 +609,56 @@ export default function IncidentsTab({
                 <button
                   type="button"
                   onClick={() => handleExpand(incident)}
-                  className="w-full flex items-start gap-3 px-5 py-4 text-left hover:bg-stone-50 transition-colors"
+                  className="w-full flex items-start gap-3 px-5 py-4 text-left hover:bg-surface-raised transition-colors"
                 >
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs text-stone-400">
+                      <span className="text-xs text-fg-muted">
                         {fmtDate(incident.date)}{timeLabel ? ` · ${timeLabel}` : ''}
                       </span>
-                      <span className="font-semibold text-stone-900 text-sm">{incident.siteName}</span>
+                      <span className="font-semibold text-fg text-sm">{incident.siteName}</span>
                       <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${cfg.cls}`}>
                         {cfg.label}
                       </span>
                       {incident.photoPaths.length > 0 && (
-                        <span className="text-xs text-stone-400">
+                        <span className="text-xs text-fg-muted">
                           · {incident.photoPaths.length} photo{incident.photoPaths.length !== 1 ? 's' : ''}
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-stone-700 line-clamp-2">{incident.description}</p>
-                    <p className="text-xs text-stone-400">Reported by {incident.reporterName}</p>
+                    <p className="text-sm text-fg-secondary line-clamp-2">{incident.description}</p>
+                    <p className="text-xs text-fg-muted">Reported by {incident.reporterName}</p>
                   </div>
                   <ChevronIcon expanded={isExpanded} />
                 </button>
 
                 {/* Expanded detail */}
                 {isExpanded && (
-                  <div className="border-t border-stone-100 bg-stone-50 px-5 py-4 space-y-4">
+                  <div className="border-t border-border-subtle bg-surface-raised px-5 py-4 space-y-4">
 
                     <div className="space-y-3">
                       <DetailField label="Description" value={incident.description} />
                       <DetailField label="People involved" value={incident.peopleInvolved} />
                       <DetailField label="Immediate action taken" value={incident.immediateAction} />
                       <div className="space-y-0.5">
-                        <p className="text-xs font-semibold text-stone-400 uppercase tracking-wide">Reported by</p>
-                        <p className="text-sm text-stone-700">{incident.reporterName}</p>
+                        <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Reported by</p>
+                        <p className="text-sm text-fg-secondary">{incident.reporterName}</p>
                       </div>
                     </div>
 
                     {/* Photos */}
                     {incident.photoPaths.length > 0 && (
                       <div className="space-y-2">
-                        <p className="text-xs font-semibold text-stone-400 uppercase tracking-wide">Photos</p>
+                        <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Photos</p>
                         {loadingPhotos && !photoUrls[incident.id] ? (
-                          <p className="text-xs text-stone-400">Loading photos…</p>
+                          <p className="text-xs text-fg-muted">Loading photos…</p>
                         ) : (
                           <div className="flex flex-wrap gap-2">
                             {(photoUrls[incident.id] ?? []).map((url, i) => (
                               <a key={i} href={url} target="_blank" rel="noopener noreferrer">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img src={url} alt={`Photo ${i + 1}`}
-                                  className="h-24 w-24 rounded-lg object-cover border border-stone-200 hover:opacity-90 transition-opacity" />
+                                  className="h-24 w-24 rounded-lg object-cover border border-border hover:opacity-90 transition-opacity" />
                               </a>
                             ))}
                           </div>
@@ -669,7 +669,7 @@ export default function IncidentsTab({
                     {/* Follow-up notes (admin notes) */}
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
-                        <p className="text-xs font-semibold text-stone-400 uppercase tracking-wide">Follow-up notes</p>
+                        <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Follow-up notes</p>
                         {isAdmin && !isEditingNotes && (
                           <button type="button"
                             onClick={() => {
@@ -677,7 +677,7 @@ export default function IncidentsTab({
                               setEditingNotesValue(incident.adminNotes ?? '')
                               setNotesError(null)
                             }}
-                            className="text-xs text-stone-400 underline underline-offset-2 hover:text-stone-700 transition-colors">
+                            className="text-xs text-fg-muted underline underline-offset-2 hover:text-fg-secondary transition-colors">
                             {incident.adminNotes ? 'Edit' : 'Add'}
                           </button>
                         )}
@@ -689,7 +689,7 @@ export default function IncidentsTab({
                             onChange={e => setEditingNotesValue(e.target.value)}
                             rows={3}
                             placeholder="Admin follow-up notes…"
-                            className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none resize-none bg-white"
+                            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-border focus:outline-none resize-none bg-surface"
                           />
                           {notesError && <p className="text-xs text-red-600">{notesError}</p>}
                           <div className="flex items-center gap-2">
@@ -698,33 +698,33 @@ export default function IncidentsTab({
                               {savingNotes ? 'Saving…' : 'Save'}
                             </button>
                             <button type="button" onClick={() => { setEditingNotesId(null); setNotesError(null) }}
-                              className="text-xs text-stone-400 hover:text-stone-600 transition-colors">Cancel</button>
+                              className="text-xs text-fg-muted hover:text-fg-secondary transition-colors">Cancel</button>
                           </div>
                         </div>
                       ) : (
-                        <p className="text-sm text-stone-700 whitespace-pre-wrap">
-                          {incident.adminNotes ?? <span className="italic text-stone-400">None</span>}
+                        <p className="text-sm text-fg-secondary whitespace-pre-wrap">
+                          {incident.adminNotes ?? <span className="italic text-fg-muted">None</span>}
                         </p>
                       )}
                     </div>
 
                     {/* Admin delete */}
                     {isAdmin && (
-                      <div className="pt-1 border-t border-stone-200">
+                      <div className="pt-1 border-t border-border">
                         {isConfirming ? (
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-stone-500">Delete this incident and all photos?</span>
+                            <span className="text-xs text-fg-muted">Delete this incident and all photos?</span>
                             <button type="button" onClick={() => handleDelete(incident.id)} disabled={deleting}
                               className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50 transition-colors">
                               {deleting ? '…' : 'Yes, delete'}
                             </button>
                             <button type="button"
                               onClick={() => { setConfirmDeleteId(null); setDeleteError(null) }}
-                              className="text-xs text-stone-400 hover:text-stone-600 transition-colors">Cancel</button>
+                              className="text-xs text-fg-muted hover:text-fg-secondary transition-colors">Cancel</button>
                           </div>
                         ) : (
                           <button type="button" onClick={() => setConfirmDeleteId(incident.id)}
-                            className="text-xs text-stone-400 hover:text-red-500 transition-colors">
+                            className="text-xs text-fg-muted hover:text-red-500 transition-colors">
                             Delete incident
                           </button>
                         )}

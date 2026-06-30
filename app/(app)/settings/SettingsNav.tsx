@@ -12,7 +12,7 @@ export default function SettingsNav() {
   const pathname = usePathname()
 
   return (
-    <div className="flex gap-1 border-b border-stone-200">
+    <div className="flex gap-1 border-b border-border">
       {TABS.map((tab) => {
         const active = pathname === tab.href
         return (
@@ -21,8 +21,8 @@ export default function SettingsNav() {
             href={tab.href}
             className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
               active
-                ? 'border-green-700 text-green-700'
-                : 'border-transparent text-stone-500 hover:text-stone-700'
+                ? 'border-green-700 text-accent-fg'
+                : 'border-transparent text-fg-muted hover:text-fg-secondary'
             }`}
           >
             {tab.label}

@@ -25,7 +25,7 @@ export default function LotForm({ stageId, siteId }: Props) {
 
       {/* Lot number */}
       <div>
-        <label htmlFor="lot_number" className="block text-sm font-medium text-stone-700">
+        <label htmlFor="lot_number" className="block text-sm font-medium text-fg-secondary">
           Lot number <span className="text-red-500">*</span>
         </label>
         <input
@@ -34,20 +34,20 @@ export default function LotForm({ stageId, siteId }: Props) {
           type="text"
           required
           placeholder="e.g. 14, 14A, 14B"
-          className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+          className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-surface text-fg"
         />
       </div>
 
       {/* Status */}
       <div>
-        <label htmlFor="status" className="block text-sm font-medium text-stone-700">
+        <label htmlFor="status" className="block text-sm font-medium text-fg-secondary">
           Status
         </label>
         <select
           id="status"
           name="status"
           defaultValue="not_started"
-          className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-white"
+          className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-surface"
         >
           {STATUS_OPTIONS.map(([value, { label }]) => (
             <option key={value} value={value}>
@@ -60,32 +60,32 @@ export default function LotForm({ stageId, siteId }: Props) {
       {/* Dates */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label htmlFor="due_date" className="block text-sm font-medium text-stone-700">
+          <label htmlFor="due_date" className="block text-sm font-medium text-fg-secondary">
             Due date
           </label>
           <input
             id="due_date"
             name="due_date"
             type="date"
-            className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+            className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-surface text-fg"
           />
         </div>
         <div>
-          <label htmlFor="scheduled_date" className="block text-sm font-medium text-stone-700">
+          <label htmlFor="scheduled_date" className="block text-sm font-medium text-fg-secondary">
             Scheduled date
           </label>
           <input
             id="scheduled_date"
             name="scheduled_date"
             type="date"
-            className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+            className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-surface text-fg"
           />
         </div>
       </div>
 
       {/* Notes */}
       <div>
-        <label htmlFor="notes" className="block text-sm font-medium text-stone-700">
+        <label htmlFor="notes" className="block text-sm font-medium text-fg-secondary">
           Notes
         </label>
         <textarea
@@ -93,7 +93,7 @@ export default function LotForm({ stageId, siteId }: Props) {
           name="notes"
           rows={3}
           placeholder="Any relevant notes for this lot…"
-          className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 resize-none"
+          className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 resize-none"
         />
       </div>
 
@@ -113,7 +113,7 @@ export default function LotForm({ stageId, siteId }: Props) {
         </button>
         <Link
           href={`/sites/${siteId}/stages/${stageId}`}
-          className="text-sm text-stone-500 hover:text-stone-700"
+          className="text-sm text-fg-muted hover:text-fg-secondary"
         >
           Cancel
         </Link>

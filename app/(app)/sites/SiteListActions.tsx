@@ -58,8 +58,8 @@ export default function SiteListActions({ activeSites, completedSites, isAdmin }
 
   if (activeSites.length === 0 && completedSites.length === 0) {
     return (
-      <div className="rounded-xl border border-stone-200 bg-white px-4 py-12 text-center">
-        <p className="text-sm text-stone-500">No sites yet.</p>
+      <div className="rounded-xl border border-border bg-surface px-4 py-12 text-center">
+        <p className="text-sm text-fg-muted">No sites yet.</p>
       </div>
     )
   }
@@ -69,41 +69,41 @@ export default function SiteListActions({ activeSites, completedSites, isAdmin }
 
       {/* Active sites */}
       {activeSites.length === 0 ? (
-        <div className="rounded-xl border border-stone-200 bg-white px-4 py-8 text-center">
-          <p className="text-sm text-stone-500">No active sites.</p>
+        <div className="rounded-xl border border-border bg-surface px-4 py-8 text-center">
+          <p className="text-sm text-fg-muted">No active sites.</p>
         </div>
       ) : (
-        <div className="rounded-xl border border-stone-200 bg-white overflow-hidden divide-y divide-stone-100">
+        <div className="rounded-xl border border-border bg-surface overflow-hidden divide-y divide-border-subtle">
           {activeSites.map((site) => {
             const pct = site.total > 0 ? Math.round((site.completed / site.total) * 100) : 0
             const isConfirming = confirmId === site.id
 
             return (
-              <div key={site.id} className="flex items-center gap-3 px-4 py-4 hover:bg-stone-50 transition-colors">
+              <div key={site.id} className="flex items-center gap-3 px-4 py-4 hover:bg-surface-raised transition-colors">
 
                 {/* Navigable area */}
                 <PrefetchLink href={`/sites/${site.id}`} className="min-w-0 flex-1 flex items-center gap-4">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-stone-900 truncate">{site.name}</p>
+                    <p className="text-sm font-semibold text-fg truncate">{site.name}</p>
                     {site.address && (
-                      <p className="mt-0.5 text-xs text-stone-500 truncate">{site.address}</p>
+                      <p className="mt-0.5 text-xs text-fg-muted truncate">{site.address}</p>
                     )}
                     <div className="mt-2 flex items-center gap-3">
-                      <span className="text-xs text-stone-500">
+                      <span className="text-xs text-fg-muted">
                         {site.stageCount} stage{site.stageCount !== 1 ? 's' : ''}
                       </span>
                       {site.total > 0 && (
                         <>
-                          <span className="text-stone-300">·</span>
-                          <span className="text-xs text-stone-500">{site.completed}/{site.total} lots</span>
-                          <div className="flex-1 max-w-24 h-1.5 rounded-full bg-stone-100">
+                          <span className="text-fg-muted">·</span>
+                          <span className="text-xs text-fg-muted">{site.completed}/{site.total} lots</span>
+                          <div className="flex-1 max-w-24 h-1.5 rounded-full bg-surface-raised">
                             <div className="h-1.5 rounded-full bg-green-600" style={{ width: `${pct}%` }} />
                           </div>
                         </>
                       )}
                     </div>
                   </div>
-                  <svg className="h-4 w-4 shrink-0 text-stone-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <svg className="h-4 w-4 shrink-0 text-fg-muted" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                   </svg>
                 </PrefetchLink>
@@ -115,13 +115,13 @@ export default function SiteListActions({ activeSites, completedSites, isAdmin }
                       <button
                         type="button"
                         onClick={() => { setConfirmId(site.id); setActionError(null) }}
-                        className="rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs font-medium text-stone-500 hover:bg-stone-50 transition-colors"
+                        className="rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-fg-muted hover:bg-surface-raised transition-colors"
                       >
                         Mark complete
                       </button>
                     ) : (
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-stone-600 hidden sm:inline">Complete?</span>
+                        <span className="text-xs text-fg-secondary hidden sm:inline">Complete?</span>
                         <button
                           type="button"
                           onClick={() => handleComplete(site.id)}
@@ -134,7 +134,7 @@ export default function SiteListActions({ activeSites, completedSites, isAdmin }
                           type="button"
                           onClick={() => setConfirmId(null)}
                           disabled={isPending}
-                          className="text-xs text-stone-400 hover:text-stone-600"
+                          className="text-xs text-fg-muted hover:text-fg-secondary"
                         >
                           Cancel
                         </button>
@@ -159,7 +159,7 @@ export default function SiteListActions({ activeSites, completedSites, isAdmin }
           <button
             type="button"
             onClick={() => setShowCompleted((v) => !v)}
-            className="flex items-center gap-1.5 text-sm text-stone-400 hover:text-stone-600 transition-colors"
+            className="flex items-center gap-1.5 text-sm text-fg-muted hover:text-fg-secondary transition-colors"
           >
             <svg
               className={`h-3.5 w-3.5 transition-transform ${showCompleted ? '' : '-rotate-90'}`}
@@ -171,39 +171,39 @@ export default function SiteListActions({ activeSites, completedSites, isAdmin }
           </button>
 
           {showCompleted && (
-            <div className="mt-3 rounded-xl border border-stone-200 bg-white overflow-hidden divide-y divide-stone-100">
+            <div className="mt-3 rounded-xl border border-border bg-surface overflow-hidden divide-y divide-border-subtle">
               {completedSites.map((site) => {
                 const pct = site.total > 0 ? Math.round((site.completed / site.total) * 100) : 0
                 return (
-                  <div key={site.id} className="flex items-center gap-3 px-4 py-4 hover:bg-stone-50 transition-colors">
+                  <div key={site.id} className="flex items-center gap-3 px-4 py-4 hover:bg-surface-raised transition-colors">
 
                     <PrefetchLink href={`/sites/${site.id}`} className="min-w-0 flex-1 flex items-center gap-4">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <p className="text-sm font-semibold text-stone-500 truncate">{site.name}</p>
-                          <span className="shrink-0 rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-400">
+                          <p className="text-sm font-semibold text-fg-muted truncate">{site.name}</p>
+                          <span className="shrink-0 rounded-full bg-surface-raised px-2 py-0.5 text-xs text-fg-muted">
                             Complete
                           </span>
                         </div>
                         {site.address && (
-                          <p className="mt-0.5 text-xs text-stone-400 truncate">{site.address}</p>
+                          <p className="mt-0.5 text-xs text-fg-muted truncate">{site.address}</p>
                         )}
                         <div className="mt-2 flex items-center gap-3">
-                          <span className="text-xs text-stone-400">
+                          <span className="text-xs text-fg-muted">
                             {site.stageCount} stage{site.stageCount !== 1 ? 's' : ''}
                           </span>
                           {site.total > 0 && (
                             <>
-                              <span className="text-stone-300">·</span>
-                              <span className="text-xs text-stone-400">{site.completed}/{site.total} lots</span>
-                              <div className="flex-1 max-w-24 h-1.5 rounded-full bg-stone-100">
+                              <span className="text-fg-muted">·</span>
+                              <span className="text-xs text-fg-muted">{site.completed}/{site.total} lots</span>
+                              <div className="flex-1 max-w-24 h-1.5 rounded-full bg-surface-raised">
                                 <div className="h-1.5 rounded-full bg-stone-400" style={{ width: `${pct}%` }} />
                               </div>
                             </>
                           )}
                         </div>
                       </div>
-                      <svg className="h-4 w-4 shrink-0 text-stone-300" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <svg className="h-4 w-4 shrink-0 text-fg-muted" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                       </svg>
                     </PrefetchLink>
@@ -214,7 +214,7 @@ export default function SiteListActions({ activeSites, completedSites, isAdmin }
                         type="button"
                         onClick={() => handleActivate(site.id)}
                         disabled={isPending}
-                        className="shrink-0 rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs font-medium text-stone-500 hover:bg-stone-50 disabled:opacity-50 transition-colors"
+                        className="shrink-0 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-fg-muted hover:bg-surface-raised disabled:opacity-50 transition-colors"
                       >
                         Mark active
                       </button>

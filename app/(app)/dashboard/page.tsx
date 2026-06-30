@@ -251,7 +251,7 @@ export default async function DashboardPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-stone-50">
+    <div className="min-h-screen bg-bg">
       <div className="mx-auto max-w-4xl px-4 py-6 space-y-6">
 
         <Greeting name={profile.full_name} />
@@ -283,7 +283,7 @@ export default async function DashboardPage() {
         {/* Section 2 — Fortnight calendar (leading_hand+) */}
         {isLeadingHand && (
           <section>
-            <h2 className="text-base font-semibold text-stone-800 mb-3">Next 2 weeks</h2>
+            <h2 className="text-base font-semibold text-fg-secondary mb-3">Next 2 weeks</h2>
             <FortnightCalendar items={calendarItems} />
           </section>
         )}
@@ -299,7 +299,7 @@ export default async function DashboardPage() {
         {/* Section 5 — Needs attention (supervisor+, hidden if nothing) */}
         {isSupervisor && (vehicleAlertCount > 0 || incidentCount > 0) && (
           <section>
-            <h2 className="text-base font-semibold text-stone-800 mb-3">Needs attention</h2>
+            <h2 className="text-base font-semibold text-fg-secondary mb-3">Needs attention</h2>
             <div className="grid grid-cols-2 gap-3">
               {vehicleAlertCount > 0 && (
                 <Link href="/vehicles" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 hover:bg-amber-100 transition-colors">
@@ -336,15 +336,15 @@ function MetricCard({
     blue:  'text-blue-700',
     amber: 'text-amber-700',
     red:   'text-red-700',
-    green: 'text-green-700',
+    green: 'text-accent-fg',
   }
 
   const inner = (
-    <div className={`rounded-xl border border-stone-200 bg-white px-3 py-3.5 flex flex-col gap-1${href ? ' hover:bg-stone-50 transition-colors' : ''}`}>
+    <div className={`rounded-xl border border-border bg-surface px-3 py-3.5 flex flex-col gap-1${href ? ' hover:bg-surface-raised transition-colors' : ''}`}>
       <span className={`text-2xl font-bold ${colors[color]}`}>
         {value.toLocaleString('en-AU')}
       </span>
-      <span className="text-xs text-stone-500 leading-tight">{label}</span>
+      <span className="text-xs text-fg-muted leading-tight">{label}</span>
     </div>
   )
 

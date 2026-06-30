@@ -260,23 +260,23 @@ export default async function LotPage({ params }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50">
+    <div className="min-h-screen bg-bg">
       <div className="mx-auto max-w-lg px-4 py-6 space-y-5">
 
         {/* Breadcrumb */}
-        <nav className="flex items-center gap-1.5 text-sm text-stone-500 flex-wrap">
-          <Link href="/sites" className="hover:text-stone-700">Sites</Link>
+        <nav className="flex items-center gap-1.5 text-sm text-fg-muted flex-wrap">
+          <Link href="/sites" className="hover:text-fg-secondary">Sites</Link>
           <span>/</span>
-          <Link href={`/sites/${siteId}`} className="hover:text-stone-700 truncate max-w-[100px]">{site.name}</Link>
+          <Link href={`/sites/${siteId}`} className="hover:text-fg-secondary truncate max-w-[100px]">{site.name}</Link>
           <span>/</span>
-          <Link href={`/sites/${siteId}/stages/${stageId}`} className="hover:text-stone-700 truncate max-w-[100px]">{stage.name}</Link>
+          <Link href={`/sites/${siteId}/stages/${stageId}`} className="hover:text-fg-secondary truncate max-w-[100px]">{stage.name}</Link>
           <span>/</span>
-          <span className="text-stone-700 font-medium">Lot {lot.lot_number}</span>
+          <span className="text-fg-secondary font-medium">Lot {lot.lot_number}</span>
         </nav>
 
         {/* Header */}
         <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold text-stone-900">Lot {lot.lot_number}</h1>
+          <h1 className="text-xl font-semibold text-fg">Lot {lot.lot_number}</h1>
           <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${cfg.badge}`}>{cfg.label}</span>
         </div>
 
@@ -297,7 +297,7 @@ export default async function LotPage({ params }: Props) {
         )}
 
         {/* Info card */}
-        <div className="rounded-xl border border-stone-200 bg-white divide-y divide-stone-100 overflow-hidden">
+        <div className="rounded-xl border border-border bg-surface divide-y divide-border-subtle overflow-hidden">
           <InfoRow label="Site"      value={site.name} />
           <InfoRow label="Stage"     value={stage.name} />
           <InfoRow label="Due date"  value={formatDate(lot.due_date)}       dim={!lot.due_date} />
@@ -305,15 +305,15 @@ export default async function LotPage({ params }: Props) {
           {lot.completion_date && <InfoRow label="Completed" value={formatDate(lot.completion_date)} />}
           {lot.notes && (
             <div className="px-4 py-3">
-              <p className="text-xs font-medium text-stone-500 mb-1">Notes</p>
-              <p className="text-sm text-stone-800 whitespace-pre-wrap">{lot.notes}</p>
+              <p className="text-xs font-medium text-fg-muted mb-1">Notes</p>
+              <p className="text-sm text-fg-secondary whitespace-pre-wrap">{lot.notes}</p>
             </div>
           )}
         </div>
 
         {/* ── Trades Completed ──────────────────────────────────────────────── */}
         <div>
-          <h2 className="text-base font-semibold text-stone-800 mb-3">Trades Completed</h2>
+          <h2 className="text-base font-semibold text-fg-secondary mb-3">Trades Completed</h2>
           <TradeStatusSection
             lotId={lotId}
             siteId={siteId}
@@ -329,7 +329,7 @@ export default async function LotPage({ params }: Props) {
 
         {/* ── Completion Checklist ──────────────────────────────────────────── */}
         <div>
-          <h2 className="text-base font-semibold text-stone-800 mb-3">Completion Checklist</h2>
+          <h2 className="text-base font-semibold text-fg-secondary mb-3">Completion Checklist</h2>
           <ChecklistSection
             lotId={lotId}
             siteId={siteId}
@@ -343,7 +343,7 @@ export default async function LotPage({ params }: Props) {
         {/* ── Quantities ─────────────────────────────────────────────────────── */}
         {showQty && sections.length > 0 && (
           <div>
-            <h2 className="text-base font-semibold text-stone-800 mb-3">Quantities</h2>
+            <h2 className="text-base font-semibold text-fg-secondary mb-3">Quantities</h2>
             <LotQuantities
               lotId={lotId}
               siteId={siteId}
@@ -362,8 +362,8 @@ export default async function LotPage({ params }: Props) {
 
         {/* ── Photos ────────────────────────────────────────────────────────── */}
         <div>
-          <h2 className="text-base font-semibold text-stone-800 mb-3">Photos</h2>
-          <div className="rounded-xl border border-stone-200 bg-white p-5 mb-4">
+          <h2 className="text-base font-semibold text-fg-secondary mb-3">Photos</h2>
+          <div className="rounded-xl border border-border bg-surface p-5 mb-4">
             <PhotoUpload
               action={uploadLotPhotoAction}
               hiddenFields={{ lot_id: lotId, site_id: siteId, stage_id: stageId }}
@@ -376,14 +376,14 @@ export default async function LotPage({ params }: Props) {
                 if (group.length === 0) return null
                 return (
                   <div key={type}>
-                    <p className="text-sm font-semibold text-stone-600 mb-2">
+                    <p className="text-sm font-semibold text-fg-secondary mb-2">
                       {PHOTO_TYPE_LABELS[type]}
-                      <span className="ml-1.5 font-normal text-stone-400">({group.length})</span>
+                      <span className="ml-1.5 font-normal text-fg-muted">({group.length})</span>
                     </p>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {group.map((photo) => (
                         <a key={photo.id} href={photo.url} target="_blank" rel="noopener noreferrer"
-                          className="block aspect-square rounded-lg overflow-hidden bg-stone-100">
+                          className="block aspect-square rounded-lg overflow-hidden bg-surface-raised">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={photo.url} alt={`${PHOTO_TYPE_LABELS[type]} photo`}
                             className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
@@ -395,20 +395,20 @@ export default async function LotPage({ params }: Props) {
               })}
             </div>
           ) : (
-            <p className="text-sm text-stone-400 text-center py-4">No photos yet.</p>
+            <p className="text-sm text-fg-muted text-center py-4">No photos yet.</p>
           )}
         </div>
 
         {/* ── Documents ─────────────────────────────────────────────────────── */}
         <div>
-          <h2 className="text-base font-semibold text-stone-800 mb-3">Documents</h2>
+          <h2 className="text-base font-semibold text-fg-secondary mb-3">Documents</h2>
           {canManage && (
-            <div className="rounded-xl border border-stone-200 bg-white p-5 mb-4">
+            <div className="rounded-xl border border-border bg-surface p-5 mb-4">
               <LotDocumentUpload lotId={lotId} siteId={siteId} stageId={stageId} />
             </div>
           )}
           {documents.length > 0 ? (
-            <div className="rounded-xl border border-stone-200 bg-white overflow-hidden divide-y divide-stone-100">
+            <div className="rounded-xl border border-border bg-surface overflow-hidden divide-y divide-border-subtle">
               {documents.map((doc) => (
                 <LotDocumentRow
                   key={doc.id}
@@ -424,16 +424,16 @@ export default async function LotPage({ params }: Props) {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-stone-400 text-center py-4">No documents yet.</p>
+            <p className="text-sm text-fg-muted text-center py-4">No documents yet.</p>
           )}
         </div>
 
         {/* ── Edit ──────────────────────────────────────────────────────────── */}
         <div>
-          <h2 className="text-base font-semibold text-stone-800 mb-3">
+          <h2 className="text-base font-semibold text-fg-secondary mb-3">
             {canManage ? 'Edit lot' : 'Update status & notes'}
           </h2>
-          <div className="rounded-xl border border-stone-200 bg-white p-5">
+          <div className="rounded-xl border border-border bg-surface p-5">
             <EditLotForm
               lotId={lotId}
               siteId={siteId}
@@ -459,8 +459,9 @@ export default async function LotPage({ params }: Props) {
 function InfoRow({ label, value, dim }: { label: string; value: string; dim?: boolean }) {
   return (
     <div className="flex items-center justify-between px-4 py-3 gap-4">
-      <span className="text-sm text-stone-500 shrink-0">{label}</span>
-      <span className={`text-sm text-right ${dim ? 'text-stone-400' : 'text-stone-900'}`}>{value}</span>
+      <span className="text-sm text-fg-muted shrink-0">{label}</span>
+      <span className={`text-sm text-right ${dim ? 'text-fg-muted' : 'text-fg'}`}>{value}</span>
+
     </div>
   )
 }

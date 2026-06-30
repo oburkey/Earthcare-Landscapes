@@ -113,7 +113,7 @@ function TradeChips({ tradesCompleted }: { tradesCompleted: string[] }) {
           <span
             key={trade}
             className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-              done ? 'bg-green-700 text-white' : 'border border-stone-200 text-stone-400'
+              done ? 'bg-green-700 text-white' : 'border border-border text-fg-muted'
             }`}
           >
             {trade}
@@ -131,24 +131,24 @@ function LotCard({ item, today }: { item: LotItem; today: string }) {
   return (
     <Link
       href={`/sites/${item.siteId}/stages/${item.stageId}/lots/${item.lotId}`}
-      className={`block rounded-xl border bg-white p-3 hover:bg-stone-50 transition-colors ${
-        overdueBlocked ? 'border-red-300 ring-1 ring-red-200' : 'border-stone-200'
+      className={`block rounded-xl border bg-surface p-3 hover:bg-surface-raised transition-colors ${
+        overdueBlocked ? 'border-red-300 ring-1 ring-red-200' : 'border-border'
       }`}
     >
       <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
-        <span className="text-sm font-semibold text-stone-900">Lot {item.lotNumber}</span>
+        <span className="text-sm font-semibold text-fg">Lot {item.lotNumber}</span>
         <div className="flex items-center gap-1.5">
           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cfg.badge}`}>{cfg.label}</span>
           <span
             className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-              item.readyForLandscaping ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+              item.readyForLandscaping ? 'bg-accent-dim text-accent-fg' : 'bg-amber-100 text-amber-700'
             }`}
           >
             {item.readyForLandscaping ? 'Ready' : 'Blocked'}
           </span>
         </div>
       </div>
-      <p className="text-xs text-stone-500 mb-2">{item.siteName} · {item.stageName}</p>
+      <p className="text-xs text-fg-muted mb-2">{item.siteName} · {item.stageName}</p>
       <TradeChips tradesCompleted={item.tradesCompleted} />
       {overdueBlocked && (
         <p className="mt-2 text-xs font-semibold text-red-600">Overdue and blocked — needs urgent attention</p>
@@ -162,11 +162,11 @@ function JobPill({ item }: { item: JobItem }) {
   return (
     <Link
       href={`/sites/${item.siteId}/stages/${item.stageId}/extra-jobs/${item.id}`}
-      className="flex items-center justify-between gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 hover:bg-stone-50 transition-colors"
+      className="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface px-3 py-2 hover:bg-surface-raised transition-colors"
     >
       <div className="flex items-center gap-2 min-w-0">
         <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 shrink-0">Extra job</span>
-        <span className="text-sm text-stone-800 truncate">{item.title}</span>
+        <span className="text-sm text-fg-secondary truncate">{item.title}</span>
       </div>
       <span className={`rounded-full px-2 py-0.5 text-xs font-medium shrink-0 ${cfg.badge}`}>{cfg.label}</span>
     </Link>
@@ -175,8 +175,8 @@ function JobPill({ item }: { item: JobItem }) {
 
 function EmptyState({ text }: { text: string }) {
   return (
-    <div className="rounded-xl border border-stone-200 bg-white px-4 py-10 text-center">
-      <p className="text-sm text-stone-500">{text}</p>
+    <div className="rounded-xl border border-border bg-surface px-4 py-10 text-center">
+      <p className="text-sm text-fg-muted">{text}</p>
     </div>
   )
 }
@@ -199,20 +199,20 @@ function WeekView({
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <button type="button" onClick={() => onWeekOffsetChange(weekOffset - 1)}
-          className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm text-stone-600 hover:bg-stone-50 transition-colors">
+          className="rounded-lg border border-border px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-raised transition-colors">
           ‹ Prev
         </button>
         <div className="text-center">
-          <h2 className="text-sm font-semibold text-stone-700">{formatWeekLabel(weekStart)}</h2>
+          <h2 className="text-sm font-semibold text-fg-secondary">{formatWeekLabel(weekStart)}</h2>
           {weekOffset !== 0 && (
             <button type="button" onClick={() => onWeekOffsetChange(0)}
-              className="text-xs text-stone-400 hover:text-stone-700 transition-colors">
+              className="text-xs text-fg-muted hover:text-fg-secondary transition-colors">
               Back to this week
             </button>
           )}
         </div>
         <button type="button" onClick={() => onWeekOffsetChange(weekOffset + 1)}
-          className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm text-stone-600 hover:bg-stone-50 transition-colors">
+          className="rounded-lg border border-border px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-raised transition-colors">
           Next ›
         </button>
       </div>
@@ -227,18 +227,18 @@ function WeekView({
           return (
             <div key={day}>
               <div className="flex items-center gap-2 mb-2">
-                <h3 className={`text-sm font-semibold ${isToday ? 'text-green-700' : 'text-stone-600'}`}>
+                <h3 className={`text-sm font-semibold ${isToday ? 'text-accent-fg' : 'text-fg-muted'}`}>
                   {formatDayLabel(day)}
                 </h3>
                 {isToday && (
-                  <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">Today</span>
+                  <span className="rounded-full bg-accent-dim px-2 py-0.5 text-xs font-medium text-accent-fg">Today</span>
                 )}
                 {isOverdue && (dayLots.length > 0 || dayJobs.length > 0) && (
                   <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Overdue</span>
                 )}
               </div>
               {dayLots.length === 0 && dayJobs.length === 0 ? (
-                <p className="text-xs text-stone-400 px-1">Nothing due</p>
+                <p className="text-xs text-fg-muted px-1">Nothing due</p>
               ) : (
                 <div className="space-y-2">
                   {dayLots.map((item) => <LotCard key={item.id} item={item} today={today} />)}
@@ -293,28 +293,28 @@ function MonthView({
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <button type="button" onClick={() => changeMonth(-1)}
-          className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm text-stone-600 hover:bg-stone-50 transition-colors">
+          className="rounded-lg border border-border px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-raised transition-colors">
           ‹ Prev
         </button>
         <div className="text-center">
-          <h2 className="text-sm font-semibold text-stone-700">{monthLabel(year, month)}</h2>
+          <h2 className="text-sm font-semibold text-fg-secondary">{monthLabel(year, month)}</h2>
           {!isCurrentMonth && (
             <button type="button" onClick={backToThisMonth}
-              className="text-xs text-stone-400 hover:text-stone-700 transition-colors">
+              className="text-xs text-fg-muted hover:text-fg-secondary transition-colors">
               Back to this month
             </button>
           )}
         </div>
         <button type="button" onClick={() => changeMonth(1)}
-          className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm text-stone-600 hover:bg-stone-50 transition-colors">
+          className="rounded-lg border border-border px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-raised transition-colors">
           Next ›
         </button>
       </div>
 
-      <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
-        <div className="grid grid-cols-7 border-b border-stone-100 bg-stone-50">
+      <div className="rounded-xl border border-border bg-surface overflow-hidden">
+        <div className="grid grid-cols-7 border-b border-border-subtle bg-surface-raised">
           {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
-            <div key={d} className="px-1 py-1.5 text-center text-xs font-medium text-stone-400">{d}</div>
+            <div key={d} className="px-1 py-1.5 text-center text-xs font-medium text-fg-muted">{d}</div>
           ))}
         </div>
         <div className="grid grid-cols-7">
@@ -326,7 +326,7 @@ function MonthView({
             const isSelected = day === selectedDay
             const dotColor = dayLots.length === 0
               ? null
-              : dayLots.every((l) => l.readyForLandscaping) ? 'bg-green-500' : 'bg-amber-500'
+              : dayLots.every((l) => l.readyForLandscaping) ? 'bg-accent-dim0' : 'bg-amber-500'
             const dayNum = Number(day.split('-')[2])
             const visibleLots = dayLots.slice(0, 3)
             const extraCount = dayLots.length - visibleLots.length
@@ -336,13 +336,13 @@ function MonthView({
                 key={day}
                 type="button"
                 onClick={() => onSelectedDayChange(isSelected ? null : day)}
-                className={`flex min-h-28 flex-col items-stretch gap-1 border-b border-r border-stone-100 p-1.5 text-left transition-colors hover:bg-stone-50 ${
-                  isSelected ? 'bg-green-50' : inMonth ? '' : 'bg-stone-50/60'
+                className={`flex min-h-28 flex-col items-stretch gap-1 border-b border-r border-border-subtle p-1.5 text-left transition-colors hover:bg-surface-raised ${
+                  isSelected ? 'bg-accent-dim' : inMonth ? '' : 'bg-surface-raised/60'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${
-                    isToday ? 'bg-green-700 text-white font-semibold' : inMonth ? 'text-stone-700' : 'text-stone-300'
+                    isToday ? 'bg-green-700 text-white font-semibold' : inMonth ? 'text-fg-secondary' : 'text-fg-muted'
                   }`}>
                     {dayNum}
                   </span>
@@ -353,14 +353,14 @@ function MonthView({
                     <span
                       key={item.id}
                       className={`truncate rounded px-1.5 py-0.5 text-[11px] font-medium ${
-                        item.readyForLandscaping ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                        item.readyForLandscaping ? 'bg-accent-dim text-accent-fg' : 'bg-amber-100 text-amber-700'
                       }`}
                     >
                       Lot {item.lotNumber}
                     </span>
                   ))}
                   {extraCount > 0 && (
-                    <span className="text-[11px] text-stone-400">+{extraCount} more</span>
+                    <span className="text-[11px] text-fg-muted">+{extraCount} more</span>
                   )}
                 </div>
               </button>
@@ -371,9 +371,9 @@ function MonthView({
 
       {selectedDay && (
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-stone-700">{formatDate(selectedDay)}</h3>
+          <h3 className="text-sm font-semibold text-fg-secondary">{formatDate(selectedDay)}</h3>
           {selectedLots.length === 0 && selectedJobs.length === 0 ? (
-            <p className="text-xs text-stone-400 px-1">Nothing due</p>
+            <p className="text-xs text-fg-muted px-1">Nothing due</p>
           ) : (
             <div className="space-y-2">
               {selectedLots.map((item) => <LotCard key={item.id} item={item} today={today} />)}
@@ -424,13 +424,13 @@ function ListView({ lots, jobs, today }: { lots: LotItem[]; jobs: JobItem[]; tod
         return (
           <div key={weekStart}>
             <div className="flex items-center gap-2 mb-2">
-              <h2 className="text-sm font-semibold text-stone-600">{formatWeekLabel(weekStart)}</h2>
+              <h2 className="text-sm font-semibold text-fg-secondary">{formatWeekLabel(weekStart)}</h2>
               {isOverdue && (
                 <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Overdue</span>
               )}
             </div>
 
-            <div className="rounded-xl border border-stone-200 bg-white overflow-hidden divide-y divide-stone-100">
+            <div className="rounded-xl border border-border bg-surface overflow-hidden divide-y divide-border-subtle">
               {weekItems.map((item) => {
                 const href = item.kind === 'lot'
                   ? `/sites/${item.siteId}/stages/${item.stageId}/lots/${item.lotId}`
@@ -442,26 +442,26 @@ function ListView({ lots, jobs, today }: { lots: LotItem[]; jobs: JobItem[]; tod
 
                 return (
                   <Link key={item.id} href={href}
-                    className="flex items-start gap-3 px-4 py-3.5 hover:bg-stone-50 active:bg-stone-100 transition-colors">
+                    className="flex items-start gap-3 px-4 py-3.5 hover:bg-surface-raised active:bg-surface-raised transition-colors">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-stone-900">{item.label}</span>
+                        <span className="text-sm font-semibold text-fg">{item.label}</span>
                         {item.kind === 'job' && (
                           <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">Extra job</span>
                         )}
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cfg.badge}`}>{cfg.label}</span>
                         {item.kind === 'lot' && (
                           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                            item.readyForLandscaping ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                            item.readyForLandscaping ? 'bg-accent-dim text-accent-fg' : 'bg-amber-100 text-amber-700'
                           }`}>
                             {item.readyForLandscaping ? 'Ready' : 'Blocked'}
                           </span>
                         )}
                       </div>
-                      <p className="mt-0.5 text-xs text-stone-500">{item.site} · {item.stage}</p>
+                      <p className="mt-0.5 text-xs text-fg-muted">{item.site} · {item.stage}</p>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-xs text-stone-500">{formatDate(item.due_date)}</p>
+                      <p className="text-xs text-fg-muted">{formatDate(item.due_date)}</p>
                     </div>
                   </Link>
                 )
@@ -489,7 +489,7 @@ function BlockedView({ lots, today }: { lots: LotItem[]; today: string }) {
     <div className="space-y-2">
       {blocked.map((item) => (
         <div key={item.id}>
-          <p className="text-xs text-stone-400 mb-1">
+          <p className="text-xs text-fg-muted mb-1">
             Due {formatDate(item.dueDate)}{item.dueDate < today ? ' · Overdue' : ''}
           </p>
           <LotCard item={item} today={today} />
@@ -540,7 +540,7 @@ export default function ScheduleView({ lotItems, jobItems, sites, today }: Props
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                 !showBlocked && view === v.id
                   ? 'bg-stone-900 text-white'
-                  : 'text-stone-500 hover:bg-stone-100'
+                  : 'text-fg-muted hover:bg-surface-raised'
               }`}
             >
               {v.label}
@@ -552,7 +552,7 @@ export default function ScheduleView({ lotItems, jobItems, sites, today }: Props
             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
               showBlocked
                 ? 'bg-amber-600 text-white'
-                : 'text-stone-500 hover:bg-stone-100'
+                : 'text-fg-muted hover:bg-surface-raised'
             }`}
           >
             Blocked lots
@@ -560,7 +560,7 @@ export default function ScheduleView({ lotItems, jobItems, sites, today }: Props
         </div>
 
         <select value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)}
-          className="rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-sm text-stone-900 focus:border-stone-400 focus:outline-none">
+          className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-fg focus:border-border focus:outline-none">
           <option value="">All sites</option>
           {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>

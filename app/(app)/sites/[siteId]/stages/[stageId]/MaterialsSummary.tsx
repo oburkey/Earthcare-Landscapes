@@ -110,9 +110,9 @@ export default async function MaterialsSummary({ stageId, siteId }: Props) {
 
   if (quotedLots === 0) {
     return (
-      <div className="rounded-xl border border-stone-200 bg-white px-4 py-8 text-center">
-        <p className="text-sm text-stone-500">No quantities submitted yet.</p>
-        <p className="text-xs text-stone-400 mt-1">
+      <div className="rounded-xl border border-border bg-surface px-4 py-8 text-center">
+        <p className="text-sm text-fg-muted">No quantities submitted yet.</p>
+        <p className="text-xs text-fg-muted mt-1">
           Quantities will appear once leading hands submit lot takeoffs.
         </p>
       </div>
@@ -130,8 +130,8 @@ export default async function MaterialsSummary({ stageId, siteId }: Props) {
     <div className="space-y-3">
 
       {/* Header */}
-      <p className="text-sm text-stone-500">
-        <span className="font-semibold text-stone-800">{quotedLots}</span> of {totalLots} lots quoted
+      <p className="text-sm text-fg-muted">
+        <span className="font-semibold text-fg-secondary">{quotedLots}</span> of {totalLots} lots quoted
       </p>
 
       {/* PLANTS & TREES */}
@@ -176,14 +176,14 @@ export default async function MaterialsSummary({ stageId, siteId }: Props) {
 
       {/* Unquoted lots */}
       {unquotedLots.length > 0 && (
-        <div className="rounded-xl border border-stone-200 bg-white px-4 py-3">
-          <p className="text-xs font-medium text-stone-500 mb-2">Not yet quoted</p>
+        <div className="rounded-xl border border-border bg-surface px-4 py-3">
+          <p className="text-xs font-medium text-fg-muted mb-2">Not yet quoted</p>
           <div className="flex flex-wrap gap-1.5">
             {unquotedLots.map((l) => (
               <a
                 key={l.id}
                 href={`/sites/${siteId}/stages/${stageId}/lots/${l.id}`}
-                className="rounded-full bg-stone-100 px-2.5 py-1 text-xs text-stone-600 hover:bg-stone-200"
+                className="rounded-full bg-surface-raised px-2.5 py-1 text-xs text-fg-secondary hover:bg-border"
               >
                 Lot {l.lot_number}
               </a>
@@ -197,9 +197,9 @@ export default async function MaterialsSummary({ stageId, siteId }: Props) {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
-      <div className="px-4 py-2.5 bg-stone-50 border-b border-stone-200">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-500">{title}</h3>
+    <div className="rounded-xl border border-border bg-surface overflow-hidden">
+      <div className="px-4 py-2.5 bg-surface-raised border-b border-border">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-secondary">{title}</h3>
       </div>
       {children}
     </div>
@@ -213,14 +213,14 @@ function Row({ label, value, unit, derived }: {
   derived?: boolean
 }) {
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-b border-stone-100 last:border-0">
-      <span className={`text-sm ${derived ? 'text-stone-500' : 'text-stone-800'}`}>
+    <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle last:border-0">
+      <span className={`text-sm ${derived ? 'text-fg-muted' : 'text-fg-secondary'}`}>
         {label}
-        {derived && <span className="ml-1 text-xs text-stone-400">(estimated)</span>}
+        {derived && <span className="ml-1 text-xs text-fg-muted">(estimated)</span>}
       </span>
-      <span className="text-sm font-semibold text-stone-900 tabular-nums">
+      <span className="text-sm font-semibold text-fg tabular-nums">
         {value}
-        <span className="ml-1 text-xs font-normal text-stone-400">{unit}</span>
+        <span className="ml-1 text-xs font-normal text-fg-muted">{unit}</span>
       </span>
     </div>
   )

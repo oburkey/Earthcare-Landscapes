@@ -17,8 +17,8 @@ export default function ExtraJobsList({ jobs }: { jobs: ExtraJobItem[] }) {
 
   return (
     <section>
-      <h2 className="text-base font-semibold text-stone-800 mb-3">Extra jobs to complete</h2>
-      <div className="rounded-xl border border-stone-200 bg-white overflow-hidden divide-y divide-stone-100">
+      <h2 className="text-base font-semibold text-fg-secondary mb-3">Extra jobs to complete</h2>
+      <div className="rounded-xl border border-border bg-surface overflow-hidden divide-y divide-border-subtle">
         {jobs.map((job) => {
           const sc = siteColour(job.siteName)
           const cfg = EXTRA_JOB_STATUS_CONFIG[job.status] ?? EXTRA_JOB_STATUS_CONFIG.not_started
@@ -26,15 +26,15 @@ export default function ExtraJobsList({ jobs }: { jobs: ExtraJobItem[] }) {
             <Link
               key={job.id}
               href={`/sites/${job.siteId}/stages/${job.stageId}/extra-jobs/${job.id}`}
-              className="flex items-center gap-3 px-4 py-3 hover:bg-stone-50 transition-colors"
+              className="flex items-center gap-3 px-4 py-3 hover:bg-surface-raised transition-colors"
             >
               <span className={`shrink-0 rounded px-1.5 py-0.5 text-xs font-bold ${sc.badge}`}>
                 {sc.abbr}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-stone-900 truncate">{job.title}</p>
+                <p className="text-sm font-medium text-fg truncate">{job.title}</p>
                 {job.dueDate && (
-                  <p className="text-xs text-stone-500">Due {formatDate(job.dueDate)}</p>
+                  <p className="text-xs text-fg-muted">Due {formatDate(job.dueDate)}</p>
                 )}
               </div>
               <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${cfg.badge}`}>

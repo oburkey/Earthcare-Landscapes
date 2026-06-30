@@ -67,7 +67,7 @@ export default function PlanPhotoUpload({ action, hiddenFields, hasPlan }: Props
           accept="image/*"
           required
           disabled={busy}
-          className="flex-1 min-w-0 text-sm text-stone-500
+          className="flex-1 min-w-0 text-sm text-fg-muted
             file:mr-3 file:py-2 file:px-4
             file:rounded-lg file:border-0
             file:text-sm file:font-medium

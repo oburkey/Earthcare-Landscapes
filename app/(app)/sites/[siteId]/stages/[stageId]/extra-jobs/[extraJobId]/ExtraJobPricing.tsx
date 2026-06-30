@@ -41,7 +41,7 @@ interface Props {
 
 type AddItem = { desc: string; qty: string; unit: string; rate: string }
 
-const INPUT = 'rounded-lg border border-stone-300 px-2 py-1.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-white'
+const INPUT = 'rounded-lg border border-border px-2 py-1.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-surface text-fg placeholder:text-fg-muted'
 const NUM   = `${INPUT} w-20 text-right tabular-nums`
 
 function fmt(n: number) {
@@ -161,17 +161,17 @@ export default function ExtraJobPricing({
         )
         if (usableItems.length === 0) return null
         return (
-          <div key={section.id} className="rounded-xl border border-stone-200 bg-white overflow-hidden">
-            <div className="px-4 py-2.5 bg-stone-50 border-b border-stone-200">
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-stone-500">{section.name}</h4>
+          <div key={section.id} className="rounded-xl border border-border bg-surface overflow-hidden">
+            <div className="px-4 py-2.5 bg-surface-raised border-b border-border">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-fg-secondary">{section.name}</h4>
             </div>
-            <div className="divide-y divide-stone-100">
+            <div className="divide-y divide-border-subtle">
               {usableItems.map((item) => {
                 const qty  = parseFloat(templateValues[item.id] || '0') || 0
                 const line = isAdmin && item.unit_price != null && qty > 0 ? qty * item.unit_price : null
                 return (
                   <div key={item.id} className={`grid ${isAdmin ? 'grid-cols-[1fr_auto_auto_auto]' : 'grid-cols-[1fr_auto]'} gap-2 items-center px-4 py-2.5`}>
-                    <span className="text-sm text-stone-700">{item.name}</span>
+                    <span className="text-sm text-fg-secondary">{item.name}</span>
                     <div className="flex items-center gap-1.5">
                       <input
                         type="number" min="0" step="any"
@@ -181,14 +181,14 @@ export default function ExtraJobPricing({
                         placeholder="0"
                         className={NUM}
                       />
-                      <span className="text-xs text-stone-400 w-8 shrink-0">{item.unit}</span>
+                      <span className="text-xs text-fg-muted w-8 shrink-0">{item.unit}</span>
                     </div>
                     {isAdmin && (item.unit_price != null
-                      ? <span className="text-xs text-stone-400 tabular-nums">${item.unit_price.toFixed(2)}/unit</span>
+                      ? <span className="text-xs text-fg-muted tabular-nums">${item.unit_price.toFixed(2)}/unit</span>
                       : <span />)}
                     {isAdmin && (
-                      <span className="text-sm font-medium text-stone-700 tabular-nums min-w-[64px] text-right">
-                        {line != null ? fmt(line) : <span className="text-stone-300">—</span>}
+                      <span className="text-sm font-medium text-fg-secondary tabular-nums min-w-[64px] text-right">
+                        {line != null ? fmt(line) : <span className="text-fg-muted">—</span>}
                       </span>
                     )}
                   </div>
@@ -200,11 +200,11 @@ export default function ExtraJobPricing({
       })}
 
       {/* Preset rate items */}
-      <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
-        <div className="px-4 py-2.5 bg-stone-50 border-b border-stone-200">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-stone-500">Preset rates</h4>
+      <div className="rounded-xl border border-border bg-surface overflow-hidden">
+        <div className="px-4 py-2.5 bg-surface-raised border-b border-border">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-fg-secondary">Preset rates</h4>
         </div>
-        <div className="divide-y divide-stone-100">
+        <div className="divide-y divide-border-subtle">
           {/* Bobcat */}
           {(['bobcat', 'labour'] as const).map((type) => {
             const state   = type === 'bobcat' ? bobcat : labour
@@ -215,7 +215,7 @@ export default function ExtraJobPricing({
             const line = isAdmin && hrs > 0 && rate > 0 ? hrs * rate : null
             return (
               <div key={type} className={`grid ${isAdmin ? 'grid-cols-[1fr_auto_auto_auto]' : 'grid-cols-[1fr_auto]'} gap-2 items-center px-4 py-2.5`}>
-                <span className="text-sm text-stone-700">{label}</span>
+                <span className="text-sm text-fg-secondary">{label}</span>
                 <div className="flex items-center gap-1.5">
                   <input
                     type="number" min="0" step="0.5"
@@ -225,11 +225,11 @@ export default function ExtraJobPricing({
                     placeholder="hrs"
                     className={NUM}
                   />
-                  <span className="text-xs text-stone-400 w-8 shrink-0">hr</span>
+                  <span className="text-xs text-fg-muted w-8 shrink-0">hr</span>
                 </div>
                 {isAdmin && (
                   <div className="flex items-center gap-1">
-                    <span className="text-xs text-stone-400">$</span>
+                    <span className="text-xs text-fg-muted">$</span>
                     <input
                       type="number" min="0" step="1"
                       value={state.rate}
@@ -238,12 +238,12 @@ export default function ExtraJobPricing({
                       placeholder="rate"
                       className={`${INPUT} w-16 text-right tabular-nums`}
                     />
-                    <span className="text-xs text-stone-400">/hr</span>
+                    <span className="text-xs text-fg-muted">/hr</span>
                   </div>
                 )}
                 {isAdmin && (
-                  <span className="text-sm font-medium text-stone-700 tabular-nums min-w-[64px] text-right">
-                    {line != null ? fmt(line) : <span className="text-stone-300">—</span>}
+                  <span className="text-sm font-medium text-fg-secondary tabular-nums min-w-[64px] text-right">
+                    {line != null ? fmt(line) : <span className="text-fg-muted">—</span>}
                   </span>
                 )}
               </div>
@@ -253,11 +253,11 @@ export default function ExtraJobPricing({
       </div>
 
       {/* Free-form additional items */}
-      <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
-        <div className="px-4 py-2.5 bg-stone-50 border-b border-stone-200">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-stone-500">Additional items</h4>
+      <div className="rounded-xl border border-border bg-surface overflow-hidden">
+        <div className="px-4 py-2.5 bg-surface-raised border-b border-border">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-fg-secondary">Additional items</h4>
         </div>
-        <div className="divide-y divide-stone-100">
+        <div className="divide-y divide-border-subtle">
           {([add1, add2] as const).map((add, idx) => {
             const setAdd = idx === 0 ? setAdd1 : setAdd2
             const label  = `Additional Item ${idx + 1}`
@@ -267,7 +267,7 @@ export default function ExtraJobPricing({
             return (
               <div key={idx} className="px-4 py-3 space-y-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-stone-400 w-28 shrink-0">{label}</span>
+                  <span className="text-xs text-fg-muted w-28 shrink-0">{label}</span>
                   <input
                     type="text"
                     value={add.desc}
@@ -296,7 +296,7 @@ export default function ExtraJobPricing({
                   />
                   {isAdmin && (
                     <>
-                      <span className="text-xs text-stone-400">@ $</span>
+                      <span className="text-xs text-fg-muted">@ $</span>
                       <input
                         type="number" min="0" step="any"
                         value={add.rate}
@@ -305,8 +305,8 @@ export default function ExtraJobPricing({
                         placeholder="Rate"
                         className={`${INPUT} w-20 text-right tabular-nums`}
                       />
-                      <span className="text-sm font-medium text-stone-700 tabular-nums ml-auto min-w-[64px] text-right">
-                        {line != null ? fmt(line) : <span className="text-stone-300">—</span>}
+                      <span className="text-sm font-medium text-fg-secondary tabular-nums ml-auto min-w-[64px] text-right">
+                        {line != null ? fmt(line) : <span className="text-fg-muted">—</span>}
                       </span>
                     </>
                   )}
@@ -319,15 +319,15 @@ export default function ExtraJobPricing({
 
       {/* Grand total — admin only */}
       {isAdmin && grandTotal > 0 && (
-        <div className="rounded-xl border border-stone-200 bg-white px-4 py-3 flex items-center justify-between">
-          <span className="text-sm font-semibold text-stone-700">Grand Total (ex GST)</span>
-          <span className="text-lg font-bold text-stone-900">{fmt(grandTotal)}</span>
+        <div className="rounded-xl border border-border bg-surface px-4 py-3 flex items-center justify-between">
+          <span className="text-sm font-semibold text-fg-secondary">Grand Total (ex GST)</span>
+          <span className="text-lg font-bold text-fg">{fmt(grandTotal)}</span>
         </div>
       )}
 
       {/* Feedback + save */}
       {error  && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-      {saved  && <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">Saved successfully.</p>}
+      {saved  && <p className="rounded-lg bg-accent-dim px-3 py-2 text-sm text-accent-fg">Saved successfully.</p>}
 
       {canManage && (
         <button

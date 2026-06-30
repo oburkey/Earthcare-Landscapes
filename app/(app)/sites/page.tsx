@@ -30,12 +30,12 @@ export default async function SitesPage() {
     .map((s: SiteRow) => ({ id: s.id, name: s.name, address: s.address ?? null, ...siteStats(s) }))
 
   return (
-    <div className="min-h-screen bg-stone-50">
+    <div className="min-h-screen bg-bg">
       <div className="mx-auto max-w-2xl px-4 py-6 space-y-5">
 
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-stone-900">Sites</h1>
+          <h1 className="text-xl font-semibold text-fg">Sites</h1>
           {canManage && (
             <Link
               href="/sites/new"

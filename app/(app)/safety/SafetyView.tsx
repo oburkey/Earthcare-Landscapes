@@ -155,7 +155,7 @@ export default function SafetyView({
 
   return (
     <div className="space-y-5">
-      <h1 className="text-xl font-semibold text-stone-900">Safety</h1>
+      <h1 className="text-xl font-semibold text-fg">Safety</h1>
 
       {/* Tab bar */}
       <div className="flex gap-1">
@@ -167,7 +167,7 @@ export default function SafetyView({
             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
               activeTab === tab.id
                 ? 'bg-stone-900 text-white'
-                : 'text-stone-500 hover:bg-stone-100'
+                : 'text-fg-muted hover:bg-surface-raised'
             }`}
           >
             {tab.label}

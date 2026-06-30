@@ -38,8 +38,8 @@ export default async function MaterialsPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-stone-900">Materials</h1>
-        <p className="mt-1 text-sm text-stone-500">
+        <h1 className="text-xl font-semibold text-fg">Materials</h1>
+        <p className="mt-1 text-sm text-fg-muted">
           Plant ordering summary for the next 3 months, based on estimate quant sheets.
         </p>
       </div>

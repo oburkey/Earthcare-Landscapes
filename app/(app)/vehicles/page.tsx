@@ -17,7 +17,7 @@ export default async function VehiclesPage() {
   const today = new Date().toISOString().split('T')[0]
 
   return (
-    <div className="min-h-screen bg-stone-50">
+    <div className="min-h-screen bg-bg">
       <div className="mx-auto max-w-2xl px-4 py-6">
         <VehicleManagement vehicles={vehicles} today={today} />
       </div>

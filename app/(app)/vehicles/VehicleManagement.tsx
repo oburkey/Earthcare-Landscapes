@@ -62,7 +62,7 @@ function getVehicleStatus(v: Vehicle, today: string): StatusLevel {
 }
 
 const STATUS_DOT: Record<StatusLevel, { dot: string; label: string }> = {
-  green: { dot: 'bg-green-500',  label: 'All good' },
+  green: { dot: 'bg-accent-dim0',  label: 'All good' },
   amber: { dot: 'bg-amber-400',  label: 'Due soon' },
   red:   { dot: 'bg-red-500',    label: 'Action needed' },
 }
@@ -76,11 +76,11 @@ function fmt(dateStr: string | null | undefined): string {
 }
 
 function dateClass(dateStr: string | null | undefined, today: string): string {
-  if (!dateStr) return 'text-stone-500'
+  if (!dateStr) return 'text-fg-muted'
   const diff = daysDiff(dateStr, today)
   if (diff < 0)  return 'text-red-600 font-semibold'
   if (diff <= 30) return 'text-amber-600 font-semibold'
-  return 'text-stone-800'
+  return 'text-fg-secondary'
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -98,7 +98,7 @@ export default function VehicleManagement({ vehicles, today }: Props) {
     <div className="space-y-5">
 
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-stone-900">Vehicles</h1>
+        <h1 className="text-xl font-semibold text-fg">Vehicles</h1>
         <button
           onClick={() => { setShowAdd((v) => !v); setEditingId(null) }}
           className="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 active:bg-green-900"
@@ -117,7 +117,7 @@ export default function VehicleManagement({ vehicles, today }: Props) {
             className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
               filterType === type
                 ? 'bg-stone-800 text-white'
-                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                : 'bg-surface-raised text-fg-muted hover:bg-surface-raised'
             }`}
           >
             {type || 'All'}
@@ -130,18 +130,18 @@ export default function VehicleManagement({ vehicles, today }: Props) {
       )}
 
       {vehicles.length === 0 ? (
-        <div className="rounded-xl border border-stone-200 bg-white px-4 py-12 text-center">
-          <p className="text-sm text-stone-500">No vehicles yet.</p>
+        <div className="rounded-xl border border-border bg-surface px-4 py-12 text-center">
+          <p className="text-sm text-fg-muted">No vehicles yet.</p>
           <button
             onClick={() => setShowAdd(true)}
-            className="mt-3 text-sm font-medium text-green-700 hover:underline"
+            className="mt-3 text-sm font-medium text-accent-fg hover:underline"
           >
             Add the first vehicle →
           </button>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-stone-200 bg-white px-4 py-8 text-center">
-          <p className="text-sm text-stone-500">No {filterType} vehicles.</p>
+        <div className="rounded-xl border border-border bg-surface px-4 py-8 text-center">
+          <p className="text-sm text-fg-muted">No {filterType} vehicles.</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -149,7 +149,7 @@ export default function VehicleManagement({ vehicles, today }: Props) {
             const status = getVehicleStatus(vehicle, today)
             const { dot, label } = STATUS_DOT[status]
             return (
-              <div key={vehicle.id} className="rounded-xl border border-stone-200 bg-white overflow-hidden">
+              <div key={vehicle.id} className="rounded-xl border border-border bg-surface overflow-hidden">
 
                 {/* Card header */}
                 <div className="flex items-start justify-between gap-3 px-4 py-4">
@@ -157,11 +157,11 @@ export default function VehicleManagement({ vehicles, today }: Props) {
                     <div className="flex items-center gap-2.5 flex-wrap">
                       {/* Status dot */}
                       <span title={label} className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${dot}`} />
-                      <span className="text-sm font-semibold text-stone-900">
+                      <span className="text-sm font-semibold text-fg">
                         {vehicle.year ? `${vehicle.year} ` : ''}{vehicle.make} {vehicle.model}
                       </span>
                       {vehicle.registration && (
-                        <span className="rounded-md bg-stone-100 px-2 py-0.5 text-xs font-mono font-medium text-stone-700">
+                        <span className="rounded-md bg-surface-raised px-2 py-0.5 text-xs font-mono font-medium text-fg-secondary">
                           {vehicle.registration}
                         </span>
                       )}
@@ -172,29 +172,29 @@ export default function VehicleManagement({ vehicles, today }: Props) {
                       )}
                     </div>
                     {vehicle.assigned_to && (
-                      <p className="mt-1 text-xs text-stone-500">
-                        Assigned to <span className="font-medium text-stone-700">{vehicle.assigned_to}</span>
+                      <p className="mt-1 text-xs text-fg-muted">
+                        Assigned to <span className="font-medium text-fg-secondary">{vehicle.assigned_to}</span>
                       </p>
                     )}
                   </div>
                   <button
                     onClick={() => setEditingId(editingId === vehicle.id ? null : vehicle.id)}
-                    className="shrink-0 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50"
+                    className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-muted hover:bg-surface-raised"
                   >
                     {editingId === vehicle.id ? 'Close' : 'Edit'}
                   </button>
                 </div>
 
                 {/* Detail rows */}
-                <div className="border-t border-stone-100 divide-y divide-stone-100">
+                <div className="border-t border-border-subtle divide-y divide-border-subtle">
 
                   {/* Service info */}
-                  <div className="grid grid-cols-2 divide-x divide-stone-100">
+                  <div className="grid grid-cols-2 divide-x divide-border-subtle">
                     <div className="px-4 py-3">
-                      <p className="text-xs font-medium text-stone-400 mb-0.5">Last service</p>
-                      <p className="text-sm text-stone-800">{fmt(vehicle.last_service_date)}</p>
+                      <p className="text-xs font-medium text-fg-muted mb-0.5">Last service</p>
+                      <p className="text-sm text-fg-secondary">{fmt(vehicle.last_service_date)}</p>
                       {(vehicle.last_service_hours !== null || vehicle.last_service_odometer !== null) && (
-                        <p className="text-xs text-stone-400 mt-0.5">
+                        <p className="text-xs text-fg-muted mt-0.5">
                           {[
                             vehicle.last_service_hours !== null ? `${vehicle.last_service_hours.toLocaleString()} hrs` : null,
                             vehicle.last_service_odometer !== null ? `${vehicle.last_service_odometer.toLocaleString()} km` : null,
@@ -203,12 +203,12 @@ export default function VehicleManagement({ vehicles, today }: Props) {
                       )}
                     </div>
                     <div className="px-4 py-3">
-                      <p className="text-xs font-medium text-stone-400 mb-0.5">Next service</p>
+                      <p className="text-xs font-medium text-fg-muted mb-0.5">Next service</p>
                       <p className={`text-sm ${dateClass(vehicle.next_service_due_date, today)}`}>
                         {fmt(vehicle.next_service_due_date)}
                       </p>
                       {(vehicle.next_service_km !== null || vehicle.next_service_hours !== null) && (
-                        <p className="text-xs text-stone-400 mt-0.5">
+                        <p className="text-xs text-fg-muted mt-0.5">
                           {[
                             vehicle.next_service_hours !== null ? `${vehicle.next_service_hours.toLocaleString()} hrs` : null,
                             vehicle.next_service_km !== null ? `${vehicle.next_service_km.toLocaleString()} km` : null,
@@ -221,32 +221,32 @@ export default function VehicleManagement({ vehicles, today }: Props) {
                   {/* Current hours — machinery only */}
                   {vehicle.vehicle_type === 'Machinery' && (
                     <div className="px-4 py-3">
-                      <p className="text-xs font-medium text-stone-400 mb-0.5">Current hours</p>
+                      <p className="text-xs font-medium text-fg-muted mb-0.5">Current hours</p>
                       {vehicle.current_hours !== null ? (
                         <>
-                          <p className="text-sm text-stone-800">{vehicle.current_hours.toLocaleString()} hrs</p>
+                          <p className="text-sm text-fg-secondary">{vehicle.current_hours.toLocaleString()} hrs</p>
                           {vehicle.current_hours_updated_at && (
-                            <p className="text-xs text-stone-400 mt-0.5">
+                            <p className="text-xs text-fg-muted mt-0.5">
                               Last updated {new Date(vehicle.current_hours_updated_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
                             </p>
                           )}
                         </>
                       ) : (
-                        <p className="text-sm text-stone-400 italic">No hours recorded</p>
+                        <p className="text-sm text-fg-muted italic">No hours recorded</p>
                       )}
                     </div>
                   )}
 
                   {/* Rego + insurance */}
-                  <div className="grid grid-cols-2 divide-x divide-stone-100">
+                  <div className="grid grid-cols-2 divide-x divide-border-subtle">
                     <div className="px-4 py-3">
-                      <p className="text-xs font-medium text-stone-400 mb-0.5">Rego expiry</p>
+                      <p className="text-xs font-medium text-fg-muted mb-0.5">Rego expiry</p>
                       <p className={`text-sm ${dateClass(vehicle.rego_expiry_date, today)}`}>
                         {fmt(vehicle.rego_expiry_date)}
                       </p>
                     </div>
                     <div className="px-4 py-3">
-                      <p className="text-xs font-medium text-stone-400 mb-0.5">Insurance expiry</p>
+                      <p className="text-xs font-medium text-fg-muted mb-0.5">Insurance expiry</p>
                       <p className={`text-sm ${dateClass(vehicle.insurance_expiry_date, today)}`}>
                         {fmt(vehicle.insurance_expiry_date)}
                       </p>
@@ -256,15 +256,15 @@ export default function VehicleManagement({ vehicles, today }: Props) {
                   {/* Notes */}
                   {vehicle.notes && (
                     <div className="px-4 py-3">
-                      <p className="text-xs font-medium text-stone-400 mb-0.5">Notes</p>
-                      <p className="text-sm text-stone-700 whitespace-pre-wrap">{vehicle.notes}</p>
+                      <p className="text-xs font-medium text-fg-muted mb-0.5">Notes</p>
+                      <p className="text-sm text-fg-secondary whitespace-pre-wrap">{vehicle.notes}</p>
                     </div>
                   )}
                 </div>
 
                 {/* Edit form */}
                 {editingId === vehicle.id && (
-                  <div className="border-t border-stone-200 bg-stone-50 px-4 py-4">
+                  <div className="border-t border-border bg-surface-raised px-4 py-4">
                     <EditForm vehicle={vehicle} onSuccess={() => setEditingId(null)} />
                   </div>
                 )}
@@ -282,7 +282,7 @@ export default function VehicleManagement({ vehicles, today }: Props) {
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-stone-700 mb-1">
+      <label className="block text-sm font-medium text-fg-secondary mb-1">
         {label}{required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
       {children}
@@ -290,7 +290,7 @@ function Field({ label, required, children }: { label: string; required?: boolea
   )
 }
 
-const INPUT = 'block w-full rounded-lg border border-stone-300 px-3 py-2 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-white'
+const INPUT = 'block w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-surface text-fg'
 
 function VehicleFields({ v }: { v?: Vehicle }) {
   return (
@@ -298,7 +298,7 @@ function VehicleFields({ v }: { v?: Vehicle }) {
 
       {/* Identity */}
       <div>
-        <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-3">Vehicle</p>
+        <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-3">Vehicle</p>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Make" required>
             <input name="make" type="text" required defaultValue={v?.make ?? ''} placeholder="Toyota" className={INPUT} />
@@ -330,7 +330,7 @@ function VehicleFields({ v }: { v?: Vehicle }) {
 
       {/* Compliance */}
       <div>
-        <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-3">Compliance</p>
+        <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-3">Compliance</p>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Rego expiry">
             <input name="rego_expiry_date" type="date" defaultValue={v?.rego_expiry_date ?? ''} className={INPUT} />
@@ -343,7 +343,7 @@ function VehicleFields({ v }: { v?: Vehicle }) {
 
       {/* Last service */}
       <div>
-        <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-3">Last service</p>
+        <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-3">Last service</p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Field label="Date">
             <input name="last_service_date" type="date" defaultValue={v?.last_service_date ?? ''} className={INPUT} />
@@ -359,7 +359,7 @@ function VehicleFields({ v }: { v?: Vehicle }) {
 
       {/* Next service */}
       <div>
-        <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-3">Next service due</p>
+        <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-3">Next service due</p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Field label="Date">
             <input name="next_service_due_date" type="date" defaultValue={v?.next_service_due_date ?? ''} className={INPUT} />
@@ -392,8 +392,8 @@ function AddForm({ onSuccess }: { onSuccess: () => void }) {
   }, [state, onSuccess])
 
   return (
-    <div className="rounded-xl border border-stone-200 bg-white p-5">
-      <h2 className="text-sm font-semibold text-stone-800 mb-5">New vehicle</h2>
+    <div className="rounded-xl border border-border bg-surface p-5">
+      <h2 className="text-sm font-semibold text-fg-secondary mb-5">New vehicle</h2>
       <form action={action} className="space-y-5">
         <VehicleFields />
         {state?.error && (
@@ -430,7 +430,7 @@ function EditForm({ vehicle, onSuccess }: { vehicle: Vehicle; onSuccess: () => v
 
         {vehicle.vehicle_type === 'Machinery' && (
           <div>
-            <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-3">Meter reading</p>
+            <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-3">Meter reading</p>
             <Field label="Current hours">
               <input
                 name="current_hours"
@@ -458,14 +458,14 @@ function EditForm({ vehicle, onSuccess }: { vehicle: Vehicle; onSuccess: () => v
         </button>
       </form>
 
-      <div className="pt-2 border-t border-stone-200">
+      <div className="pt-2 border-t border-border">
         {!confirmDelete ? (
           <button onClick={() => setConfirmDelete(true)} className="text-sm text-red-500 hover:text-red-700">
             Remove vehicle
           </button>
         ) : (
           <div className="flex items-center gap-3">
-            <p className="text-sm text-stone-600">Are you sure?</p>
+            <p className="text-sm text-fg-muted">Are you sure?</p>
             <form action={deleteAction}>
               <input type="hidden" name="vehicle_id" value={vehicle.id} />
               <button
@@ -476,7 +476,7 @@ function EditForm({ vehicle, onSuccess }: { vehicle: Vehicle; onSuccess: () => v
                 {deletePending ? 'Removing…' : 'Yes, remove'}
               </button>
             </form>
-            <button onClick={() => setConfirmDelete(false)} className="text-sm text-stone-500 hover:text-stone-700">
+            <button onClick={() => setConfirmDelete(false)} className="text-sm text-fg-muted hover:text-fg-secondary">
               Cancel
             </button>
           </div>

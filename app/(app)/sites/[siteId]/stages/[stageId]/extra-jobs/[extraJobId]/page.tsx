@@ -142,23 +142,23 @@ export default async function ExtraJobPage({ params }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50">
+    <div className="min-h-screen bg-bg">
       <div className="mx-auto max-w-lg px-4 py-6 space-y-5">
 
         {/* Breadcrumb */}
-        <nav className="flex items-center gap-1.5 text-sm text-stone-500 flex-wrap">
-          <Link href="/sites" className="hover:text-stone-700">Sites</Link>
+        <nav className="flex items-center gap-1.5 text-sm text-fg-muted flex-wrap">
+          <Link href="/sites" className="hover:text-fg-secondary">Sites</Link>
           <span>/</span>
-          <Link href={`/sites/${siteId}`} className="hover:text-stone-700 truncate max-w-[80px]">{site.name}</Link>
+          <Link href={`/sites/${siteId}`} className="hover:text-fg-secondary truncate max-w-[80px]">{site.name}</Link>
           <span>/</span>
-          <Link href={`/sites/${siteId}/stages/${stageId}`} className="hover:text-stone-700 truncate max-w-[80px]">{stage.name}</Link>
+          <Link href={`/sites/${siteId}/stages/${stageId}`} className="hover:text-fg-secondary truncate max-w-[80px]">{stage.name}</Link>
           <span>/</span>
-          <span className="text-stone-700 font-medium truncate max-w-[100px]">{job.title}</span>
+          <span className="text-fg-secondary font-medium truncate max-w-[100px]">{job.title}</span>
         </nav>
 
         {/* Header */}
         <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold text-stone-900">{job.title}</h1>
+          <h1 className="text-xl font-semibold text-fg">{job.title}</h1>
           <span className={`rounded-full px-2.5 py-1 text-xs font-semibold shrink-0 ${cfg.badge}`}>
             {cfg.label}
           </span>
@@ -166,25 +166,25 @@ export default async function ExtraJobPage({ params }: Props) {
 
         {/* Info card */}
         {job.description && (
-          <div className="rounded-xl border border-stone-200 bg-white px-4 py-3">
-            <p className="text-xs font-medium text-stone-500 mb-1">Description</p>
-            <p className="text-sm text-stone-800">{job.description}</p>
+          <div className="rounded-xl border border-border bg-surface px-4 py-3">
+            <p className="text-xs font-medium text-fg-muted mb-1">Description</p>
+            <p className="text-sm text-fg-secondary">{job.description}</p>
           </div>
         )}
 
         {job.notes && (
-          <div className="rounded-xl border border-stone-200 bg-white px-4 py-3">
-            <p className="text-xs font-medium text-stone-500 mb-1">Notes</p>
-            <p className="text-sm text-stone-800 whitespace-pre-wrap">{job.notes}</p>
+          <div className="rounded-xl border border-border bg-surface px-4 py-3">
+            <p className="text-xs font-medium text-fg-muted mb-1">Notes</p>
+            <p className="text-sm text-fg-secondary whitespace-pre-wrap">{job.notes}</p>
           </div>
         )}
 
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         {(job as any).due_date && (
-          <div className="rounded-xl border border-stone-200 bg-white px-4 py-3">
-            <p className="text-xs font-medium text-stone-500 mb-1">Due date</p>
+          <div className="rounded-xl border border-border bg-surface px-4 py-3">
+            <p className="text-xs font-medium text-fg-muted mb-1">Due date</p>
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            <p className="text-sm text-stone-800">{formatDate((job as any).due_date)}</p>
+            <p className="text-sm text-fg-secondary">{formatDate((job as any).due_date)}</p>
           </div>
         )}
 
@@ -202,9 +202,9 @@ export default async function ExtraJobPage({ params }: Props) {
 
         {/* Photos */}
         <div>
-          <h2 className="text-base font-semibold text-stone-800 mb-3">Photos</h2>
+          <h2 className="text-base font-semibold text-fg-secondary mb-3">Photos</h2>
 
-          <div className="rounded-xl border border-stone-200 bg-white p-5 mb-4">
+          <div className="rounded-xl border border-border bg-surface p-5 mb-4">
             <PhotoUpload
                 action={uploadExtraJobPhotoAction}
                 hiddenFields={{ extra_job_id: extraJobId, site_id: siteId, stage_id: stageId }}
@@ -218,9 +218,9 @@ export default async function ExtraJobPage({ params }: Props) {
                 if (group.length === 0) return null
                 return (
                   <div key={type}>
-                    <p className="text-sm font-semibold text-stone-600 mb-2">
+                    <p className="text-sm font-semibold text-fg-secondary mb-2">
                       {PHOTO_TYPE_LABELS[type]}
-                      <span className="ml-1.5 font-normal text-stone-400">({group.length})</span>
+                      <span className="ml-1.5 font-normal text-fg-muted">({group.length})</span>
                     </p>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {group.map((photo) => (
@@ -229,7 +229,7 @@ export default async function ExtraJobPage({ params }: Props) {
                           href={photo.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="block aspect-square rounded-lg overflow-hidden bg-stone-100"
+                          className="block aspect-square rounded-lg overflow-hidden bg-surface-raised"
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
@@ -245,13 +245,13 @@ export default async function ExtraJobPage({ params }: Props) {
               })}
             </div>
           ) : (
-            <p className="text-sm text-stone-400 text-center py-4">No photos yet.</p>
+            <p className="text-sm text-fg-muted text-center py-4">No photos yet.</p>
           )}
         </div>
 
-        {/* Pricing */}
+        {/* Quantities */}
         <div>
-          <h2 className="text-base font-semibold text-stone-800 mb-3">Pricing</h2>
+          <h2 className="text-base font-semibold text-fg-secondary mb-3">Quantities</h2>
           <ExtraJobPricing
             extraJobId={extraJobId}
             siteId={siteId}
@@ -282,10 +282,10 @@ export default async function ExtraJobPage({ params }: Props) {
 
         {/* Edit section */}
         <div>
-          <h2 className="text-base font-semibold text-stone-800 mb-3">
+          <h2 className="text-base font-semibold text-fg-secondary mb-3">
             {canManage ? 'Edit job' : 'Update status & notes'}
           </h2>
-          <div className="rounded-xl border border-stone-200 bg-white p-5">
+          <div className="rounded-xl border border-border bg-surface p-5">
             <EditExtraJobForm
               extraJobId={extraJobId}
               siteId={siteId}

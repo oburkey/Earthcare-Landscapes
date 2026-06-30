@@ -24,7 +24,7 @@ export default function EditStageForm({ siteId, stageId, name, isAdmin, isContra
     return (
       <button
         onClick={() => setOpen(true)}
-        className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm font-medium text-stone-600 hover:bg-stone-50"
+        className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-fg-secondary hover:bg-surface-raised"
       >
         Edit
       </button>
@@ -44,7 +44,7 @@ export default function EditStageForm({ siteId, stageId, name, isAdmin, isContra
             type="text"
             required
             defaultValue={name}
-            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 w-44"
+            className="rounded-lg border border-border px-3 py-1.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 w-44 bg-surface text-fg"
           />
           <button
             type="submit"
@@ -56,7 +56,7 @@ export default function EditStageForm({ siteId, stageId, name, isAdmin, isContra
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm font-medium text-stone-600 hover:bg-stone-50 shrink-0"
+            className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-fg-muted hover:bg-surface-raised shrink-0"
           >
             Cancel
           </button>
@@ -65,12 +65,12 @@ export default function EditStageForm({ siteId, stageId, name, isAdmin, isContra
         {/* Contract pricing toggle */}
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-stone-500">Contract pricing</span>
+            <span className="text-xs font-medium text-fg-muted">Contract pricing</span>
             <button
               type="button"
               onClick={() => setContractPricing((v) => !v)}
               className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                contractPricing ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-500'
+                contractPricing ? 'bg-accent-dim text-accent-fg' : 'bg-surface-raised text-fg-muted'
               }`}
             >
               {contractPricing ? 'On' : 'Off'}
@@ -78,9 +78,9 @@ export default function EditStageForm({ siteId, stageId, name, isAdmin, isContra
           </div>
           {contractPricing && (
             <div className="flex items-center gap-2">
-              <label className="text-xs text-stone-500 shrink-0">Default price per lot</label>
+              <label className="text-xs text-fg-muted shrink-0">Default price per lot</label>
               <div className="relative w-36">
-                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-stone-400">$</span>
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-fg-muted">$</span>
                 <input
                   name="default_contract_price"
                   type="number"
@@ -88,7 +88,7 @@ export default function EditStageForm({ siteId, stageId, name, isAdmin, isContra
                   step="0.01"
                   defaultValue={defaultContractPrice ?? ''}
                   placeholder="0.00"
-                  className="w-full rounded-lg border border-stone-300 pl-6 pr-3 py-1.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+                  className="w-full rounded-lg border border-border pl-6 pr-3 py-1.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-surface text-fg"
                 />
               </div>
             </div>
@@ -112,7 +112,7 @@ export default function EditStageForm({ siteId, stageId, name, isAdmin, isContra
             </button>
           ) : (
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-xs text-stone-600">Delete this stage and all its lots?</p>
+              <p className="text-xs text-fg-secondary">Delete this stage and all its lots?</p>
               <form action={deleteAction}>
                 <input type="hidden" name="site_id"  value={siteId} />
                 <input type="hidden" name="stage_id" value={stageId} />
@@ -127,7 +127,7 @@ export default function EditStageForm({ siteId, stageId, name, isAdmin, isContra
               <button
                 type="button"
                 onClick={() => setConfirmDelete(false)}
-                className="text-xs text-stone-500 hover:text-stone-700"
+                className="text-xs text-fg-muted hover:text-fg-secondary"
               >
                 Cancel
               </button>

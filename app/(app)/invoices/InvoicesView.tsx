@@ -581,9 +581,9 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
 
   if (sites.length === 0) {
     return (
-      <div className="rounded-xl border border-stone-200 bg-white px-4 py-16 text-center">
-        <p className="text-sm font-medium text-stone-600">No lots ready for invoicing</p>
-        <p className="mt-1 text-sm text-stone-400">
+      <div className="rounded-xl border border-border bg-surface px-4 py-16 text-center">
+        <p className="text-sm font-medium text-fg-muted">No lots ready for invoicing</p>
+        <p className="mt-1 text-sm text-fg-muted">
           Lots appear here once marked as Build Complete or Quant Done.
         </p>
       </div>
@@ -595,8 +595,8 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
 
       {/* Selection action bar — appears when lots or extra jobs are selected */}
       {(selectedLots.size > 0 || selectedExtraJobs.size > 0) && (
-        <div className="sticky top-14 md:top-0 z-10 flex items-center justify-between gap-3 rounded-xl border border-green-200 bg-green-50 px-4 py-2.5">
-          <span className="text-sm font-medium text-green-800">
+        <div className="sticky top-14 md:top-0 z-10 flex items-center justify-between gap-3 rounded-xl border border-green-200 bg-accent-dim px-4 py-2.5">
+          <span className="text-sm font-medium text-accent-fg">
             {[
               selectedLots.size > 0      ? `${selectedLots.size} lot${selectedLots.size !== 1 ? 's' : ''}` : null,
               selectedExtraJobs.size > 0 ? `${selectedExtraJobs.size} extra job${selectedExtraJobs.size !== 1 ? 's' : ''}` : null,
@@ -628,7 +628,7 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
             <button
               type="button"
               onClick={() => { setSelectedLots(new Set()); setSelectedExtraJobs(new Set()) }}
-              className="text-xs text-green-700 hover:text-green-900"
+              className="text-xs text-accent-fg hover:text-green-900"
             >
               Clear
             </button>
@@ -642,28 +642,28 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
         const totalLots  = site.stages.reduce((n, st) => n + st.lots.length, 0)
 
         return (
-          <div key={site.id} className="rounded-xl border border-stone-200 bg-white overflow-hidden">
+          <div key={site.id} className="rounded-xl border border-border bg-surface overflow-hidden">
 
             <button
               type="button"
               onClick={() => toggleSite(site.id)}
-              className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-stone-50 transition-colors"
+              className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-surface-raised transition-colors"
             >
-              <svg className={`h-4 w-4 text-stone-400 shrink-0 transition-transform ${isExpanded ? '' : '-rotate-90'}`}
+              <svg className={`h-4 w-4 text-fg-muted shrink-0 transition-transform ${isExpanded ? '' : '-rotate-90'}`}
                 fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
               </svg>
-              <span className="text-base font-semibold text-stone-900 flex-1">{site.name}</span>
+              <span className="text-base font-semibold text-fg flex-1">{site.name}</span>
               {site.clientContact && (
-                <span className="text-xs text-stone-400 shrink-0 hidden sm:block">{site.clientContact}</span>
+                <span className="text-xs text-fg-muted shrink-0 hidden sm:block">{site.clientContact}</span>
               )}
-              <span className="text-xs text-stone-400 shrink-0">
+              <span className="text-xs text-fg-muted shrink-0">
                 {site.stages.length} stage{site.stages.length !== 1 ? 's' : ''} · {totalLots} lot{totalLots !== 1 ? 's' : ''}
               </span>
             </button>
 
             {isExpanded && (
-              <div className="border-t border-stone-100 divide-y divide-stone-100">
+              <div className="border-t border-border-subtle divide-y divide-border-subtle">
                 {site.stages.map((stage) => {
                   const totStd        = stage.lots.reduce((s, l) => s + (l.contractPrice != null ? 0 : l.standardAmount), 0)
                   const totExtra      = stage.lots.reduce((s, l) => s + (l.contractPrice != null ? 0 : l.clientExtrasAmount), 0)
@@ -675,7 +675,7 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
                   const isStageExpanded = expandedStages.has(stage.id)
 
                   return (
-                    <div key={stage.id} className="border-b border-stone-100 last:border-0">
+                    <div key={stage.id} className="border-b border-border-subtle last:border-0">
 
                       {/* Stage header — click to expand/collapse */}
                       <div className="flex items-center gap-3 px-5 py-3 flex-wrap">
@@ -684,19 +684,19 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
                           checked={allSel}
                           ref={(el) => { if (el) el.indeterminate = someSel && !allSel }}
                           onChange={(e) => toggleStageSelection(stage, e.target.checked)}
-                          className="h-4 w-4 rounded border-stone-300 text-green-700 focus:ring-green-600 cursor-pointer shrink-0"
+                          className="h-4 w-4 rounded border-border text-accent-fg focus:ring-green-600 cursor-pointer shrink-0"
                         />
                         <button
                           type="button"
                           onClick={() => toggleStage(stage.id)}
                           className="flex items-center gap-2 flex-1 text-left hover:opacity-75 transition-opacity"
                         >
-                          <svg className={`h-3.5 w-3.5 text-stone-400 shrink-0 transition-transform ${isStageExpanded ? '' : '-rotate-90'}`}
+                          <svg className={`h-3.5 w-3.5 text-fg-muted shrink-0 transition-transform ${isStageExpanded ? '' : '-rotate-90'}`}
                             fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                           </svg>
-                          <h3 className="text-sm font-semibold text-stone-700">{stage.name}</h3>
-                          <span className="text-xs text-stone-400">
+                          <h3 className="text-sm font-semibold text-fg-secondary">{stage.name}</h3>
+                          <span className="text-xs text-fg-muted">
                             {stage.lots.length} lot{stage.lots.length !== 1 ? 's' : ''}
                             {stage.extraJobs.length > 0 && ` · ${stage.extraJobs.length} extra job${stage.extraJobs.length !== 1 ? 's' : ''}`}
                             {totAmt > 0 && ` · ${fmt(totAmt)}`}
@@ -706,7 +706,7 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
                           type="button"
                           onClick={() => exportStageSummary(site, stage)}
                           disabled={generating.has(summaryId)}
-                          className="flex items-center gap-1.5 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 disabled:opacity-60 transition-colors shrink-0"
+                          className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-muted hover:bg-surface-raised disabled:opacity-60 transition-colors shrink-0"
                         >
                           {generating.has(summaryId) ? <Spinner /> : <PdfIcon />}
                           {generating.has(summaryId) ? 'Generating…' : 'Export stage summary'}
@@ -719,15 +719,15 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm border-collapse">
                           <thead>
-                            <tr className="border-b border-stone-200">
+                            <tr className="border-b border-border">
                               <th className="pb-2 pr-3 w-8"></th>
-                              <th className="text-left text-xs font-semibold text-stone-400 uppercase tracking-wide pb-2 pr-6 whitespace-nowrap">Lot</th>
-                              <th className="text-center text-xs font-semibold text-stone-400 uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Build Complete</th>
-                              <th className="text-center text-xs font-semibold text-stone-400 uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Quant Done</th>
-                              <th className="text-right text-xs font-semibold text-stone-400 uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Standard Amount</th>
-                              <th className="text-right text-xs font-semibold text-stone-400 uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Client Extras</th>
-                              <th className="text-right text-xs font-semibold text-stone-400 uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Total</th>
-                              <th className="text-center text-xs font-semibold text-stone-400 uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Invoiced</th>
+                              <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 pr-6 whitespace-nowrap">Lot</th>
+                              <th className="text-center text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Build Complete</th>
+                              <th className="text-center text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Quant Done</th>
+                              <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Standard Amount</th>
+                              <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Client Extras</th>
+                              <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Total</th>
+                              <th className="text-center text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Invoiced</th>
                               <th className="pb-2 pl-2 w-7"></th>
                             </tr>
                           </thead>
@@ -739,40 +739,40 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
                               const genning  = generating.has(lot.id)
 
                               return (
-                                <tr key={lot.id} className={`border-b border-stone-100 transition-colors ${selected ? 'bg-green-50' : 'hover:bg-stone-50'}`}>
+                                <tr key={lot.id} className={`border-b border-border-subtle transition-colors ${selected ? 'bg-accent-dim' : 'hover:bg-surface-raised'}`}>
                                   <td className="py-2.5 pr-3">
                                     <input
                                       type="checkbox"
                                       checked={selected}
                                       onChange={() => toggleLotSelection(lot.id)}
-                                      className="h-4 w-4 rounded border-stone-300 text-green-700 focus:ring-green-600 cursor-pointer"
+                                      className="h-4 w-4 rounded border-border text-accent-fg focus:ring-green-600 cursor-pointer"
                                     />
                                   </td>
-                                  <td className="py-2.5 pr-6 font-medium text-stone-900 whitespace-nowrap">
+                                  <td className="py-2.5 pr-6 font-medium text-fg whitespace-nowrap">
                                     Lot {lot.lotNumber}
                                     {lot.contractPrice != null && (
                                       <span className="ml-1.5 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">Contract</span>
                                     )}
                                   </td>
                                   <td className="py-2.5 px-3 text-center">
-                                    {lot.buildComplete ? <span className="text-green-600 font-semibold">✓</span> : <span className="text-stone-300">—</span>}
+                                    {lot.buildComplete ? <span className="text-green-600 font-semibold">✓</span> : <span className="text-fg-muted">—</span>}
                                   </td>
                                   <td className="py-2.5 px-3 text-center">
-                                    {lot.quantDone ? <span className="text-green-600 font-semibold">✓</span> : <span className="text-stone-300">—</span>}
+                                    {lot.quantDone ? <span className="text-green-600 font-semibold">✓</span> : <span className="text-fg-muted">—</span>}
                                   </td>
-                                  <td className="py-2.5 px-3 text-right tabular-nums text-stone-700">
-                                    {lot.contractPrice != null ? <span className="text-stone-300">—</span> : fmt(lot.standardAmount)}
+                                  <td className="py-2.5 px-3 text-right tabular-nums text-fg-secondary">
+                                    {lot.contractPrice != null ? <span className="text-fg-muted">—</span> : fmt(lot.standardAmount)}
                                   </td>
-                                  <td className="py-2.5 px-3 text-right tabular-nums text-stone-700">
-                                    {lot.contractPrice != null ? <span className="text-stone-300">—</span> : (lot.clientExtrasAmount > 0 ? fmt(lot.clientExtrasAmount) : <span className="text-stone-300">—</span>)}
+                                  <td className="py-2.5 px-3 text-right tabular-nums text-fg-secondary">
+                                    {lot.contractPrice != null ? <span className="text-fg-muted">—</span> : (lot.clientExtrasAmount > 0 ? fmt(lot.clientExtrasAmount) : <span className="text-fg-muted">—</span>)}
                                   </td>
-                                  <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-stone-900">{fmt(total)}</td>
+                                  <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg">{fmt(total)}</td>
                                   <td className="py-2.5 px-3 text-center">
                                     <button
                                       type="button"
                                       disabled={isPending}
                                       onClick={() => handleToggleInvoiced(lot.id, invoiced)}
-                                      className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60 whitespace-nowrap ${invoiced ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-500 hover:bg-stone-200'}`}
+                                      className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60 whitespace-nowrap ${invoiced ? 'bg-accent-dim text-accent-fg' : 'bg-surface-raised text-fg-muted hover:bg-border'}`}
                                     >
                                       {invoiced ? 'Invoiced' : 'Invoice'}
                                     </button>
@@ -783,7 +783,7 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
                                       onClick={() => exportLotClaimSheet(site, stage.name, lot)}
                                       disabled={genning}
                                       title="Download claim sheet PDF"
-                                      className="text-stone-300 hover:text-stone-600 disabled:opacity-40 transition-colors"
+                                      className="text-fg-muted hover:text-fg-secondary disabled:opacity-40 transition-colors"
                                     >
                                       {genning ? <Spinner /> : <PdfIcon />}
                                     </button>
@@ -792,13 +792,13 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
                               )
                             })}
 
-                            <tr className="border-t-2 border-stone-300 bg-stone-50">
-                              <td colSpan={4} className="py-2.5 pr-6 font-semibold text-stone-700">Stage Total</td>
-                              <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-stone-700">{fmt(totStd)}</td>
-                              <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-stone-700">
-                                {totExtra > 0 ? fmt(totExtra) : <span className="text-stone-300">—</span>}
+                            <tr className="border-t-2 border-border bg-surface-raised">
+                              <td colSpan={4} className="py-2.5 pr-6 font-semibold text-fg-secondary">Stage Total</td>
+                              <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg-secondary">{fmt(totStd)}</td>
+                              <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg-secondary">
+                                {totExtra > 0 ? fmt(totExtra) : <span className="text-fg-muted">—</span>}
                               </td>
-                              <td className="py-2.5 px-3 text-right tabular-nums font-bold text-stone-900">{fmt(totAmt)}</td>
+                              <td className="py-2.5 px-3 text-right tabular-nums font-bold text-fg">{fmt(totAmt)}</td>
                               <td colSpan={2} />
                             </tr>
                           </tbody>
@@ -808,21 +808,21 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
                       {/* Extra jobs section */}
                       {stage.extraJobs.length > 0 && (
                         <div className="mt-3">
-                          <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-2">
+                          <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-2">
                             Extra Jobs
                           </p>
-                          <div className="rounded-xl border border-stone-200 overflow-hidden divide-y divide-stone-100">
+                          <div className="rounded-xl border border-border overflow-hidden divide-y divide-border-subtle">
                             {stage.extraJobs.map((job) => (
-                              <div key={job.id} className={`flex items-center gap-3 px-4 py-2.5 transition-colors ${selectedExtraJobs.has(job.id) ? 'bg-amber-50' : 'hover:bg-stone-50'}`}>
+                              <div key={job.id} className={`flex items-center gap-3 px-4 py-2.5 transition-colors ${selectedExtraJobs.has(job.id) ? 'bg-amber-50' : 'hover:bg-surface-raised'}`}>
                                 <input
                                   type="checkbox"
                                   checked={selectedExtraJobs.has(job.id)}
                                   onChange={() => toggleExtraJobSelection(job.id)}
-                                  className="h-4 w-4 rounded border-stone-300 text-amber-600 focus:ring-amber-500 cursor-pointer shrink-0"
+                                  className="h-4 w-4 rounded border-border text-amber-600 focus:ring-amber-500 cursor-pointer shrink-0"
                                 />
-                                <span className="text-sm text-stone-800 flex-1 truncate">{job.title}</span>
-                                <span className="text-sm tabular-nums text-stone-600 shrink-0">
-                                  {job.total > 0 ? fmt(job.total) : <span className="text-stone-300">—</span>}
+                                <span className="text-sm text-fg-secondary flex-1 truncate">{job.title}</span>
+                                <span className="text-sm tabular-nums text-fg-muted shrink-0">
+                                  {job.total > 0 ? fmt(job.total) : <span className="text-fg-muted">—</span>}
                                 </span>
                               </div>
                             ))}

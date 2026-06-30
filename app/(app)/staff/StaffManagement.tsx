@@ -29,11 +29,11 @@ const ROLE_LABELS: Record<Role, string> = {
 }
 
 const ROLE_BADGE: Record<Role, string> = {
-  worker:       'bg-stone-100 text-stone-600',
+  worker:       'bg-surface-raised text-fg-muted',
   leading_hand: 'bg-amber-100 text-amber-700',
   supervisor:   'bg-blue-100 text-blue-700',
   admin:        'bg-purple-100 text-purple-700',
-  client:       'bg-green-100 text-green-700',
+  client:       'bg-accent-dim text-accent-fg',
 }
 
 export default function StaffManagement({ staff, canManage, allowedRoles }: Props) {
@@ -44,7 +44,7 @@ export default function StaffManagement({ staff, canManage, allowedRoles }: Prop
     <div className="space-y-5">
 
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-stone-900">Staff</h1>
+        <h1 className="text-xl font-semibold text-fg">Staff</h1>
         {canManage && (
           <button
             onClick={() => { setShowAdd((v) => !v); setEditingId(null) }}
@@ -62,12 +62,12 @@ export default function StaffManagement({ staff, canManage, allowedRoles }: Prop
 
       {/* List */}
       {staff.length === 0 ? (
-        <div className="rounded-xl border border-stone-200 bg-white px-4 py-12 text-center">
-          <p className="text-sm text-stone-500">No staff members yet.</p>
+        <div className="rounded-xl border border-border bg-surface px-4 py-12 text-center">
+          <p className="text-sm text-fg-muted">No staff members yet.</p>
           {canManage && (
             <button
               onClick={() => setShowAdd(true)}
-              className="mt-3 text-sm font-medium text-green-700 hover:underline"
+              className="mt-3 text-sm font-medium text-accent-fg hover:underline"
             >
               Add the first staff member →
             </button>
@@ -76,24 +76,24 @@ export default function StaffManagement({ staff, canManage, allowedRoles }: Prop
       ) : (
         <div className="space-y-3">
           {staff.map((member) => (
-            <div key={member.id} className="rounded-xl border border-stone-200 bg-white overflow-hidden">
+            <div key={member.id} className="rounded-xl border border-border bg-surface overflow-hidden">
               <div className="flex items-center justify-between px-4 py-4">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-stone-900">{member.full_name || 'Unnamed'}</span>
+                    <span className="text-sm font-semibold text-fg">{member.full_name || 'Unnamed'}</span>
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ROLE_BADGE[member.role]}`}>
                       {ROLE_LABELS[member.role]}
                     </span>
                   </div>
                   {member.phone_number && (
-                    <a href={`tel:${member.phone_number}`} className="mt-0.5 block text-sm text-stone-500 hover:text-stone-700">
+                    <a href={`tel:${member.phone_number}`} className="mt-0.5 block text-sm text-fg-muted hover:text-fg-secondary">
                       {member.phone_number}
                     </a>
                   )}
                   {member.credentials.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {member.credentials.map((c, i) => (
-                        <span key={i} className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-600">{c}</span>
+                        <span key={i} className="rounded-full bg-surface-raised px-2 py-0.5 text-xs text-fg-muted">{c}</span>
                       ))}
                     </div>
                   )}
@@ -101,7 +101,7 @@ export default function StaffManagement({ staff, canManage, allowedRoles }: Prop
                 {canManage && (
                   <button
                     onClick={() => setEditingId(editingId === member.id ? null : member.id)}
-                    className="ml-3 shrink-0 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50"
+                    className="ml-3 shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-muted hover:bg-surface-raised"
                   >
                     {editingId === member.id ? 'Close' : 'Edit'}
                   </button>
@@ -109,7 +109,7 @@ export default function StaffManagement({ staff, canManage, allowedRoles }: Prop
               </div>
 
               {editingId === member.id && canManage && (
-                <div className="border-t border-stone-100 px-4 py-4">
+                <div className="border-t border-border-subtle px-4 py-4">
                   <EditForm
                     member={member}
                     allowedRoles={allowedRoles}
@@ -133,13 +133,13 @@ function AddForm({ allowedRoles, onSuccess }: { allowedRoles: Role[]; onSuccess:
   }, [state, onSuccess])
 
   return (
-    <div className="rounded-xl border border-stone-200 bg-white p-5">
-      <h2 className="text-sm font-semibold text-stone-800 mb-4">New staff member</h2>
+    <div className="rounded-xl border border-border bg-surface p-5">
+      <h2 className="text-sm font-semibold text-fg-secondary mb-4">New staff member</h2>
       <form action={action} className="space-y-4">
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="add-name" className="block text-sm font-medium text-stone-700">
+            <label htmlFor="add-name" className="block text-sm font-medium text-fg-secondary">
               Full name <span className="text-red-500">*</span>
             </label>
             <input
@@ -148,11 +148,11 @@ function AddForm({ allowedRoles, onSuccess }: { allowedRoles: Role[]; onSuccess:
               type="text"
               required
               placeholder="e.g. Jake Morrison"
-              className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+              className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
             />
           </div>
           <div>
-            <label htmlFor="add-phone" className="block text-sm font-medium text-stone-700">
+            <label htmlFor="add-phone" className="block text-sm font-medium text-fg-secondary">
               Phone number
             </label>
             <input
@@ -160,20 +160,20 @@ function AddForm({ allowedRoles, onSuccess }: { allowedRoles: Role[]; onSuccess:
               name="phone_number"
               type="tel"
               placeholder="e.g. 0400 000 000"
-              className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+              className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
             />
           </div>
         </div>
 
         <div>
-          <label htmlFor="add-role" className="block text-sm font-medium text-stone-700">
+          <label htmlFor="add-role" className="block text-sm font-medium text-fg-secondary">
             Role
           </label>
           <select
             id="add-role"
             name="role"
             defaultValue="worker"
-            className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-white"
+            className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-surface"
           >
             {allowedRoles.map((r) => (
               <option key={r} value={r}>{ROLE_LABELS[r]}</option>
@@ -182,16 +182,16 @@ function AddForm({ allowedRoles, onSuccess }: { allowedRoles: Role[]; onSuccess:
         </div>
 
         <div>
-          <label htmlFor="add-credentials" className="block text-sm font-medium text-stone-700">
+          <label htmlFor="add-credentials" className="block text-sm font-medium text-fg-secondary">
             Credentials
           </label>
-          <p className="mt-0.5 text-xs text-stone-500">One per line (e.g. White Card, Forklift Ticket, First Aid)</p>
+          <p className="mt-0.5 text-xs text-fg-muted">One per line (e.g. White Card, Forklift Ticket, First Aid)</p>
           <textarea
             id="add-credentials"
             name="credentials"
             rows={3}
             placeholder={'White Card\nForklift Ticket\nFirst Aid'}
-            className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 resize-none"
+            className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 resize-none"
           />
         </div>
 
@@ -235,36 +235,36 @@ function EditForm({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label htmlFor={`name-${member.id}`} className="block text-sm font-medium text-stone-700">Full name</label>
+            <label htmlFor={`name-${member.id}`} className="block text-sm font-medium text-fg-secondary">Full name</label>
             <input
               id={`name-${member.id}`}
               name="full_name"
               type="text"
               required
               defaultValue={member.full_name}
-              className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+              className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
             />
           </div>
           <div>
-            <label htmlFor={`phone-${member.id}`} className="block text-sm font-medium text-stone-700">Phone number</label>
+            <label htmlFor={`phone-${member.id}`} className="block text-sm font-medium text-fg-secondary">Phone number</label>
             <input
               id={`phone-${member.id}`}
               name="phone_number"
               type="tel"
               defaultValue={member.phone_number ?? ''}
               placeholder="e.g. 0400 000 000"
-              className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+              className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
             />
           </div>
         </div>
 
         <div>
-          <label htmlFor={`role-${member.id}`} className="block text-sm font-medium text-stone-700">Role</label>
+          <label htmlFor={`role-${member.id}`} className="block text-sm font-medium text-fg-secondary">Role</label>
           <select
             id={`role-${member.id}`}
             name="role"
             defaultValue={member.role}
-            className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-white"
+            className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-surface"
           >
             {allowedRoles.map((r) => (
               <option key={r} value={r}>{ROLE_LABELS[r]}</option>
@@ -273,15 +273,15 @@ function EditForm({
         </div>
 
         <div>
-          <label htmlFor={`creds-${member.id}`} className="block text-sm font-medium text-stone-700">Credentials</label>
-          <p className="mt-0.5 text-xs text-stone-500">One per line</p>
+          <label htmlFor={`creds-${member.id}`} className="block text-sm font-medium text-fg-secondary">Credentials</label>
+          <p className="mt-0.5 text-xs text-fg-muted">One per line</p>
           <textarea
             id={`creds-${member.id}`}
             name="credentials"
             rows={3}
             defaultValue={member.credentials.join('\n')}
             placeholder={'White Card\nForklift Ticket\nFirst Aid'}
-            className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 resize-none"
+            className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 resize-none"
           />
         </div>
 
@@ -289,7 +289,7 @@ function EditForm({
           <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{updateState.error}</p>
         )}
         {updateState?.success && (
-          <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{updateState.success}</p>
+          <p className="rounded-lg bg-accent-dim px-3 py-2 text-sm text-accent-fg">{updateState.success}</p>
         )}
 
         <button
@@ -302,7 +302,7 @@ function EditForm({
       </form>
 
       {/* Delete */}
-      <div className="pt-1 border-t border-stone-100">
+      <div className="pt-1 border-t border-border-subtle">
         {!confirmDelete ? (
           <button
             onClick={() => setConfirmDelete(true)}
@@ -312,7 +312,7 @@ function EditForm({
           </button>
         ) : (
           <div className="flex items-center gap-3">
-            <p className="text-sm text-stone-600">Are you sure?</p>
+            <p className="text-sm text-fg-muted">Are you sure?</p>
             <form action={deleteAction}>
               <input type="hidden" name="member_id" value={member.id} />
               <button
@@ -323,7 +323,7 @@ function EditForm({
                 {deletePending ? 'Removing…' : 'Yes, remove'}
               </button>
             </form>
-            <button onClick={() => setConfirmDelete(false)} className="text-sm text-stone-500 hover:text-stone-700">
+            <button onClick={() => setConfirmDelete(false)} className="text-sm text-fg-muted hover:text-fg-secondary">
               Cancel
             </button>
           </div>

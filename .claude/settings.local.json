@@ -33,7 +33,15 @@
       "Bash(grep -rn \"client\" app/page.tsx app/\\\\\\(auth\\\\\\)/login/LoginForm.tsx middleware.ts)",
       "Bash(cat app/page.tsx)",
       "Bash(sed -n '67,80p' supabase/schema.sql)",
-      "Bash(sed -n '52,62p' types/database.ts)"
+      "Bash(sed -n '52,62p' types/database.ts)",
+      "Read(//c/Users/Ollie/Desktop/earthcare/**)",
+      "Bash(npx tailwindcss *)",
+      "Bash(findstr /i \"dark variant\")",
+      "PowerShell(npm run *)",
+      "Bash(xxd \"C:/Users/Ollie/desktop/earthcare/app/\\(app\\)/ThemeToggle.tsx\")",
+      "Bash(xxd \"C:/Users/Ollie/desktop/earthcare/app/\\(app\\)/AppNav.tsx\")",
+      "Bash(sed -i 's/text-xs font-semibold uppercase tracking-wide text-fg-muted/text-xs font-semibold uppercase tracking-wide text-fg-secondary/g' 'C:/Users/Ollie/desktop/earthcare/app/\\(app\\)/sites/[siteId]/stages/[stageId]/extra-jobs/[extraJobId]/ExtraJobPricing.tsx')",
+      "Bash(sed -i 's/text-xs font-semibold uppercase tracking-wide text-fg-muted/text-xs font-semibold uppercase tracking-wide text-fg-secondary/g' 'C:/Users/Ollie/desktop/earthcare/app/\\(app\\)/sites/[siteId]/stages/[stageId]/MaterialsSummary.tsx')"
     ]
   }
 }

@@ -8,8 +8,8 @@ export default async function UsersPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold text-stone-900">User Management</h1>
-      <p className="mt-1 text-sm text-stone-500">Coming soon.</p>
+      <h1 className="text-xl font-semibold text-fg">User Management</h1>
+      <p className="mt-1 text-sm text-fg-muted">Coming soon.</p>
     </div>
   )
 }

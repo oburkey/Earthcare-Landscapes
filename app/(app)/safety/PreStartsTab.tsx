@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { submitPreStart, getSafetyDocUrl, deletePreStart } from './actions'
+import { submitPreStart, getSafetyDocUrl, deletePreStart, updatePreStart } from './actions'
 import { compressImage } from '@/lib/compressImage'
 import { LOGO_DATA_URL } from '@/lib/pdfAssets'
 import type { Role } from '@/types/database'
@@ -325,10 +325,10 @@ function fmtDate(d: string) {
 }
 
 function checkLabel(val: string, inverted = false) {
-  if (val === 'yes') return <span className={`${inverted ? 'text-red-600' : 'text-green-700'} font-medium`}>Yes</span>
-  if (val === 'no')  return <span className={`${inverted ? 'text-green-700' : 'text-red-600'} font-medium`}>No</span>
-  if (val === '')    return <span className="text-stone-300">—</span>
-  return <span className="text-stone-400">N/A</span>
+  if (val === 'yes') return <span className={`${inverted ? 'text-red-600 dark:text-red-400' : 'text-green-700 dark:text-green-400'} font-medium`}>Yes</span>
+  if (val === 'no')  return <span className={`${inverted ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'} font-medium`}>No</span>
+  if (val === '')    return <span className="text-fg-muted">—</span>
+  return <span className="text-fg-muted">N/A</span>
 }
 
 // Checklist display in the detail view
@@ -340,7 +340,7 @@ function DetailChecklist({
   checks: Record<string, string>
 }) {
   return (
-    <div className="rounded-lg border border-stone-200 overflow-hidden divide-y divide-stone-100">
+    <div className="rounded-lg border border-border overflow-hidden divide-y divide-border-subtle">
       {items.map(item => {
         const val  = checks[item.key] ?? ''
         const note = checks[`${item.key}_notes`] ?? ''
@@ -348,7 +348,7 @@ function DetailChecklist({
         return (
           <div key={item.key} className="px-3 py-2 text-sm">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-stone-700 flex-1 pr-4">{item.label}</span>
+              <span className="text-fg-secondary flex-1 pr-4">{item.label}</span>
               {checkLabel(val, item.inverted)}
             </div>
             {bad && note && (
@@ -376,7 +376,7 @@ function ChecklistSection({
   onNote:  (key: string, note: string) => void
 }) {
   return (
-    <div className="rounded-lg border border-stone-200 bg-white overflow-hidden divide-y divide-stone-100">
+    <div className="rounded-lg border border-border bg-surface overflow-hidden divide-y divide-border-subtle">
       {items.map(item => {
         const val     = (checks[item.key] ?? '') as CheckVal
         const bad     = isBadAnswer(item, val)
@@ -384,7 +384,7 @@ function ChecklistSection({
         return (
           <div key={item.key} className="space-y-2 px-3 py-2.5">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-sm text-stone-700 flex-1">{item.label}</span>
+              <span className="text-sm text-fg-secondary flex-1">{item.label}</span>
               <div className="flex gap-1 shrink-0">
                 {(['yes', 'no'] as const).map(v => (
                   <button
@@ -396,7 +396,7 @@ function ChecklistSection({
                         ? item.inverted
                           ? v === 'yes' ? 'bg-red-600 text-white' : 'bg-green-600 text-white'
                           : v === 'yes' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
-                        : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
+                        : 'bg-surface-raised text-fg-muted hover:bg-surface-raised'
                     }`}
                   >
                     {v === 'yes' ? 'Yes' : 'No'}
@@ -415,7 +415,7 @@ function ChecklistSection({
                 onChange={e => onNote(item.key, e.target.value)}
                 placeholder="What's wrong? (required)"
                 rows={2}
-                className="w-full rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-stone-900 placeholder:text-red-400 focus:border-red-400 focus:outline-none resize-none"
+                className="w-full rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-fg placeholder:text-red-400 focus:border-red-400 focus:outline-none resize-none"
               />
             )}
           </div>
@@ -509,6 +509,19 @@ export default function PreStartsTab({
   const [deleting, setDeleting]                     = useState(false)
   const [deleteError, setDeleteError]               = useState<string | null>(null)
 
+  // Edit state (admin only)
+  const [editMode, setEditMode]                   = useState(false)
+  const [editDate, setEditDate]                   = useState('')
+  const [editSiteId, setEditSiteId]               = useState('')
+  const [editCrewPresent, setEditCrewPresent]     = useState<string[]>([])
+  const [editWeather, setEditWeather]             = useState<string[]>([])
+  const [editSiteHazards, setEditSiteHazards]     = useState('')
+  const [editPpeConfirmed, setEditPpeConfirmed]   = useState(true)
+  const [editFitForWork, setEditFitForWork]       = useState(true)
+  const [editNotes, setEditNotes]                 = useState('')
+  const [editSaving, setEditSaving]               = useState(false)
+  const [editError, setEditError]                 = useState<string | null>(null)
+
   // Photo state
   const [pendingPhotos, setPendingPhotos]   = useState<File[]>([])
   const [photoPreviews, setPhotoPreviews]   = useState<string[]>([])
@@ -551,6 +564,8 @@ export default function PreStartsTab({
   async function openDetail(id: string) {
     setDetailId(id)
     setDetailPhotoUrls([])
+    setEditMode(false)
+    setEditError(null)
     setView('detail')
     const ps = preStarts.find(p => p.id === id)
     if (ps && ps.photoPaths.length > 0) {
@@ -705,6 +720,48 @@ export default function PreStartsTab({
     setView('list')
   }
 
+  function openEdit(ps: PreStartRow) {
+    setEditDate(ps.date)
+    setEditSiteId(ps.siteId)
+    setEditCrewPresent(ps.crewPresent)
+    setEditWeather(ps.weather)
+    setEditSiteHazards(ps.siteHazards ?? '')
+    setEditPpeConfirmed(ps.ppeConfirmed)
+    setEditFitForWork(ps.fitForWork)
+    setEditNotes(ps.notes ?? '')
+    setEditError(null)
+    setEditMode(true)
+  }
+
+  async function handleEditSave(id: string) {
+    setEditSaving(true); setEditError(null)
+    const result = await updatePreStart(id, {
+      date:          editDate,
+      siteId:        editSiteId,
+      crewPresent:   editCrewPresent,
+      weather:       editWeather,
+      siteHazards:   editSiteHazards || null,
+      ppeConfirmed:  editPpeConfirmed,
+      fitForWork:    editFitForWork,
+      notes:         editNotes || null,
+    })
+    setEditSaving(false)
+    if (result?.error) { setEditError(result.error); return }
+    onPreStartsChange(prev => prev.map(ps => ps.id !== id ? ps : {
+      ...ps,
+      date:         editDate,
+      siteId:       editSiteId,
+      siteName:     sites.find(s => s.id === editSiteId)?.name ?? ps.siteName,
+      crewPresent:  editCrewPresent,
+      weather:      editWeather,
+      siteHazards:  editSiteHazards || null,
+      ppeConfirmed: editPpeConfirmed,
+      fitForWork:   editFitForWork,
+      notes:        editNotes || null,
+    }))
+    setEditMode(false)
+  }
+
   // ── Detail view ────────────────────────────────────────────────────────────
 
   if (view === 'detail' && selectedPreStart) {
@@ -716,17 +773,17 @@ export default function PreStartsTab({
       <div className="space-y-5">
         <div className="flex items-center gap-3">
           <button type="button" onClick={() => setView('list')}
-            className="flex items-center gap-1 text-sm text-stone-500 hover:text-stone-800 transition-colors">
+            className="flex items-center gap-1 text-sm text-fg-muted hover:text-fg transition-colors">
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
             </svg>
             Pre-starts
           </button>
-          <span className="text-stone-300">/</span>
-          <h2 className="text-lg font-semibold text-stone-900">{fmtDate(ps.date)}</h2>
+          <span className="text-fg-muted">/</span>
+          <h2 className="text-lg font-semibold text-fg">{fmtDate(ps.date)}</h2>
         </div>
 
-        <div className="rounded-xl border border-stone-200 bg-white p-5 space-y-5">
+        <div className="rounded-xl border border-border bg-surface p-5 space-y-5">
 
           {/* General info */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -734,20 +791,20 @@ export default function PreStartsTab({
             <Field label="Date"         value={fmtDate(ps.date)} />
             <Field label="Submitted By" value={ps.submitterName} />
             <div className="col-span-2 sm:col-span-3">
-              <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1">Crew Present</p>
-              <p className="text-sm text-stone-900">
-                {ps.crewPresent.length > 0 ? ps.crewPresent.join(', ') : <span className="text-stone-400 italic">None listed</span>}
+              <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-1">Crew Present</p>
+              <p className="text-sm text-fg">
+                {ps.crewPresent.length > 0 ? ps.crewPresent.join(', ') : <span className="text-fg-muted italic">None listed</span>}
               </p>
             </div>
           </div>
 
           {/* Weather + bool flags */}
           <div>
-            <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1">Weather</p>
+            <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-1">Weather</p>
             <div className="flex flex-wrap gap-1 mb-3">
               {ps.weather.length > 0
-                ? ps.weather.map(w => <span key={w} className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-700">{w}</span>)
-                : <span className="text-sm text-stone-400 italic">Not recorded</span>
+                ? ps.weather.map(w => <span key={w} className="rounded-full bg-surface-raised px-2 py-0.5 text-xs text-fg-secondary">{w}</span>)
+                : <span className="text-sm text-fg-muted italic">Not recorded</span>
               }
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -761,25 +818,25 @@ export default function PreStartsTab({
 
           {ps.siteHazards && (
             <div>
-              <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1">Site Hazards</p>
-              <p className="text-sm text-stone-900 whitespace-pre-wrap">{ps.siteHazards}</p>
+              <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-1">Site Hazards</p>
+              <p className="text-sm text-fg whitespace-pre-wrap">{ps.siteHazards}</p>
             </div>
           )}
 
           {/* Machinery section */}
           {ps.usingMachinery && mc && (
             <div className="space-y-3">
-              <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Machinery Pre-Start</p>
+              <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Machinery Pre-Start</p>
               {(() => {
                 const machine = ps.machineId ? vehicles.find(v => v.id === ps.machineId) : null
                 if (!machine) return null
                 return (
-                  <div className="rounded-lg bg-stone-50 border border-stone-200 px-3 py-2 space-y-0.5">
-                    <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1">Machine</p>
-                    <p className="text-sm font-medium text-stone-900">{machine.make} {machine.model}</p>
-                    {machine.registration && <p className="text-xs text-stone-500">{machine.registration}</p>}
+                  <div className="rounded-lg bg-surface-raised border border-border px-3 py-2 space-y-0.5">
+                    <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-1">Machine</p>
+                    <p className="text-sm font-medium text-fg">{machine.make} {machine.model}</p>
+                    {machine.registration && <p className="text-xs text-fg-muted">{machine.registration}</p>}
                     {mc.hours_today && (
-                      <p className="text-xs text-stone-500">Meter reading at submission: <span className="font-semibold text-stone-700">{mc.hours_today} hrs</span></p>
+                      <p className="text-xs text-fg-muted">Meter reading at submission: <span className="font-semibold text-fg-secondary">{mc.hours_today} hrs</span></p>
                     )}
                   </div>
                 )
@@ -787,15 +844,15 @@ export default function PreStartsTab({
               <DetailChecklist items={isOldMachinery ? OLD_MACHINERY_CHECKLIST : MACHINERY_CHECKLIST} checks={mc} />
               {/* Legacy notes for old-format records */}
               {isOldMachinery && mc.greased_why_not && (
-                <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2">
-                  <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-0.5">Why not greased</p>
-                  <p className="text-sm text-amber-900 whitespace-pre-wrap">{mc.greased_why_not}</p>
+                <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 dark:bg-amber-900/20 dark:border-amber-800/40">
+                  <p className="text-xs font-semibold text-amber-700 dark:text-amber-300 uppercase tracking-wide mb-0.5">Why not greased</p>
+                  <p className="text-sm text-amber-900 dark:text-amber-100 whitespace-pre-wrap">{mc.greased_why_not}</p>
                 </div>
               )}
               {isOldMachinery && mc.damage_description && (
-                <div className="rounded-lg bg-red-50 border border-red-100 px-3 py-2">
-                  <p className="text-xs font-semibold text-red-700 uppercase tracking-wide mb-0.5">Damage description</p>
-                  <p className="text-sm text-red-900 whitespace-pre-wrap">{mc.damage_description}</p>
+                <div className="rounded-lg bg-red-50 border border-red-100 px-3 py-2 dark:bg-red-900/20 dark:border-red-800/40">
+                  <p className="text-xs font-semibold text-red-700 dark:text-red-300 uppercase tracking-wide mb-0.5">Damage description</p>
+                  <p className="text-sm text-red-900 dark:text-red-100 whitespace-pre-wrap">{mc.damage_description}</p>
                 </div>
               )}
             </div>
@@ -804,15 +861,15 @@ export default function PreStartsTab({
           {/* Truck section */}
           {ps.usingTruck && ps.truckChecks && (
             <div className="space-y-3">
-              <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Truck Pre-Start</p>
+              <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Truck Pre-Start</p>
               {(() => {
                 const truck = ps.truckId ? vehicles.find(v => v.id === ps.truckId) : null
                 if (!truck) return null
                 return (
-                  <div className="rounded-lg bg-stone-50 border border-stone-200 px-3 py-2 space-y-0.5">
-                    <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1">Truck</p>
-                    <p className="text-sm font-medium text-stone-900">{truck.make} {truck.model}</p>
-                    {truck.registration && <p className="text-xs text-stone-500">{truck.registration}</p>}
+                  <div className="rounded-lg bg-surface-raised border border-border px-3 py-2 space-y-0.5">
+                    <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-1">Truck</p>
+                    <p className="text-sm font-medium text-fg">{truck.make} {truck.model}</p>
+                    {truck.registration && <p className="text-xs text-fg-muted">{truck.registration}</p>}
                   </div>
                 )
               })()}
@@ -823,22 +880,22 @@ export default function PreStartsTab({
           {/* Trailer section */}
           {ps.usingTrailer && ps.trailerChecks && (
             <div className="space-y-3">
-              <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Trailer Pre-Start</p>
+              <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Trailer Pre-Start</p>
               <DetailChecklist items={TRAILER_CHECKLIST} checks={ps.trailerChecks} />
             </div>
           )}
 
           {ps.notes && (
             <div>
-              <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1">Notes</p>
-              <p className="text-sm text-stone-900 whitespace-pre-wrap">{ps.notes}</p>
+              <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-1">Notes</p>
+              <p className="text-sm text-fg whitespace-pre-wrap">{ps.notes}</p>
             </div>
           )}
 
           {/* Photos */}
           {ps.photoPaths.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-2">
+              <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-2">
                 Photos ({ps.photoPaths.length})
               </p>
               {detailPhotoUrls.length > 0 ? (
@@ -847,33 +904,138 @@ export default function PreStartsTab({
                     <a key={i} href={url} target="_blank" rel="noopener noreferrer">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={url} alt={`Photo ${i + 1}`}
-                        className="w-full h-32 object-cover rounded-lg border border-stone-200 hover:opacity-90 transition-opacity" />
+                        className="w-full h-32 object-cover rounded-lg border border-border hover:opacity-90 transition-opacity" />
                     </a>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-stone-400 italic">Loading photos…</p>
+                <p className="text-sm text-fg-muted italic">Loading photos…</p>
               )}
             </div>
           )}
 
-          {/* Admin delete */}
+          {/* Admin actions */}
           {isAdmin && (
-            <div className="pt-3 border-t border-stone-100">
-              {confirmDeleteDetail ? (
-                <div className="flex items-center gap-3 flex-wrap">
-                  <span className="text-sm text-stone-600">Delete this pre-start record permanently?</span>
-                  <button type="button" onClick={() => handleDelete(ps.id)} disabled={deleting}
-                    className="text-sm font-medium text-red-600 hover:text-red-800 disabled:opacity-50 transition-colors">
-                    {deleting ? 'Deleting…' : 'Yes, delete'}
-                  </button>
-                  <button type="button" onClick={() => { setConfirmDeleteDetail(false); setDeleteError(null) }}
-                    className="text-sm text-stone-400 hover:text-stone-600 transition-colors">Cancel</button>
-                  {deleteError && <span className="text-sm text-red-500">{deleteError}</span>}
+            <div className="pt-3 border-t border-border-subtle">
+              {editMode ? (
+                <div className="space-y-4">
+                  <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Edit record</p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-fg-muted">Date</label>
+                      <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)}
+                        className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-border focus:outline-none" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-fg-muted">Site</label>
+                      <select value={editSiteId} onChange={e => setEditSiteId(e.target.value)}
+                        className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-border focus:outline-none">
+                        <option value="">— Select site —</option>
+                        {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-fg-muted">PPE Confirmed</label>
+                      <div className="flex gap-2">
+                        {([true, false] as const).map(v => (
+                          <button key={String(v)} type="button" onClick={() => setEditPpeConfirmed(v)}
+                            className={`flex-1 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${editPpeConfirmed === v ? 'bg-stone-900 border-stone-900 text-white dark:bg-stone-700 dark:border-stone-700' : 'border-border text-fg-secondary hover:bg-surface-raised'}`}>
+                            {v ? 'Yes' : 'No'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-fg-muted">Fit for Work</label>
+                      <div className="flex gap-2">
+                        {([true, false] as const).map(v => (
+                          <button key={String(v)} type="button" onClick={() => setEditFitForWork(v)}
+                            className={`flex-1 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${editFitForWork === v ? 'bg-stone-900 border-stone-900 text-white dark:bg-stone-700 dark:border-stone-700' : 'border-border text-fg-secondary hover:bg-surface-raised'}`}>
+                            {v ? 'Yes' : 'No'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-fg-muted">Weather</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {WEATHER_OPTIONS.map(w => (
+                        <button key={w} type="button"
+                          onClick={() => setEditWeather(prev => prev.includes(w) ? prev.filter(x => x !== w) : [...prev, w])}
+                          className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${editWeather.includes(w) ? 'bg-stone-800 text-white dark:bg-stone-600' : 'bg-surface-raised text-fg-secondary hover:bg-surface-raised'}`}>
+                          {w}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-fg-muted">Crew Present</label>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                      {staff.map(s => (
+                        <label key={s.id} className="flex items-center gap-1.5 text-sm text-fg-secondary cursor-pointer">
+                          <input type="checkbox"
+                            checked={editCrewPresent.includes(s.full_name)}
+                            onChange={() => setEditCrewPresent(prev =>
+                              prev.includes(s.full_name) ? prev.filter(n => n !== s.full_name) : [...prev, s.full_name]
+                            )}
+                            className="rounded border-border text-fg focus:ring-border" />
+                          {s.full_name}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-fg-muted">Site Hazards</label>
+                    <textarea value={editSiteHazards} onChange={e => setEditSiteHazards(e.target.value)}
+                      rows={2} placeholder="Describe any site hazards…"
+                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-border focus:outline-none resize-none" />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-fg-muted">Notes</label>
+                    <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)}
+                      rows={2} placeholder="Any notes…"
+                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-border focus:outline-none resize-none" />
+                  </div>
+
+                  {editError && <p className="text-sm text-red-600">{editError}</p>}
+                  <div className="flex items-center gap-3">
+                    <button type="button" onClick={() => handleEditSave(ps.id)} disabled={editSaving}
+                      className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-800 disabled:opacity-50 transition-colors">
+                      {editSaving ? 'Saving…' : 'Save changes'}
+                    </button>
+                    <button type="button" onClick={() => { setEditMode(false); setEditError(null) }}
+                      className="text-sm text-fg-muted hover:text-fg transition-colors">Cancel</button>
+                  </div>
                 </div>
               ) : (
-                <button type="button" onClick={() => setConfirmDeleteDetail(true)}
-                  className="text-sm text-stone-400 hover:text-red-500 transition-colors">Delete record</button>
+                <div className="flex items-center gap-4">
+                  <button type="button" onClick={() => openEdit(ps)}
+                    className="text-sm text-fg-muted hover:text-fg transition-colors">Edit record</button>
+                  {confirmDeleteDetail ? (
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <span className="text-sm text-fg-secondary">Delete this pre-start record permanently?</span>
+                      <button type="button" onClick={() => handleDelete(ps.id)} disabled={deleting}
+                        className="text-sm font-medium text-red-600 hover:text-red-800 disabled:opacity-50 transition-colors">
+                        {deleting ? 'Deleting…' : 'Yes, delete'}
+                      </button>
+                      <button type="button" onClick={() => { setConfirmDeleteDetail(false); setDeleteError(null) }}
+                        className="text-sm text-fg-muted hover:text-fg-secondary transition-colors">Cancel</button>
+                      {deleteError && <span className="text-sm text-red-500">{deleteError}</span>}
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => setConfirmDeleteDetail(true)}
+                      className="text-sm text-fg-muted hover:text-red-500 transition-colors">Delete record</button>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -889,64 +1051,64 @@ export default function PreStartsTab({
       <div className="space-y-5">
         <div className="flex items-center gap-3">
           <button type="button" onClick={() => setView('list')}
-            className="flex items-center gap-1 text-sm text-stone-500 hover:text-stone-800 transition-colors">
+            className="flex items-center gap-1 text-sm text-fg-muted hover:text-fg transition-colors">
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
             </svg>
             Pre-starts
           </button>
-          <span className="text-stone-300">/</span>
-          <h2 className="text-lg font-semibold text-stone-900">New pre-start</h2>
+          <span className="text-fg-muted">/</span>
+          <h2 className="text-lg font-semibold text-fg">New pre-start</h2>
         </div>
 
-        <div className="rounded-xl border border-stone-200 bg-white p-5 space-y-6">
+        <div className="rounded-xl border border-border bg-surface p-5 space-y-6">
 
           {/* Site + Date */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Site *</label>
+              <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Site *</label>
               <select value={siteId} onChange={e => setSiteId(e.target.value)}
-                className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 focus:border-stone-400 focus:outline-none">
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-border focus:outline-none">
                 <option value="">— Select site —</option>
                 {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Date *</label>
+              <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Date *</label>
               <input type="date" value={date} onChange={e => setDate(e.target.value)}
-                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 focus:border-stone-400 focus:outline-none" />
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-border focus:outline-none" />
             </div>
           </div>
 
           {/* Crew present */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Crew Present</label>
+            <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Crew Present</label>
             {staff.length === 0 ? (
-              <p className="text-sm text-stone-400 italic">No staff in directory</p>
+              <p className="text-sm text-fg-muted italic">No staff in directory</p>
             ) : (
-              <div className="rounded-lg border border-stone-200 max-h-48 overflow-y-auto divide-y divide-stone-50">
+              <div className="rounded-lg border border-border max-h-48 overflow-y-auto divide-y divide-border-subtle">
                 {staff.map(s => (
-                  <label key={s.id} className="flex items-center gap-2.5 px-3 py-2 hover:bg-stone-50 cursor-pointer">
+                  <label key={s.id} className="flex items-center gap-2.5 px-3 py-2 hover:bg-surface-raised cursor-pointer">
                     <input type="checkbox" checked={crewPresent.includes(s.full_name)} onChange={() => toggleCrew(s.full_name)}
-                      className="h-4 w-4 rounded border-stone-300 text-green-700 focus:ring-green-600" />
-                    <span className="text-sm text-stone-800">{s.full_name}</span>
+                      className="h-4 w-4 rounded border-border text-green-700 focus:ring-green-600" />
+                    <span className="text-sm text-fg">{s.full_name}</span>
                   </label>
                 ))}
               </div>
             )}
             {crewPresent.length > 0 && (
-              <p className="text-xs text-stone-500">{crewPresent.length} selected: {crewPresent.join(', ')}</p>
+              <p className="text-xs text-fg-muted">{crewPresent.length} selected: {crewPresent.join(', ')}</p>
             )}
           </div>
 
           {/* Weather */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Weather</label>
+            <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Weather</label>
             <div className="flex flex-wrap gap-2">
               {WEATHER_OPTIONS.map(w => (
                 <button key={w} type="button" onClick={() => toggleWeather(w)}
                   className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                    weather.includes(w) ? 'bg-stone-800 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                    weather.includes(w) ? 'bg-stone-800 text-white dark:bg-stone-600' : 'bg-surface-raised text-fg-secondary hover:bg-surface-raised'
                   }`}>{w}</button>
               ))}
             </div>
@@ -954,22 +1116,22 @@ export default function PreStartsTab({
 
           {/* Hazards */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">
+            <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">
               Any hazards identified on site?
             </label>
             <textarea value={siteHazards} onChange={e => setSiteHazards(e.target.value)}
               placeholder="Describe any hazards identified…" rows={2}
-              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none resize-none" />
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-border focus:outline-none resize-none" />
           </div>
 
           {/* PPE + Fit */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">PPE being worn?</label>
+              <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">PPE being worn?</label>
               <YesNo value={ppeConfirmed} onChange={setPpeConfirmed} />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">All crew fit for work?</label>
+              <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">All crew fit for work?</label>
               <YesNo value={fitForWork} onChange={setFitForWork} />
             </div>
           </div>
@@ -977,32 +1139,32 @@ export default function PreStartsTab({
           {/* Equipment toggles */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Using machinery today?</label>
+              <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Using machinery today?</label>
               <YesNo value={usingMachinery} onChange={setUsingMachinery} />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Using a truck today?</label>
+              <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Using a truck today?</label>
               <YesNo value={usingTruck} onChange={setUsingTruck} />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Using a trailer today?</label>
+              <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Using a trailer today?</label>
               <YesNo value={usingTrailer} onChange={setUsingTrailer} />
             </div>
           </div>
 
           {/* ── Machinery pre-start ── */}
           {usingMachinery && (
-            <div className="space-y-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
-              <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide">Machinery Pre-Start Check</p>
+            <div className="space-y-4 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/60 dark:bg-amber-900/20">
+              <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 uppercase tracking-wide">Machinery Pre-Start Check</p>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Select Machine</label>
+                <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Select Machine</label>
                 {machineryVehicles.length === 0 ? (
-                  <p className="text-sm text-stone-400 italic">No machinery in fleet. Add vehicles with type &quot;Machinery&quot; in the Vehicles page.</p>
+                  <p className="text-sm text-fg-muted italic">No machinery in fleet. Add vehicles with type &quot;Machinery&quot; in the Vehicles page.</p>
                 ) : (
                   <>
                     <select value={machineId} onChange={e => setMachineId(e.target.value)}
-                      className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 focus:border-stone-400 focus:outline-none">
+                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-border focus:outline-none">
                       <option value="">— Select machine —</option>
                       {machineryVehicles.map(v => (
                         <option key={v.id} value={v.id}>
@@ -1011,7 +1173,7 @@ export default function PreStartsTab({
                       ))}
                     </select>
                     {selectedMachine?.current_hours != null && (
-                      <p className="text-xs text-stone-500">
+                      <p className="text-xs text-fg-muted">
                         Current hours on this machine: <span className="font-semibold">{selectedMachine.current_hours} hrs</span>
                       </p>
                     )}
@@ -1020,14 +1182,14 @@ export default function PreStartsTab({
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Current meter reading (hrs)</label>
+                <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Current meter reading (hrs)</label>
                 <input type="number" value={machineHours} onChange={e => setMachineHours(e.target.value)}
                   placeholder="e.g. 1234.5" min="0" step="0.5"
-                  className="w-36 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none" />
+                  className="w-36 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-border focus:outline-none" />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Checklist</label>
+                <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Checklist</label>
                 <ChecklistSection
                   items={MACHINERY_CHECKLIST}
                   checks={machineChecks}
@@ -1041,17 +1203,17 @@ export default function PreStartsTab({
 
           {/* ── Truck pre-start ── */}
           {usingTruck && (
-            <div className="space-y-4 rounded-xl border border-blue-200 bg-blue-50 p-4">
-              <p className="text-xs font-semibold text-blue-800 uppercase tracking-wide">Truck Pre-Start Check</p>
+            <div className="space-y-4 rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800/60 dark:bg-blue-900/20">
+              <p className="text-xs font-semibold text-blue-800 dark:text-blue-300 uppercase tracking-wide">Truck Pre-Start Check</p>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Select Truck</label>
+                <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Select Truck</label>
                 {truckVehicles.length === 0 ? (
-                  <p className="text-sm text-stone-400 italic">No trucks in fleet. Add vehicles with type &quot;Truck&quot; in the Vehicles page.</p>
+                  <p className="text-sm text-fg-muted italic">No trucks in fleet. Add vehicles with type &quot;Truck&quot; in the Vehicles page.</p>
                 ) : (
                   <>
                     <select value={truckId} onChange={e => setTruckId(e.target.value)}
-                      className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 focus:border-stone-400 focus:outline-none">
+                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-border focus:outline-none">
                       <option value="">— Select truck —</option>
                       {truckVehicles.map(v => (
                         <option key={v.id} value={v.id}>
@@ -1060,14 +1222,14 @@ export default function PreStartsTab({
                       ))}
                     </select>
                     {selectedTruck && (
-                      <p className="text-xs text-stone-500">{selectedTruck.make} {selectedTruck.model} selected</p>
+                      <p className="text-xs text-fg-muted">{selectedTruck.make} {selectedTruck.model} selected</p>
                     )}
                   </>
                 )}
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Checklist</label>
+                <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Checklist</label>
                 <ChecklistSection
                   items={TRUCK_CHECKLIST}
                   checks={truckChecks}
@@ -1081,10 +1243,10 @@ export default function PreStartsTab({
 
           {/* ── Trailer pre-start ── */}
           {usingTrailer && (
-            <div className="space-y-4 rounded-xl border border-green-200 bg-green-50 p-4">
-              <p className="text-xs font-semibold text-green-800 uppercase tracking-wide">Trailer Pre-Start Check</p>
+            <div className="space-y-4 rounded-xl border border-green-200 bg-green-50 p-4 dark:border-green-800/60 dark:bg-green-900/20">
+              <p className="text-xs font-semibold text-green-800 dark:text-green-300 uppercase tracking-wide">Trailer Pre-Start Check</p>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Checklist</label>
+                <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Checklist</label>
                 <ChecklistSection
                   items={TRAILER_CHECKLIST}
                   checks={trailerChecks}
@@ -1098,15 +1260,15 @@ export default function PreStartsTab({
 
           {/* General notes */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">General Notes</label>
+            <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">General Notes</label>
             <textarea value={notes} onChange={e => setNotes(e.target.value)}
               placeholder="Any additional notes…" rows={2}
-              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none resize-none" />
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-border focus:outline-none resize-none" />
           </div>
 
           {/* Photo upload */}
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">
+            <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">
               Attach photos (optional) — e.g. damage, hazards
             </label>
             {photoPreviews.length > 0 && (
@@ -1114,7 +1276,7 @@ export default function PreStartsTab({
                 {photoPreviews.map((url, i) => (
                   <div key={i} className="relative">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={url} alt={`Photo ${i + 1}`} className="w-full h-20 object-cover rounded-lg border border-stone-200" />
+                    <img src={url} alt={`Photo ${i + 1}`} className="w-full h-20 object-cover rounded-lg border border-border" />
                     <button type="button" onClick={() => removePhoto(i)}
                       className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs hover:bg-red-600 transition-colors">×</button>
                   </div>
@@ -1122,8 +1284,8 @@ export default function PreStartsTab({
               </div>
             )}
             <div className="flex items-center gap-3">
-              <label className={`flex items-center gap-2 rounded-lg border border-stone-200 px-3 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50 transition-colors cursor-pointer ${compressingPhotos ? 'opacity-50 pointer-events-none' : ''}`}>
-                <svg className="h-4 w-4 text-stone-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <label className={`flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-fg-secondary hover:bg-surface-raised transition-colors cursor-pointer ${compressingPhotos ? 'opacity-50 pointer-events-none' : ''}`}>
+                <svg className="h-4 w-4 text-fg-muted" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
                 {compressingPhotos ? 'Compressing…' : 'Add photos'}
@@ -1131,7 +1293,7 @@ export default function PreStartsTab({
                   onChange={handlePhotoSelect} disabled={compressingPhotos} />
               </label>
               {pendingPhotos.length > 0 && (
-                <span className="text-xs text-stone-400">{pendingPhotos.length} photo{pendingPhotos.length !== 1 ? 's' : ''} ready</span>
+                <span className="text-xs text-fg-muted">{pendingPhotos.length} photo{pendingPhotos.length !== 1 ? 's' : ''} ready</span>
               )}
             </div>
           </div>
@@ -1148,7 +1310,7 @@ export default function PreStartsTab({
             {saving ? 'Submitting…' : 'Submit pre-start'}
           </button>
           <button type="button" onClick={() => setView('list')}
-            className="text-sm text-stone-500 hover:text-stone-700 transition-colors">Cancel</button>
+            className="text-sm text-fg-muted hover:text-fg-secondary transition-colors">Cancel</button>
         </div>
       </div>
     )
@@ -1160,7 +1322,7 @@ export default function PreStartsTab({
     <div className="space-y-5">
 
       {!tableExists && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800/60 dark:bg-amber-900/20 dark:text-amber-300">
           The <code className="font-mono">pre_starts</code> table hasn&apos;t been created yet. Run the SQL migration to enable this feature.
         </div>
       )}
@@ -1169,11 +1331,11 @@ export default function PreStartsTab({
         <div className="space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-stone-700">
+              <h2 className="text-sm font-semibold text-fg-secondary">
                 Today — {todaysPreStarts.length} pre-start{todaysPreStarts.length !== 1 ? 's' : ''}
               </h2>
               {todaysPreStarts.length > 0 && (
-                <p className="text-xs text-stone-400 mt-0.5">{todaysPreStarts.map(ps => ps.submitterName).join(', ')}</p>
+                <p className="text-xs text-fg-muted mt-0.5">{todaysPreStarts.map(ps => ps.submitterName).join(', ')}</p>
               )}
             </div>
             <button type="button" onClick={openNew}
@@ -1182,33 +1344,33 @@ export default function PreStartsTab({
             </button>
           </div>
 
-          <div className="rounded-xl border border-stone-200 bg-white p-4">
-            <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-3">Filter</p>
+          <div className="rounded-xl border border-border bg-surface p-4">
+            <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-3">Filter</p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
               <div className="space-y-1">
-                <label className="text-xs text-stone-500">From</label>
+                <label className="text-xs text-fg-muted">From</label>
                 <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
-                  className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-sm text-stone-900 focus:border-stone-400 focus:outline-none" />
+                  className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-fg focus:border-border focus:outline-none" />
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-stone-500">To</label>
+                <label className="text-xs text-fg-muted">To</label>
                 <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
-                  className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-sm text-stone-900 focus:border-stone-400 focus:outline-none" />
+                  className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-fg focus:border-border focus:outline-none" />
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-stone-500">Site</label>
+                <label className="text-xs text-fg-muted">Site</label>
                 <select value={filterSite} onChange={e => setFilterSite(e.target.value)}
-                  className="w-full rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-sm text-stone-900 focus:border-stone-400 focus:outline-none">
+                  className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-fg focus:border-border focus:outline-none">
                   <option value="">All sites</option>
                   {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
               <div className="flex gap-2">
                 <button type="button" onClick={() => { setFilterFrom(''); setFilterTo(''); setFilterSite('') }}
-                  className="text-xs text-stone-400 hover:text-stone-700 transition-colors">Clear</button>
+                  className="text-xs text-fg-muted hover:text-fg-secondary transition-colors">Clear</button>
                 <button type="button" onClick={handleExportPdf}
                   disabled={pdfGenerating || filteredPreStarts.length === 0}
-                  className="flex items-center gap-1.5 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50 transition-colors">
+                  className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-secondary hover:bg-surface-raised disabled:opacity-50 transition-colors">
                   {pdfGenerating ? <Spinner /> : <PdfIcon />}
                   Export PDF
                 </button>
@@ -1233,11 +1395,11 @@ export default function PreStartsTab({
       )}
 
       {filteredPreStarts.length === 0 ? (
-        <div className="rounded-xl border border-stone-200 bg-white px-4 py-14 text-center">
-          <p className="text-sm font-medium text-stone-600">No pre-starts{isSupervisorPlus ? ' for this filter' : ' submitted yet'}</p>
+        <div className="rounded-xl border border-border bg-surface px-4 py-14 text-center">
+          <p className="text-sm font-medium text-fg-secondary">No pre-starts{isSupervisorPlus ? ' for this filter' : ' submitted yet'}</p>
         </div>
       ) : (
-        <div className="rounded-xl border border-stone-200 bg-white overflow-hidden divide-y divide-stone-100">
+        <div className="rounded-xl border border-border bg-surface overflow-hidden divide-y divide-border-subtle">
           {filteredPreStarts.map(ps => {
             const hasHazards = !!ps.siteHazards
             const issueFlags = [
@@ -1248,52 +1410,52 @@ export default function PreStartsTab({
             return (
               <div key={ps.id} className="flex items-stretch">
                 <button type="button" onClick={() => openDetail(ps.id)}
-                  className="flex-1 flex items-start gap-3 px-5 py-4 hover:bg-stone-50 transition-colors text-left min-w-0">
+                  className="flex-1 flex items-start gap-3 px-5 py-4 hover:bg-surface-raised transition-colors text-left min-w-0">
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-stone-900 text-sm">{ps.siteName}</span>
-                      <span className="text-xs text-stone-400">{fmtDate(ps.date)}</span>
-                      {hasHazards && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Hazard</span>}
+                      <span className="font-semibold text-fg text-sm">{ps.siteName}</span>
+                      <span className="text-xs text-fg-muted">{fmtDate(ps.date)}</span>
+                      {hasHazards && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">Hazard</span>}
                       {issueFlags.map(f => (
-                        <span key={f} className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">{f} ✗</span>
+                        <span key={f} className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/40 dark:text-red-300">{f} ✗</span>
                       ))}
                       {(ps.usingMachinery || ps.usingTruck || ps.usingTrailer) && (
-                        <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
+                        <span className="rounded-full bg-surface-raised px-2 py-0.5 text-xs text-fg-muted">
                           {[ps.usingMachinery && 'Machine', ps.usingTruck && 'Truck', ps.usingTrailer && 'Trailer'].filter(Boolean).join(', ')}
                         </span>
                       )}
                       {ps.photoPaths.length > 0 && (
-                        <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
+                        <span className="rounded-full bg-surface-raised px-2 py-0.5 text-xs text-fg-muted">
                           {ps.photoPaths.length} photo{ps.photoPaths.length !== 1 ? 's' : ''}
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-stone-400">
+                    <div className="flex items-center gap-3 text-xs text-fg-muted">
                       <span>Submitted by {ps.submitterName}</span>
                       {ps.crewPresent.length > 0 && <span>· {ps.crewPresent.length} crew</span>}
                       {ps.weather.length > 0 && <span>· {ps.weather.join(', ')}</span>}
                     </div>
                   </div>
-                  <svg className="h-4 w-4 text-stone-300 shrink-0 mt-1" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <svg className="h-4 w-4 text-fg-muted shrink-0 mt-1" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                   </svg>
                 </button>
 
                 {isAdmin && (
-                  <div className="flex items-center px-4 border-l border-stone-100 shrink-0">
+                  <div className="flex items-center px-4 border-l border-border-subtle shrink-0">
                     {isConfirming ? (
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-stone-500">Delete?</span>
+                        <span className="text-xs text-fg-muted">Delete?</span>
                         <button type="button" onClick={() => handleDelete(ps.id)} disabled={deleting}
                           className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50 transition-colors">
                           {deleting ? '…' : 'Yes'}
                         </button>
                         <button type="button" onClick={() => { setConfirmDeleteId(null); setDeleteError(null) }}
-                          className="text-xs text-stone-400 hover:text-stone-600 transition-colors">Cancel</button>
+                          className="text-xs text-fg-muted hover:text-fg-secondary transition-colors">Cancel</button>
                       </div>
                     ) : (
                       <button type="button" onClick={() => setConfirmDeleteId(ps.id)}
-                        className="text-xs text-stone-300 hover:text-red-500 transition-colors">Delete</button>
+                        className="text-xs text-fg-muted hover:text-red-500 transition-colors">Delete</button>
                     )}
                   </div>
                 )}
@@ -1311,8 +1473,8 @@ export default function PreStartsTab({
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1">{label}</p>
-      <p className="text-sm text-stone-900">{value}</p>
+      <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-1">{label}</p>
+      <p className="text-sm text-fg">{value}</p>
     </div>
   )
 }
@@ -1320,8 +1482,8 @@ function Field({ label, value }: { label: string; value: string }) {
 function BoolField({ label, value }: { label: string; value: boolean }) {
   return (
     <div>
-      <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1">{label}</p>
-      <p className={`text-sm font-medium ${value ? 'text-green-700' : 'text-red-600'}`}>
+      <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-1">{label}</p>
+      <p className={`text-sm font-medium ${value ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
         {value ? 'Yes ✓' : 'No ✗'}
       </p>
     </div>
@@ -1332,11 +1494,11 @@ function YesNo({ value, onChange }: { value: boolean; onChange: (v: boolean) => 
   return (
     <div className="flex gap-1.5">
       <button type="button" onClick={() => onChange(true)}
-        className={`flex-1 rounded-lg py-2 text-xs font-medium transition-colors ${value ? 'bg-green-600 text-white' : 'bg-stone-100 text-stone-500 hover:bg-stone-200'}`}>
+        className={`flex-1 rounded-lg py-2 text-xs font-medium transition-colors ${value ? 'bg-green-600 text-white' : 'bg-surface-raised text-fg-muted hover:bg-surface-raised'}`}>
         Yes
       </button>
       <button type="button" onClick={() => onChange(false)}
-        className={`flex-1 rounded-lg py-2 text-xs font-medium transition-colors ${!value ? 'bg-red-600 text-white' : 'bg-stone-100 text-stone-500 hover:bg-stone-200'}`}>
+        className={`flex-1 rounded-lg py-2 text-xs font-medium transition-colors ${!value ? 'bg-red-600 text-white' : 'bg-surface-raised text-fg-muted hover:bg-surface-raised'}`}>
         No
       </button>
     </div>

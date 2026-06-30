@@ -17,8 +17,8 @@ export default async function PlantRatiosPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 space-y-5">
       <div>
-        <h1 className="text-xl font-semibold text-stone-900">Plant Ratios</h1>
-        <p className="mt-1 text-sm text-stone-500">
+        <h1 className="text-xl font-semibold text-fg">Plant Ratios</h1>
+        <p className="mt-1 text-sm text-fg-muted">
           Configure plants-per-m² ratios and pot size splits used for plant quantity calculations.
         </p>
       </div>

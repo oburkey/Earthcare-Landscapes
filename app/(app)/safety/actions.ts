@@ -220,6 +220,44 @@ export async function signOffDocument(documentId: string, signatureNotes: string
   }
 }
 
+export async function updatePreStart(id: string, fields: {
+  date: string
+  siteId: string
+  crewPresent: string[]
+  weather: string[]
+  siteHazards: string | null
+  ppeConfirmed: boolean
+  fitForWork: boolean
+  notes: string | null
+}) {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Admin access required' }
+
+  if (!fields.date)   return { error: 'Date is required' }
+  if (!fields.siteId) return { error: 'Site is required' }
+
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('pre_starts')
+    .update({
+      date:          fields.date,
+      site_id:       fields.siteId,
+      crew_present:  fields.crewPresent,
+      weather:       fields.weather,
+      site_hazards:  fields.siteHazards,
+      ppe_confirmed: fields.ppeConfirmed,
+      fit_for_work:  fields.fitForWork,
+      notes:         fields.notes,
+    })
+    .eq('id', id)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/safety')
+  return { success: true }
+}
+
 export async function deletePreStart(preStartId: string) {
   const profile = await requireAuth()
   if (profile.role !== 'admin') return { error: 'Admin access required' }

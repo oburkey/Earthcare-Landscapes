@@ -23,7 +23,7 @@ export default function EditSiteForm({ siteId, name, address, clientContact, has
     return (
       <button
         onClick={() => setOpen(true)}
-        className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm font-medium text-stone-600 hover:bg-stone-50 shrink-0"
+        className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-fg-secondary hover:bg-surface-raised shrink-0"
       >
         Edit
       </button>
@@ -31,12 +31,12 @@ export default function EditSiteForm({ siteId, name, address, clientContact, has
   }
 
   return (
-    <div className="mt-4 border-t border-stone-100 pt-4">
+    <div className="mt-4 border-t border-border-subtle pt-4">
       <form action={action} className="space-y-3">
         <input type="hidden" name="site_id" value={siteId} />
 
         <div>
-          <label htmlFor="site-name" className="block text-sm font-medium text-stone-700">
+          <label htmlFor="site-name" className="block text-sm font-medium text-fg-secondary">
             Site name <span className="text-red-500">*</span>
           </label>
           <input
@@ -45,12 +45,12 @@ export default function EditSiteForm({ siteId, name, address, clientContact, has
             type="text"
             required
             defaultValue={name}
-            className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+            className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-surface text-fg"
           />
         </div>
 
         <div>
-          <label htmlFor="site-address" className="block text-sm font-medium text-stone-700">
+          <label htmlFor="site-address" className="block text-sm font-medium text-fg-secondary">
             Address
           </label>
           <input
@@ -59,12 +59,12 @@ export default function EditSiteForm({ siteId, name, address, clientContact, has
             type="text"
             defaultValue={address ?? ''}
             placeholder="e.g. 123 Main St, Perth WA 6000"
-            className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+            className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-surface text-fg"
           />
         </div>
 
         <div>
-          <label htmlFor="site-contact" className="block text-sm font-medium text-stone-700">
+          <label htmlFor="site-contact" className="block text-sm font-medium text-fg-secondary">
             Client contact
           </label>
           <input
@@ -73,22 +73,22 @@ export default function EditSiteForm({ siteId, name, address, clientContact, has
             type="text"
             defaultValue={clientContact ?? ''}
             placeholder="e.g. Jane Smith — 0400 000 000"
-            className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+            className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-surface text-fg"
           />
         </div>
 
         {isAdmin && (
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-stone-700">Client extras</span>
+            <span className="text-sm font-medium text-fg-secondary">Client extras</span>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
                 name="has_client_extras"
                 value="true"
                 defaultChecked={hasClientExtras}
-                className="h-4 w-4 rounded border-stone-300 text-green-700 focus:ring-green-600"
+                className="h-4 w-4 rounded border-border text-accent-fg focus:ring-green-600"
               />
-              <span className="text-xs text-stone-500">Show in quant &amp; invoices</span>
+              <span className="text-xs text-fg-muted">Show in quant &amp; invoices</span>
             </label>
           </div>
         )}
@@ -108,7 +108,7 @@ export default function EditSiteForm({ siteId, name, address, clientContact, has
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="rounded-lg border border-stone-200 px-4 py-2 text-sm font-medium text-stone-600 hover:bg-stone-50"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-fg-secondary hover:bg-surface-raised"
           >
             Cancel
           </button>
@@ -116,7 +116,7 @@ export default function EditSiteForm({ siteId, name, address, clientContact, has
       </form>
 
       {isAdmin && (
-        <div className="mt-4 pt-3 border-t border-stone-100">
+        <div className="mt-4 pt-3 border-t border-border-subtle">
           {!confirmDelete ? (
             <button
               type="button"
@@ -127,7 +127,7 @@ export default function EditSiteForm({ siteId, name, address, clientContact, has
             </button>
           ) : (
             <div className="space-y-2">
-              <p className="text-sm text-stone-700">
+              <p className="text-sm text-fg-secondary">
                 Permanently delete this site and all its stages, lots, and photos?
               </p>
               <div className="flex items-center gap-3">
@@ -144,7 +144,7 @@ export default function EditSiteForm({ siteId, name, address, clientContact, has
                 <button
                   type="button"
                   onClick={() => setConfirmDelete(false)}
-                  className="text-sm text-stone-500 hover:text-stone-700"
+                  className="text-sm text-fg-muted hover:text-fg-secondary"
                 >
                   Cancel
                 </button>

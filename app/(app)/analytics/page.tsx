@@ -100,14 +100,14 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     <div className="mx-auto max-w-6xl px-4 py-6 space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-stone-900">Analytics</h1>
-          <p className="mt-1 text-sm text-stone-500">
+          <h1 className="text-xl font-semibold text-fg">Analytics</h1>
+          <p className="mt-1 text-sm text-fg-muted">
             Revenue and materials accuracy for Providence-style per-lot quoted sites.
           </p>
         </div>
         <div className="text-right">
           <DateRangeFilter current={range} />
-          <p className="mt-1 text-xs text-stone-400">
+          <p className="mt-1 text-xs text-fg-muted">
             Pipeline &amp; revenue look ahead from this month; completions look back.
           </p>
         </div>

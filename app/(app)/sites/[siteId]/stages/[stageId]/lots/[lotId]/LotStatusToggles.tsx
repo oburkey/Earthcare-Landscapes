@@ -60,8 +60,8 @@ export default function LotStatusToggles({
 
   const pill = (on: boolean) =>
     on
-      ? 'bg-green-100 text-green-700'
-      : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
+      ? 'bg-accent-dim text-accent-fg'
+      : 'bg-surface-raised text-fg-muted hover:bg-surface-raised'
 
   return (
     <div className="space-y-1.5">

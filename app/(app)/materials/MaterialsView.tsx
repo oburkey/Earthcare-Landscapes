@@ -147,38 +147,38 @@ function SiteCard({ site, lotSitePlanUrls }: { site: SiteMaterialGroup; lotSiteP
   const [expanded, setExpanded] = useState(false)
 
   return (
-    <div className="rounded-xl border border-stone-200 bg-white p-4">
+    <div className="rounded-xl border border-border bg-surface p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-stone-800">{site.siteName}</h3>
-          <p className="mt-1 text-xs text-stone-500">
+          <h3 className="text-sm font-semibold text-fg-secondary">{site.siteName}</h3>
+          <p className="mt-1 text-xs text-fg-muted">
             Front {fmtM2(site.totals.frontM2)} m² · Rear {fmtM2(site.totals.rearM2)} m²
           </p>
-          <p className="mt-1 text-xs text-stone-500">
-            Plants: <span className="font-medium text-stone-700">{site.totals.totalPlants}</span>
+          <p className="mt-1 text-xs text-fg-muted">
+            Plants: <span className="font-medium text-fg-secondary">{site.totals.totalPlants}</span>
             {' '}(front {site.totals.frontPlants} / rear {site.totals.rearPlants})
           </p>
           {site.totals.potSplit.length > 0 && (
-            <p className="mt-1 text-xs text-stone-500">Pot sizes: {potSplitText(site)}</p>
+            <p className="mt-1 text-xs text-fg-muted">Pot sizes: {potSplitText(site)}</p>
           )}
           {site.totals.streetTrees90L > 0 && (
-            <p className="mt-1 text-xs text-stone-500">Street trees (90L): {site.totals.streetTrees90L}</p>
+            <p className="mt-1 text-xs text-fg-muted">Street trees (90L): {site.totals.streetTrees90L}</p>
           )}
         </div>
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="shrink-0 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-100"
+          className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-muted hover:bg-surface-raised"
         >
           {expanded ? 'Hide detail' : 'Show detail'}
         </button>
       </div>
 
       {expanded && (
-        <div className="mt-3 border-t border-stone-100 pt-3 overflow-x-auto">
+        <div className="mt-3 border-t border-border-subtle pt-3 overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="text-stone-400">
+              <tr className="text-fg-muted">
                 <th className="text-left font-medium pb-1 pr-2">Lot</th>
                 <th className="text-right font-medium pb-1 pr-2">Front m²</th>
                 <th className="text-right font-medium pb-1 pr-2">Rear m²</th>
@@ -189,15 +189,15 @@ function SiteCard({ site, lotSitePlanUrls }: { site: SiteMaterialGroup; lotSiteP
             </thead>
             <tbody>
               {site.lots.map((lot) => (
-                <tr key={lot.id} className="border-t border-stone-100">
-                  <td className="py-1 pr-2 text-stone-700">Lot {lot.lotNumber}</td>
-                  <td className="py-1 pr-2 text-right text-stone-600">{fmtM2(lot.frontM2)}</td>
-                  <td className="py-1 pr-2 text-right text-stone-600">{fmtM2(lot.rearM2)}</td>
-                  <td className="py-1 pr-2 text-right text-stone-600">{lot.totalPlants}</td>
-                  <td className="py-1 pr-2 text-right text-stone-600">{lot.streetTrees90L > 0 ? lot.streetTrees90L : '—'}</td>
+                <tr key={lot.id} className="border-t border-border-subtle">
+                  <td className="py-1 pr-2 text-fg-secondary">Lot {lot.lotNumber}</td>
+                  <td className="py-1 pr-2 text-right text-fg-muted">{fmtM2(lot.frontM2)}</td>
+                  <td className="py-1 pr-2 text-right text-fg-muted">{fmtM2(lot.rearM2)}</td>
+                  <td className="py-1 pr-2 text-right text-fg-muted">{lot.totalPlants}</td>
+                  <td className="py-1 pr-2 text-right text-fg-muted">{lot.streetTrees90L > 0 ? lot.streetTrees90L : '—'}</td>
                   <td className="py-1 text-right">
                     {lotSitePlanUrls[lot.id] && (
-                      <a href={lotSitePlanUrls[lot.id]} target="_blank" rel="noopener noreferrer" className="text-green-700 hover:underline">
+                      <a href={lotSitePlanUrls[lot.id]} target="_blank" rel="noopener noreferrer" className="text-accent-fg hover:underline">
                         Site plan
                       </a>
                     )}
@@ -205,12 +205,12 @@ function SiteCard({ site, lotSitePlanUrls }: { site: SiteMaterialGroup; lotSiteP
                 </tr>
               ))}
               {site.extraJobs.map((job) => (
-                <tr key={job.id} className="border-t border-stone-100">
-                  <td className="py-1 pr-2 text-stone-700">Extra job — {job.title}</td>
-                  <td className="py-1 pr-2 text-right text-stone-600">{fmtM2(job.frontM2)}</td>
-                  <td className="py-1 pr-2 text-right text-stone-600">{fmtM2(job.rearM2)}</td>
-                  <td className="py-1 pr-2 text-right text-stone-600">{job.totalPlants}</td>
-                  <td className="py-1 pr-2 text-right text-stone-600">{job.streetTrees90L > 0 ? job.streetTrees90L : '—'}</td>
+                <tr key={job.id} className="border-t border-border-subtle">
+                  <td className="py-1 pr-2 text-fg-secondary">Extra job — {job.title}</td>
+                  <td className="py-1 pr-2 text-right text-fg-muted">{fmtM2(job.frontM2)}</td>
+                  <td className="py-1 pr-2 text-right text-fg-muted">{fmtM2(job.rearM2)}</td>
+                  <td className="py-1 pr-2 text-right text-fg-muted">{job.totalPlants}</td>
+                  <td className="py-1 pr-2 text-right text-fg-muted">{job.streetTrees90L > 0 ? job.streetTrees90L : '—'}</td>
                   <td className="py-1"></td>
                 </tr>
               ))}
@@ -265,19 +265,19 @@ export default function MaterialsView({ months, lotSitePlanUrls }: {
       {months.map((month) => (
         <div key={month.key} className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-stone-800">{month.label}</h2>
+            <h2 className="text-sm font-semibold text-fg-secondary">{month.label}</h2>
             <button
               type="button"
               onClick={() => exportMonth(month)}
               disabled={exportingKey !== null}
-              className="rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-100 disabled:opacity-50"
+              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-muted hover:bg-surface-raised disabled:opacity-50"
             >
               {exportingKey === month.key ? 'Generating…' : 'Export PDF'}
             </button>
           </div>
 
           {month.sites.length === 0 ? (
-            <p className="text-sm text-stone-400">No lots or extra jobs due this month.</p>
+            <p className="text-sm text-fg-muted">No lots or extra jobs due this month.</p>
           ) : (
             <div className="space-y-3">
               {month.sites.map((site) => (

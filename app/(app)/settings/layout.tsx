@@ -5,7 +5,7 @@ export default async function SettingsLayout({ children }: { children: React.Rea
   const profile = await requireAuth()
   requireRole(profile, 'admin')
   return (
-    <div className="min-h-screen bg-stone-50">
+    <div className="min-h-screen bg-surface-raised">
       <div className="mx-auto max-w-3xl px-4 pt-6">
         <SettingsNav />
       </div>

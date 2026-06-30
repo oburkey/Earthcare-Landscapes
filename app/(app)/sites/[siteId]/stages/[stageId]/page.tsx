@@ -64,25 +64,25 @@ export default async function StagePage({ params }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50">
+    <div className="min-h-screen bg-bg">
       <div className="mx-auto max-w-2xl px-4 py-6 space-y-5">
 
         {/* Breadcrumb */}
-        <nav className="flex items-center gap-1.5 text-sm text-stone-500">
-          <Link href="/sites" className="hover:text-stone-700">Sites</Link>
+        <nav className="flex items-center gap-1.5 text-sm text-fg-muted">
+          <Link href="/sites" className="hover:text-fg-secondary">Sites</Link>
           <span>/</span>
-          <Link href={`/sites/${siteId}`} className="hover:text-stone-700 truncate max-w-[120px]">
+          <Link href={`/sites/${siteId}`} className="hover:text-fg-secondary truncate max-w-[120px]">
             {site.name}
           </Link>
           <span>/</span>
-          <span className="text-stone-700 font-medium">{stage.name}</span>
+          <span className="text-fg-secondary font-medium">{stage.name}</span>
         </nav>
 
         {/* Stage header */}
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-xl font-semibold text-stone-900">{stage.name}</h1>
+              <h1 className="text-xl font-semibold text-fg">{stage.name}</h1>
               {canManageStage && (
                 <EditStageForm
                   siteId={siteId}
@@ -95,7 +95,7 @@ export default async function StagePage({ params }: Props) {
               )}
             </div>
             {total > 0 && (
-              <p className="mt-0.5 text-sm text-stone-500">
+              <p className="mt-0.5 text-sm text-fg-muted">
                 {completed}/{total} lots complete
               </p>
             )}
@@ -112,7 +112,7 @@ export default async function StagePage({ params }: Props) {
 
         {/* Progress bar */}
         {total > 0 && (
-          <div className="h-2 w-full rounded-full bg-stone-100">
+          <div className="h-2 w-full rounded-full bg-surface-raised">
             <div
               className="h-2 rounded-full bg-green-600 transition-all"
               style={{ width: `${Math.round((completed / total) * 100)}%` }}
@@ -123,11 +123,11 @@ export default async function StagePage({ params }: Props) {
         {/* ── Stage plan ────────────────────────────────────────────────────── */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-semibold text-stone-800">Stage plan</h2>
+            <h2 className="text-base font-semibold text-fg-secondary">Stage plan</h2>
           </div>
 
           {stagePlanUrl ? (
-            <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
+            <div className="rounded-xl border border-border bg-surface overflow-hidden">
               <a href={stagePlanUrl} target="_blank" rel="noopener noreferrer">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -137,7 +137,7 @@ export default async function StagePage({ params }: Props) {
                 />
               </a>
               {isAdmin && (
-                <div className="p-4 border-t border-stone-100">
+                <div className="p-4 border-t border-border-subtle">
                   <PlanPhotoUpload
                     action={uploadStagePlanAction}
                     hiddenFields={{ site_id: siteId, stage_id: stageId }}
@@ -147,7 +147,7 @@ export default async function StagePage({ params }: Props) {
               )}
             </div>
           ) : (
-            <div className="rounded-xl border border-stone-200 bg-white p-5">
+            <div className="rounded-xl border border-border bg-surface p-5">
               {isAdmin ? (
                 <PlanPhotoUpload
                   action={uploadStagePlanAction}
@@ -155,7 +155,7 @@ export default async function StagePage({ params }: Props) {
                   hasPlan={false}
                 />
               ) : (
-                <p className="text-sm text-stone-400 text-center py-4">No stage plan uploaded yet.</p>
+                <p className="text-sm text-fg-muted text-center py-4">No stage plan uploaded yet.</p>
               )}
             </div>
           )}
@@ -164,24 +164,24 @@ export default async function StagePage({ params }: Props) {
         {/* ── Lots list ─────────────────────────────────────────────────────── */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-stone-800">Lots</h2>
+            <h2 className="text-base font-semibold text-fg-secondary">Lots</h2>
           </div>
           {canAddLot && <BulkUpdateLotsButton stageId={stageId} siteId={siteId} />}
 
           {lots.length === 0 ? (
-            <div className="rounded-xl border border-stone-200 bg-white px-4 py-12 text-center">
-              <p className="text-sm text-stone-500">No lots in this stage yet.</p>
+            <div className="rounded-xl border border-border bg-surface px-4 py-12 text-center">
+              <p className="text-sm text-fg-muted">No lots in this stage yet.</p>
               {canAddLot && (
                 <Link
                   href={`/sites/${siteId}/stages/${stageId}/new-lot`}
-                  className="mt-3 inline-block text-sm font-medium text-green-700 hover:underline"
+                  className="mt-3 inline-block text-sm font-medium text-accent-fg hover:underline"
                 >
                   Add the first lot →
                 </Link>
               )}
             </div>
           ) : (
-            <div className="rounded-xl border border-stone-200 bg-white overflow-hidden divide-y divide-stone-100">
+            <div className="rounded-xl border border-border bg-surface overflow-hidden divide-y divide-border-subtle">
               {lots.map((lot) => {
                 const status = lot.status as LotStatus
                 const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.not_started
@@ -190,11 +190,11 @@ export default async function StagePage({ params }: Props) {
                   <PrefetchLink
                     key={lot.id}
                     href={`/sites/${siteId}/stages/${stageId}/lots/${lot.id}`}
-                    className="flex items-center gap-3 px-4 py-3.5 hover:bg-stone-50 active:bg-stone-100 transition-colors"
+                    className="flex items-center gap-3 px-4 py-3.5 hover:bg-surface-raised active:bg-surface-raised transition-colors"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-stone-900">
+                        <span className="text-sm font-semibold text-fg">
                           Lot {lot.lot_number}
                         </span>
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cfg.badge}`}>
@@ -207,12 +207,12 @@ export default async function StagePage({ params }: Props) {
                         )}
                       </div>
                       {lot.due_date && (
-                        <p className="mt-1 text-xs text-stone-500">
+                        <p className="mt-1 text-xs text-fg-muted">
                           Due {formatDate(lot.due_date)}
                         </p>
                       )}
                     </div>
-                    <svg className="h-4 w-4 shrink-0 text-stone-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <svg className="h-4 w-4 shrink-0 text-fg-muted" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                     </svg>
                   </PrefetchLink>
@@ -225,7 +225,7 @@ export default async function StagePage({ params }: Props) {
         {/* ── Extra Jobs ────────────────────────────────────────────────────── */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-semibold text-stone-800">Extra jobs</h2>
+            <h2 className="text-base font-semibold text-fg-secondary">Extra jobs</h2>
             {canManageExtraJobs && (
               <Link
                 href={`/sites/${siteId}/stages/${stageId}/extra-jobs/new`}
@@ -237,19 +237,19 @@ export default async function StagePage({ params }: Props) {
           </div>
 
           {!extraJobs || extraJobs.length === 0 ? (
-            <div className="rounded-xl border border-stone-200 bg-white px-4 py-10 text-center">
-              <p className="text-sm text-stone-500">No extra jobs yet.</p>
+            <div className="rounded-xl border border-border bg-surface px-4 py-10 text-center">
+              <p className="text-sm text-fg-muted">No extra jobs yet.</p>
               {canManageExtraJobs && (
                 <Link
                   href={`/sites/${siteId}/stages/${stageId}/extra-jobs/new`}
-                  className="mt-3 inline-block text-sm font-medium text-green-700 hover:underline"
+                  className="mt-3 inline-block text-sm font-medium text-accent-fg hover:underline"
                 >
                   Add the first extra job →
                 </Link>
               )}
             </div>
           ) : (
-            <div className="rounded-xl border border-stone-200 bg-white overflow-hidden divide-y divide-stone-100">
+            <div className="rounded-xl border border-border bg-surface overflow-hidden divide-y divide-border-subtle">
               {extraJobs.map((job) => {
                 const jobStatus = job.status as ExtraJobStatus
                 const cfg = EXTRA_JOB_STATUS_CONFIG[jobStatus] ?? EXTRA_JOB_STATUS_CONFIG.not_started
@@ -257,25 +257,25 @@ export default async function StagePage({ params }: Props) {
                   <Link
                     key={job.id}
                     href={`/sites/${siteId}/stages/${stageId}/extra-jobs/${job.id}`}
-                    className="flex items-center gap-3 px-4 py-3.5 hover:bg-stone-50 active:bg-stone-100 transition-colors"
+                    className="flex items-center gap-3 px-4 py-3.5 hover:bg-surface-raised active:bg-surface-raised transition-colors"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-stone-900">{job.title}</span>
+                        <span className="text-sm font-semibold text-fg">{job.title}</span>
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cfg.badge}`}>
                           {cfg.label}
                         </span>
                       </div>
                       {job.description && (
-                        <p className="mt-0.5 text-xs text-stone-500 truncate">{job.description}</p>
+                        <p className="mt-0.5 text-xs text-fg-muted truncate">{job.description}</p>
                       )}
                       {(job as unknown as { due_date?: string }).due_date && (
-                        <p className="mt-0.5 text-xs text-stone-500">
+                        <p className="mt-0.5 text-xs text-fg-muted">
                           Due {formatDate((job as unknown as { due_date: string }).due_date)}
                         </p>
                       )}
                     </div>
-                    <svg className="h-4 w-4 shrink-0 text-stone-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <svg className="h-4 w-4 shrink-0 text-fg-muted" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                     </svg>
                   </Link>
@@ -288,7 +288,7 @@ export default async function StagePage({ params }: Props) {
         {/* ── Materials Summary ────────────────────────────────────────────── */}
         {showSummary && (
           <div>
-            <h2 className="text-base font-semibold text-stone-800 mb-3">Materials Summary</h2>
+            <h2 className="text-base font-semibold text-fg-secondary mb-3">Materials Summary</h2>
             <MaterialsSummary stageId={stageId} siteId={siteId} />
           </div>
         )}

@@ -45,7 +45,7 @@ export default function BulkUpdateLotsButton({ stageId, siteId }: Props) {
         <button
           type="button"
           onClick={handleOpen}
-          className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm font-medium text-stone-600 hover:bg-stone-50 transition-colors"
+          className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-fg-secondary hover:bg-surface-raised transition-colors"
         >
           Bulk update lots
         </button>
@@ -54,19 +54,19 @@ export default function BulkUpdateLotsButton({ stageId, siteId }: Props) {
   }
 
   return (
-    <div className="rounded-xl border border-stone-200 bg-white p-4 space-y-3">
+    <div className="rounded-xl border border-border bg-surface p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-stone-800">Bulk update lots</p>
+        <p className="text-sm font-semibold text-fg-secondary">Bulk update lots</p>
         <button
           type="button"
           onClick={handleClose}
-          className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
+          className="text-xs text-fg-muted hover:text-fg-secondary transition-colors"
         >
           Cancel
         </button>
       </div>
 
-      <p className="text-xs text-stone-500">
+      <p className="text-xs text-fg-muted">
         One lot per line — lot number, then tab or comma, then date in{' '}
         <span className="font-mono">DD/MM/YYYY</span> format. Lots that exist will be
         updated; lots that don&apos;t exist will be created.
@@ -78,17 +78,17 @@ export default function BulkUpdateLotsButton({ stageId, siteId }: Props) {
         placeholder={'059\t03/04/2026\n076\t03/04/2026\n077\t25/03/2026'}
         rows={6}
         disabled={isPending}
-        className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm font-mono text-stone-900 placeholder:text-stone-300 focus:border-stone-400 focus:outline-none resize-y disabled:opacity-60"
+        className="w-full rounded-lg border border-border px-3 py-2 text-sm font-mono text-fg placeholder:text-fg-muted focus:border-border focus:outline-none resize-y disabled:opacity-60 bg-surface"
       />
 
       {result && (
         <div className="space-y-2">
-          <p className="text-sm text-stone-700">
-            <span className="font-semibold text-green-700">{result.updated} updated</span>
+          <p className="text-sm text-fg-secondary">
+            <span className="font-semibold text-accent-fg">{result.updated} updated</span>
             {', '}
-            <span className="font-semibold text-green-700">{result.created} created</span>
+            <span className="font-semibold text-accent-fg">{result.created} created</span>
             {result.errors.length > 0 && (
-              <span className="text-stone-400">{', '}{result.errors.length} error{result.errors.length !== 1 ? 's' : ''}</span>
+              <span className="text-fg-muted">{', '}{result.errors.length} error{result.errors.length !== 1 ? 's' : ''}</span>
             )}
           </p>
           {result.errors.length > 0 && (
@@ -114,7 +114,7 @@ export default function BulkUpdateLotsButton({ stageId, siteId }: Props) {
           <button
             type="button"
             onClick={handleClose}
-            className="text-sm text-stone-500 hover:text-stone-700 transition-colors"
+            className="text-sm text-fg-muted hover:text-fg-secondary transition-colors"
           >
             Done
           </button>

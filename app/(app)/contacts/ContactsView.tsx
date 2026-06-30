@@ -11,7 +11,7 @@ interface Props {
   canManage: boolean
 }
 
-const FIELD_CLASS = 'mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600'
+const FIELD_CLASS = 'mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600'
 
 export default function ContactsView({ contacts, canManage }: Props) {
   const [query, setQuery] = useState('')
@@ -43,7 +43,7 @@ export default function ContactsView({ contacts, canManage }: Props) {
 
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-stone-900">Contacts</h1>
+        <h1 className="text-xl font-semibold text-fg">Contacts</h1>
         {canManage && (
           <button
             onClick={() => { setShowAdd((v) => !v); setExpandedId(null) }}
@@ -64,7 +64,7 @@ export default function ContactsView({ contacts, canManage }: Props) {
 
       {/* Search */}
       <div className="relative">
-        <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+        <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-fg-muted" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
         </svg>
         <input
@@ -72,7 +72,7 @@ export default function ContactsView({ contacts, canManage }: Props) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search by name or company…"
-          className="block w-full rounded-lg border border-stone-300 bg-white pl-9 pr-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+          className="block w-full rounded-lg border border-border bg-surface pl-9 pr-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
         />
       </div>
 
@@ -84,7 +84,7 @@ export default function ContactsView({ contacts, canManage }: Props) {
             className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
               activeCategory === null
                 ? 'bg-green-700 text-white'
-                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                : 'bg-surface-raised text-fg-muted hover:bg-skeleton'
             }`}
           >
             All
@@ -96,7 +96,7 @@ export default function ContactsView({ contacts, canManage }: Props) {
               className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                 activeCategory === cat
                   ? 'bg-green-700 text-white'
-                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  : 'bg-surface-raised text-fg-muted hover:bg-skeleton'
               }`}
             >
               {cat}
@@ -107,8 +107,8 @@ export default function ContactsView({ contacts, canManage }: Props) {
 
       {/* List */}
       {filtered.length === 0 ? (
-        <div className="rounded-xl border border-stone-200 bg-white px-4 py-12 text-center">
-          <p className="text-sm text-stone-500">
+        <div className="rounded-xl border border-border bg-surface px-4 py-12 text-center">
+          <p className="text-sm text-fg-muted">
             {contacts.length === 0
               ? 'No contacts yet.'
               : 'No contacts match your search.'}
@@ -116,7 +116,7 @@ export default function ContactsView({ contacts, canManage }: Props) {
           {contacts.length === 0 && canManage && (
             <button
               onClick={() => setShowAdd(true)}
-              className="mt-3 text-sm font-medium text-green-700 hover:underline"
+              className="mt-3 text-sm font-medium text-accent-fg hover:underline"
             >
               Add the first contact →
             </button>
@@ -154,34 +154,34 @@ function ContactCard({
   onClose: () => void
 }) {
   return (
-    <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
+    <div className="rounded-xl border border-border bg-surface overflow-hidden">
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between px-4 py-3.5 text-left hover:bg-stone-50 active:bg-stone-100 transition-colors"
+        className="w-full flex items-center justify-between px-4 py-3.5 text-left hover:bg-surface-raised active:bg-surface-raised transition-colors"
       >
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold text-stone-900">{contact.name}</span>
+            <span className="text-sm font-semibold text-fg">{contact.name}</span>
             {contact.company && (
-              <span className="text-sm text-stone-500">{contact.company}</span>
+              <span className="text-sm text-fg-muted">{contact.company}</span>
             )}
             {contact.category && (
-              <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
+              <span className="rounded-full bg-surface-raised px-2 py-0.5 text-xs text-fg-muted">
                 {contact.category}
               </span>
             )}
           </div>
           <div className="mt-0.5 flex items-center gap-3 flex-wrap">
             {contact.phone && (
-              <span className="text-xs text-stone-400">{contact.phone}</span>
+              <span className="text-xs text-fg-muted">{contact.phone}</span>
             )}
             {contact.email && (
-              <span className="text-xs text-stone-400">{contact.email}</span>
+              <span className="text-xs text-fg-muted">{contact.email}</span>
             )}
           </div>
         </div>
         <svg
-          className={`ml-3 h-4 w-4 shrink-0 text-stone-400 transition-transform ${expanded ? 'rotate-90' : ''}`}
+          className={`ml-3 h-4 w-4 shrink-0 text-fg-muted transition-transform ${expanded ? 'rotate-90' : ''}`}
           fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
@@ -189,31 +189,31 @@ function ContactCard({
       </button>
 
       {expanded && (
-        <div className="border-t border-stone-100 px-4 py-4 space-y-4">
+        <div className="border-t border-border-subtle px-4 py-4 space-y-4">
           {/* Contact detail view */}
           <div className="space-y-2">
             {contact.phone && (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-stone-400 w-16 shrink-0">Phone</span>
-                <a href={`tel:${contact.phone}`} className="text-sm text-stone-800 hover:text-green-700">{contact.phone}</a>
+                <span className="text-xs text-fg-muted w-16 shrink-0">Phone</span>
+                <a href={`tel:${contact.phone}`} className="text-sm text-fg-secondary hover:text-accent-fg">{contact.phone}</a>
               </div>
             )}
             {contact.email && (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-stone-400 w-16 shrink-0">Email</span>
-                <a href={`mailto:${contact.email}`} className="text-sm text-stone-800 hover:text-green-700 break-all">{contact.email}</a>
+                <span className="text-xs text-fg-muted w-16 shrink-0">Email</span>
+                <a href={`mailto:${contact.email}`} className="text-sm text-fg-secondary hover:text-accent-fg break-all">{contact.email}</a>
               </div>
             )}
             {contact.category && (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-stone-400 w-16 shrink-0">Category</span>
-                <span className="text-sm text-stone-800">{contact.category}</span>
+                <span className="text-xs text-fg-muted w-16 shrink-0">Category</span>
+                <span className="text-sm text-fg-secondary">{contact.category}</span>
               </div>
             )}
             {contact.notes && (
               <div className="flex gap-2">
-                <span className="text-xs text-stone-400 w-16 shrink-0 pt-0.5">Notes</span>
-                <p className="text-sm text-stone-800 whitespace-pre-wrap">{contact.notes}</p>
+                <span className="text-xs text-fg-muted w-16 shrink-0 pt-0.5">Notes</span>
+                <p className="text-sm text-fg-secondary whitespace-pre-wrap">{contact.notes}</p>
               </div>
             )}
           </div>
@@ -245,14 +245,14 @@ function ContactForm({
   }
 
   return (
-    <div className={mode === 'add' ? 'rounded-xl border border-stone-200 bg-white p-5' : ''}>
-      {mode === 'add' && <h2 className="text-sm font-semibold text-stone-800 mb-4">New contact</h2>}
+    <div className={mode === 'add' ? 'rounded-xl border border-border bg-surface p-5' : ''}>
+      {mode === 'add' && <h2 className="text-sm font-semibold text-fg-secondary mb-4">New contact</h2>}
       <form action={formAction} className="space-y-4">
         {contact && <input type="hidden" name="contact_id" value={contact.id} />}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-stone-700">
+            <label className="block text-sm font-medium text-fg-secondary">
               Name <span className="text-red-500">*</span>
             </label>
             <input
@@ -265,7 +265,7 @@ function ContactForm({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-stone-700">Company</label>
+            <label className="block text-sm font-medium text-fg-secondary">Company</label>
             <input
               name="company"
               type="text"
@@ -278,7 +278,7 @@ function ContactForm({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-stone-700">Phone</label>
+            <label className="block text-sm font-medium text-fg-secondary">Phone</label>
             <input
               name="phone"
               type="tel"
@@ -288,7 +288,7 @@ function ContactForm({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-stone-700">Email</label>
+            <label className="block text-sm font-medium text-fg-secondary">Email</label>
             <input
               name="email"
               type="email"
@@ -300,7 +300,7 @@ function ContactForm({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-stone-700">Category</label>
+          <label className="block text-sm font-medium text-fg-secondary">Category</label>
           <input
             name="category"
             type="text"
@@ -311,7 +311,7 @@ function ContactForm({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-stone-700">Notes</label>
+          <label className="block text-sm font-medium text-fg-secondary">Notes</label>
           <textarea
             name="notes"
             rows={3}
@@ -348,10 +348,10 @@ function EditContactForm({ contact, onSuccess }: { contact: Contact; onSuccess: 
   }
 
   return (
-    <div className="space-y-3 pt-2 border-t border-stone-100">
+    <div className="space-y-3 pt-2 border-t border-border-subtle">
       <button
         onClick={() => setShowEdit((v) => !v)}
-        className="rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50"
+        className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-muted hover:bg-surface-raised"
       >
         {showEdit ? 'Cancel edit' : 'Edit contact'}
       </button>
@@ -371,7 +371,7 @@ function EditContactForm({ contact, onSuccess }: { contact: Contact; onSuccess: 
           </button>
         ) : (
           <div className="flex items-center gap-3">
-            <p className="text-sm text-stone-600">Are you sure?</p>
+            <p className="text-sm text-fg-muted">Are you sure?</p>
             <form action={deleteAction}>
               <input type="hidden" name="contact_id" value={contact.id} />
               <button
@@ -382,7 +382,7 @@ function EditContactForm({ contact, onSuccess }: { contact: Contact; onSuccess: 
                 {deletePending ? 'Deleting…' : 'Yes, delete'}
               </button>
             </form>
-            <button onClick={() => setConfirmDelete(false)} className="text-sm text-stone-500 hover:text-stone-700">
+            <button onClick={() => setConfirmDelete(false)} className="text-sm text-fg-muted hover:text-fg-secondary">
               Cancel
             </button>
           </div>

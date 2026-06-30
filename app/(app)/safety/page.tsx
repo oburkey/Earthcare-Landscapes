@@ -267,7 +267,7 @@ export default async function SafetyPage() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50">
+    <div className="min-h-screen bg-bg">
       <div className="mx-auto max-w-5xl px-4 py-6">
         <SafetyView
           profile={profile}

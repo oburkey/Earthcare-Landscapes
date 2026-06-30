@@ -81,14 +81,14 @@ export default function ChecklistSection({
   return (
     <div className="space-y-3">
       {/* Progress indicator */}
-      <div className="rounded-xl border border-stone-200 bg-white px-4 py-3">
+      <div className="rounded-xl border border-border bg-surface px-4 py-3">
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-sm font-medium text-stone-700">Progress</span>
-          <span className="text-sm font-semibold text-stone-900">
+          <span className="text-sm font-medium text-fg-secondary">Progress</span>
+          <span className="text-sm font-semibold text-fg">
             {completedCount} of {TOTAL_CHECKLIST_ITEMS} items complete
           </span>
         </div>
-        <div className="h-2 w-full rounded-full bg-stone-100">
+        <div className="h-2 w-full rounded-full bg-surface-raised">
           <div
             className="h-2 rounded-full bg-green-600 transition-all"
             style={{ width: `${Math.round((completedCount / TOTAL_CHECKLIST_ITEMS) * 100)}%` }}
@@ -105,17 +105,17 @@ export default function ChecklistSection({
           const sectionCompleted = section.items.filter((i) => items[i.key].completed).length
           const isOpen = open[section.id]
           return (
-            <div key={section.id} className="rounded-xl border border-stone-200 bg-white overflow-hidden">
+            <div key={section.id} className="rounded-xl border border-border bg-surface overflow-hidden">
               <button
                 type="button"
                 onClick={() => toggleSection(section.id)}
-                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-stone-50 transition-colors"
+                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surface-raised transition-colors"
               >
-                <span className="text-sm font-semibold text-stone-800">{section.title}</span>
+                <span className="text-sm font-semibold text-fg-secondary">{section.title}</span>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs text-stone-400">{sectionCompleted}/{section.items.length}</span>
+                  <span className="text-xs text-fg-muted">{sectionCompleted}/{section.items.length}</span>
                   <svg
-                    className={`h-4 w-4 text-stone-400 transition-transform ${isOpen ? '' : '-rotate-90'}`}
+                    className={`h-4 w-4 text-fg-muted transition-transform ${isOpen ? '' : '-rotate-90'}`}
                     fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
                   >
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
@@ -124,14 +124,14 @@ export default function ChecklistSection({
               </button>
 
               {isOpen && (
-                <div className="divide-y divide-stone-100 border-t border-stone-100">
+                <div className="divide-y divide-border-subtle border-t border-border-subtle">
                   {section.items.map((item) => {
                     const itemState = items[item.key]
 
                     if (item.type === 'yesno') {
                       return (
                         <div key={item.key} className="flex items-center justify-between gap-3 px-4 py-3">
-                          <span className="text-sm text-stone-800 flex-1 min-w-0">{item.label}</span>
+                          <span className="text-sm text-fg-secondary flex-1 min-w-0">{item.label}</span>
                           <div className="flex items-center gap-2 shrink-0">
                             <input type="hidden" name={`response__${item.key}`} value={itemState.response ?? ''} />
                             <button
@@ -139,7 +139,7 @@ export default function ChecklistSection({
                               disabled={!canManage}
                               onClick={() => handleResponseChange(item.key, 'yes')}
                               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-60 ${
-                                itemState.response === 'yes' ? 'bg-green-700 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                                itemState.response === 'yes' ? 'bg-green-700 text-white' : 'bg-surface-raised text-fg-muted hover:bg-surface-raised'
                               }`}
                             >
                               Yes
@@ -149,7 +149,7 @@ export default function ChecklistSection({
                               disabled={!canManage}
                               onClick={() => handleResponseChange(item.key, 'no')}
                               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-60 ${
-                                itemState.response === 'no' ? 'bg-amber-600 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                                itemState.response === 'no' ? 'bg-amber-600 text-white' : 'bg-surface-raised text-fg-muted hover:bg-surface-raised'
                               }`}
                             >
                               No
@@ -161,7 +161,7 @@ export default function ChecklistSection({
                                 value={itemState.date}
                                 onChange={(e) => handleDateChange(item.key, e.target.value)}
                                 disabled={!canManage}
-                                className="rounded-lg border border-stone-300 px-2 py-1 text-xs focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 disabled:bg-stone-50"
+                                className="rounded-lg border border-border px-2 py-1 text-xs focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 disabled:bg-surface-raised"
                               />
                             )}
                           </div>
@@ -179,9 +179,9 @@ export default function ChecklistSection({
                             checked={itemState.completed}
                             onChange={(e) => handleCheckboxChange(item.key, e.target.checked)}
                             disabled={!canManage}
-                            className="h-4 w-4 shrink-0 rounded border-stone-300 text-green-700 focus:ring-green-600"
+                            className="h-4 w-4 shrink-0 rounded border-border text-accent-fg focus:ring-green-600"
                           />
-                          <span className="text-sm text-stone-800">{item.label}</span>
+                          <span className="text-sm text-fg-secondary">{item.label}</span>
                         </label>
                         {itemState.completed && (
                           <input
@@ -190,7 +190,7 @@ export default function ChecklistSection({
                             value={itemState.date}
                             onChange={(e) => handleDateChange(item.key, e.target.value)}
                             disabled={!canManage}
-                            className="shrink-0 rounded-lg border border-stone-300 px-2 py-1 text-xs focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 disabled:bg-stone-50"
+                            className="shrink-0 rounded-lg border border-border px-2 py-1 text-xs focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 disabled:bg-surface-raised"
                           />
                         )}
                       </div>
@@ -203,8 +203,8 @@ export default function ChecklistSection({
         })}
 
         {/* Extras / Comments */}
-        <div className="rounded-xl border border-stone-200 bg-white p-4">
-          <label htmlFor="extras_notes" className="block text-sm font-medium text-stone-700 mb-1">
+        <div className="rounded-xl border border-border bg-surface p-4">
+          <label htmlFor="extras_notes" className="block text-sm font-medium text-fg-secondary mb-1">
             Extras / Comments
           </label>
           <textarea
@@ -214,7 +214,7 @@ export default function ChecklistSection({
             defaultValue={extrasNotes ?? ''}
             disabled={!canManage}
             placeholder="Any other notes about this lot…"
-            className="block w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 resize-none disabled:bg-stone-50 disabled:text-stone-400"
+            className="block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 resize-none disabled:bg-surface-raised disabled:text-fg-muted"
           />
         </div>
 

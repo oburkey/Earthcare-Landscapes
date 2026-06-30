@@ -60,9 +60,9 @@ function statusLabel(s: string): string {
 }
 
 function statusClass(s: string): string {
-  if (s === 'accepted') return 'bg-green-100 text-green-700'
+  if (s === 'accepted') return 'bg-accent-dim text-accent-fg'
   if (s === 'sent') return 'bg-blue-100 text-blue-700'
-  return 'bg-stone-100 text-stone-500'
+  return 'bg-surface-raised text-fg-muted'
 }
 
 function slug(...parts: (string | null | undefined)[]): string {
@@ -590,15 +590,15 @@ export default function QuotesView({
           <button
             type="button"
             onClick={closeBuilder}
-            className="flex items-center gap-1 text-sm text-stone-500 hover:text-stone-800 transition-colors"
+            className="flex items-center gap-1 text-sm text-fg-muted hover:text-fg transition-colors"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
             </svg>
             Quotes
           </button>
-          <span className="text-stone-300">/</span>
-          <h1 className="text-xl font-semibold text-stone-900">{isNew ? 'New quote' : 'Edit quote'}</h1>
+          <span className="text-fg-muted">/</span>
+          <h1 className="text-xl font-semibold text-fg">{isNew ? 'New quote' : 'Edit quote'}</h1>
           {!isNew && (
             <>
               <div className="flex-1" />
@@ -615,17 +615,17 @@ export default function QuotesView({
         </div>
 
         {/* Form card */}
-        <div className="rounded-xl border border-stone-200 bg-white p-5 space-y-5">
+        <div className="rounded-xl border border-border bg-surface p-5 space-y-5">
 
           {/* Site + Stage + Reference */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-1.5">
-              <label className={`text-xs font-semibold uppercase tracking-wide ${convertValidation && !siteId ? 'text-red-500' : 'text-stone-500'}`}>Site</label>
+              <label className={`text-xs font-semibold uppercase tracking-wide ${convertValidation && !siteId ? 'text-red-500' : 'text-fg-secondary'}`}>Site</label>
               <select
                 value={siteId}
                 onChange={(e) => handleFormSiteChange(e.target.value)}
-                className={`w-full rounded-lg border bg-white px-3 py-2 text-sm text-stone-900 focus:outline-none ${
-                  convertValidation && !siteId ? 'border-red-400 focus:border-red-500' : 'border-stone-200 focus:border-stone-400'
+                className={`w-full rounded-lg border bg-surface px-3 py-2 text-sm text-fg focus:outline-none ${
+                  convertValidation && !siteId ? 'border-red-400 focus:border-red-500' : 'border-border focus:border-border'
                 }`}
               >
                 <option value="">— No site —</option>
@@ -635,13 +635,13 @@ export default function QuotesView({
               </select>
             </div>
             <div className="space-y-1.5">
-              <label className={`text-xs font-semibold uppercase tracking-wide ${convertValidation && !stageId ? 'text-red-500' : 'text-stone-500'}`}>Stage</label>
+              <label className={`text-xs font-semibold uppercase tracking-wide ${convertValidation && !stageId ? 'text-red-500' : 'text-fg-secondary'}`}>Stage</label>
               <select
                 value={stageId}
                 onChange={(e) => { setStageId(e.target.value); setConvertValidation(false) }}
                 disabled={!siteId || loadingFormStages}
-                className={`w-full rounded-lg border bg-white px-3 py-2 text-sm text-stone-900 focus:outline-none disabled:opacity-50 ${
-                  convertValidation && !stageId ? 'border-red-400 focus:border-red-500' : 'border-stone-200 focus:border-stone-400'
+                className={`w-full rounded-lg border bg-surface px-3 py-2 text-sm text-fg focus:outline-none disabled:opacity-50 ${
+                  convertValidation && !stageId ? 'border-red-400 focus:border-red-500' : 'border-border focus:border-border'
                 }`}
               >
                 <option value="">
@@ -653,13 +653,13 @@ export default function QuotesView({
               </select>
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Reference</label>
+              <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Reference</label>
               <input
                 type="text"
                 value={reference}
                 onChange={(e) => setReference(e.target.value)}
                 placeholder="e.g. Lot 104, TL#121, Vibe"
-                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none"
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-border focus:outline-none"
               />
             </div>
           </div>
@@ -671,32 +671,32 @@ export default function QuotesView({
 
           {/* Description */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Description</label>
+            <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Description</label>
             <input
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="e.g. Client extras — rear turf and edging"
-              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-border focus:outline-none"
             />
           </div>
 
           {/* Line items */}
           <div className="space-y-2">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Line Items</label>
+              <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Line Items</label>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => addPreset('Bobcat', 90)}
-                  className="rounded-lg border border-stone-200 px-2.5 py-1 text-xs font-medium text-stone-600 hover:bg-stone-50 transition-colors"
+                  className="rounded-lg border border-border px-2.5 py-1 text-xs font-medium text-fg-muted hover:bg-surface-raised transition-colors"
                 >
                   + Bobcat $90/hr
                 </button>
                 <button
                   type="button"
                   onClick={() => addPreset('Labour', 65)}
-                  className="rounded-lg border border-stone-200 px-2.5 py-1 text-xs font-medium text-stone-600 hover:bg-stone-50 transition-colors"
+                  className="rounded-lg border border-border px-2.5 py-1 text-xs font-medium text-fg-muted hover:bg-surface-raised transition-colors"
                 >
                   + Labour $65/hr
                 </button>
@@ -706,12 +706,12 @@ export default function QuotesView({
             <div className="overflow-x-auto">
               <table className="w-full text-sm border-collapse">
                 <thead>
-                  <tr className="border-b border-stone-200">
-                    <th className="text-left text-xs font-semibold text-stone-400 uppercase tracking-wide pb-2 pr-3 min-w-[180px]">Description</th>
-                    <th className="text-right text-xs font-semibold text-stone-400 uppercase tracking-wide pb-2 px-2 w-20">Qty</th>
-                    <th className="text-left text-xs font-semibold text-stone-400 uppercase tracking-wide pb-2 px-2 w-20">Unit</th>
-                    <th className="text-right text-xs font-semibold text-stone-400 uppercase tracking-wide pb-2 px-2 w-24">Rate</th>
-                    <th className="text-right text-xs font-semibold text-stone-400 uppercase tracking-wide pb-2 px-2 w-28">Total</th>
+                  <tr className="border-b border-border">
+                    <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 pr-3 min-w-[180px]">Description</th>
+                    <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-2 w-20">Qty</th>
+                    <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-2 w-20">Unit</th>
+                    <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-2 w-24">Rate</th>
+                    <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-2 w-28">Total</th>
                     <th className="pb-2 w-8"></th>
                   </tr>
                 </thead>
@@ -719,14 +719,14 @@ export default function QuotesView({
                   {lineItems.map((item, i) => {
                     const lineTotal = (item.qty || 0) * (item.rate || 0)
                     return (
-                      <tr key={i} className="border-b border-stone-100">
+                      <tr key={i} className="border-b border-border-subtle">
                         <td className="py-1.5 pr-3">
                           <input
                             type="text"
                             value={item.description}
                             onChange={(e) => updateLine(i, 'description', e.target.value)}
                             placeholder="Description"
-                            className="w-full rounded border border-stone-200 px-2 py-1 text-sm focus:border-stone-400 focus:outline-none"
+                            className="w-full rounded border border-border bg-surface px-2 py-1 text-sm text-fg placeholder:text-fg-muted focus:border-border focus:outline-none"
                           />
                         </td>
                         <td className="py-1.5 px-2">
@@ -736,7 +736,7 @@ export default function QuotesView({
                             min={0}
                             step="any"
                             onChange={(e) => updateLine(i, 'qty', parseFloat(e.target.value) || 0)}
-                            className="w-full rounded border border-stone-200 px-2 py-1 text-sm text-right focus:border-stone-400 focus:outline-none"
+                            className="w-full rounded border border-border bg-surface px-2 py-1 text-sm text-fg text-right focus:border-border focus:outline-none"
                           />
                         </td>
                         <td className="py-1.5 px-2">
@@ -745,7 +745,7 @@ export default function QuotesView({
                             value={item.unit}
                             onChange={(e) => updateLine(i, 'unit', e.target.value)}
                             placeholder="hr"
-                            className="w-full rounded border border-stone-200 px-2 py-1 text-sm focus:border-stone-400 focus:outline-none"
+                            className="w-full rounded border border-border bg-surface px-2 py-1 text-sm text-fg placeholder:text-fg-muted focus:border-border focus:outline-none"
                           />
                         </td>
                         <td className="py-1.5 px-2">
@@ -755,10 +755,10 @@ export default function QuotesView({
                             min={0}
                             step="any"
                             onChange={(e) => updateLine(i, 'rate', parseFloat(e.target.value) || 0)}
-                            className="w-full rounded border border-stone-200 px-2 py-1 text-sm text-right focus:border-stone-400 focus:outline-none"
+                            className="w-full rounded border border-border bg-surface px-2 py-1 text-sm text-fg text-right focus:border-border focus:outline-none"
                           />
                         </td>
-                        <td className="py-1.5 px-2 text-right text-sm tabular-nums text-stone-700">
+                        <td className="py-1.5 px-2 text-right text-sm tabular-nums text-fg-secondary">
                           {fmt(lineTotal)}
                         </td>
                         <td className="py-1.5 pl-2">
@@ -766,7 +766,7 @@ export default function QuotesView({
                             type="button"
                             onClick={() => removeLine(i)}
                             disabled={lineItems.length === 1}
-                            className="text-stone-300 hover:text-red-500 disabled:hover:text-stone-300 transition-colors"
+                            className="text-fg-muted hover:text-red-500 disabled:hover:text-fg-muted transition-colors"
                           >
                             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -783,7 +783,7 @@ export default function QuotesView({
             <button
               type="button"
               onClick={addLine}
-              className="flex items-center gap-1 text-sm font-medium text-green-700 hover:text-green-900 transition-colors"
+              className="flex items-center gap-1 text-sm font-medium text-accent-fg hover:text-green-900 transition-colors"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -794,28 +794,28 @@ export default function QuotesView({
 
           {/* Notes */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Notes / Conditions</label>
+            <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Notes / Conditions</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="e.g. Quote valid for 30 days. Price subject to site access."
               rows={3}
-              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none resize-none"
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-border focus:outline-none resize-none"
             />
           </div>
 
           {/* Totals */}
-          <div className="flex justify-end border-t border-stone-100 pt-4">
+          <div className="flex justify-end border-t border-border-subtle pt-4">
             <div className="w-64 space-y-1.5 text-sm">
-              <div className="flex justify-between text-stone-500">
+              <div className="flex justify-between text-fg-muted">
                 <span>Subtotal (ex GST)</span>
                 <span className="tabular-nums">{fmt(subtotal)}</span>
               </div>
-              <div className="flex justify-between text-stone-500">
+              <div className="flex justify-between text-fg-muted">
                 <span>GST (10%)</span>
                 <span className="tabular-nums">{fmt(gst)}</span>
               </div>
-              <div className="flex justify-between font-semibold text-stone-900 border-t border-stone-200 pt-1.5">
+              <div className="flex justify-between font-semibold text-fg border-t border-border pt-1.5">
                 <span>Total (inc GST)</span>
                 <span className="tabular-nums">{fmt(total)}</span>
               </div>
@@ -824,7 +824,7 @@ export default function QuotesView({
 
           {/* Status toggle */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Status</label>
+            <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Status</label>
             <div className="flex gap-2">
               {(['draft', 'sent', 'accepted'] as const).map((s) => (
                 <button
@@ -836,7 +836,7 @@ export default function QuotesView({
                       ? s === 'accepted' ? 'bg-green-600 text-white'
                         : s === 'sent'   ? 'bg-blue-600 text-white'
                         :                  'bg-stone-700 text-white'
-                      : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
+                      : 'bg-surface-raised text-fg-muted hover:bg-border'
                   }`}
                 >
                   {statusLabel(s)}
@@ -854,7 +854,7 @@ export default function QuotesView({
         {!isNew && conversions[view] && (
           <a
             href={`/sites/${conversions[view].siteId}/stages/${conversions[view].stageId}`}
-            className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 hover:bg-green-100 transition-colors"
+            className="flex items-center gap-2 rounded-xl border border-green-200 bg-accent-dim px-4 py-3 text-sm text-accent-fg hover:bg-accent-dim transition-colors"
           >
             <svg className="h-4 w-4 shrink-0 text-green-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -880,7 +880,7 @@ export default function QuotesView({
             type="button"
             onClick={handleDownloadPDF}
             disabled={pdfGenerating}
-            className="flex items-center gap-2 rounded-lg border border-stone-200 px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-60 transition-colors"
+            className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-fg-secondary hover:bg-surface-raised disabled:opacity-60 transition-colors"
           >
             {pdfGenerating ? <Spinner /> : <PdfIcon />}
             {pdfGenerating ? 'Generating…' : 'Download PDF'}
@@ -889,7 +889,7 @@ export default function QuotesView({
             <button
               type="button"
               onClick={() => openConvertModal(view, siteId || '', stageId || '')}
-              className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-100 transition-colors"
+              className="flex items-center gap-2 rounded-lg border border-green-200 bg-accent-dim px-4 py-2 text-sm font-medium text-accent-fg hover:bg-accent-dim transition-colors"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5L7.5 3m0 0L12 7.5M7.5 3v13.5m13.5-3L16.5 18m0 0L12 13.5m4.5 4.5V4.5" />
@@ -900,7 +900,7 @@ export default function QuotesView({
           <button
             type="button"
             onClick={closeBuilder}
-            className="text-sm text-stone-500 hover:text-stone-700 transition-colors"
+            className="text-sm text-fg-muted hover:text-fg-secondary transition-colors"
           >
             Cancel
           </button>
@@ -918,7 +918,7 @@ export default function QuotesView({
 
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-stone-900">Quotes</h1>
+        <h1 className="text-xl font-semibold text-fg">Quotes</h1>
         {canEdit && (
           <button
             type="button"
@@ -947,11 +947,11 @@ export default function QuotesView({
               type="button"
               onClick={() => setFilter(f)}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                filter === f ? 'bg-stone-900 text-white' : 'text-stone-500 hover:bg-stone-100'
+                filter === f ? 'bg-stone-900 text-white' : 'text-fg-muted hover:bg-surface-raised'
               }`}
             >
               {f === 'all' ? 'All' : statusLabel(f)}
-              <span className={`ml-1.5 text-xs ${filter === f ? 'text-stone-300' : 'text-stone-400'}`}>
+              <span className={`ml-1.5 text-xs ${filter === f ? 'text-fg-muted' : 'text-fg-muted'}`}>
                 {count}
               </span>
             </button>
@@ -961,16 +961,16 @@ export default function QuotesView({
 
       {/* Quote list */}
       {filtered.length === 0 ? (
-        <div className="rounded-xl border border-stone-200 bg-white px-4 py-16 text-center">
-          <p className="text-sm font-medium text-stone-600">No quotes{filter !== 'all' ? ` with status "${statusLabel(filter)}"` : ''}</p>
+        <div className="rounded-xl border border-border bg-surface px-4 py-16 text-center">
+          <p className="text-sm font-medium text-fg-muted">No quotes{filter !== 'all' ? ` with status "${statusLabel(filter)}"` : ''}</p>
           {canEdit && filter === 'all' && (
-            <p className="mt-1 text-sm text-stone-400">
+            <p className="mt-1 text-sm text-fg-muted">
               Click <span className="font-medium">New quote</span> to get started.
             </p>
           )}
         </div>
       ) : (
-        <div className="rounded-xl border border-stone-200 bg-white overflow-hidden divide-y divide-stone-100">
+        <div className="rounded-xl border border-border bg-surface overflow-hidden divide-y divide-border-subtle">
           {filtered.map((q) => {
             const rowSubtotal = calcSubtotal(q.lineItems)
             const date = new Date(q.createdAt).toLocaleDateString('en-AU', {
@@ -981,14 +981,14 @@ export default function QuotesView({
             return (
               <div
                 key={q.id}
-                className={`px-5 py-4 transition-colors ${selected ? 'bg-green-50' : 'hover:bg-stone-50'}`}
+                className={`px-5 py-4 transition-colors ${selected ? 'bg-accent-dim' : 'hover:bg-surface-raised'}`}
               >
                 <div className="flex items-center gap-3">
                   <input
                     type="checkbox"
                     checked={selected}
                     onChange={() => toggleSelection(q.id)}
-                    className="h-4 w-4 rounded border-stone-300 text-green-700 focus:ring-green-600 cursor-pointer shrink-0"
+                    className="h-4 w-4 rounded border-border text-accent-fg focus:ring-green-600 cursor-pointer shrink-0"
                   />
                   <button
                     type="button"
@@ -998,21 +998,21 @@ export default function QuotesView({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         {q.reference && (
-                          <span className="font-semibold text-stone-900 text-sm">{q.reference}</span>
+                          <span className="font-semibold text-fg text-sm">{q.reference}</span>
                         )}
                         {q.siteName && (
-                          <span className="text-xs text-stone-400">{q.siteName}</span>
+                          <span className="text-xs text-fg-muted">{q.siteName}</span>
                         )}
                         {!q.reference && !q.siteName && (
-                          <span className="text-sm text-stone-400 italic">Untitled</span>
+                          <span className="text-sm text-fg-muted italic">Untitled</span>
                         )}
                       </div>
                       {q.description && (
-                        <p className="text-sm text-stone-500 mt-0.5 truncate">{q.description}</p>
+                        <p className="text-sm text-fg-muted mt-0.5 truncate">{q.description}</p>
                       )}
                     </div>
-                    <span className="text-xs text-stone-400 shrink-0 hidden sm:block">{date}</span>
-                    <span className="text-sm tabular-nums font-semibold text-stone-900 shrink-0">{fmt(rowSubtotal)}</span>
+                    <span className="text-xs text-fg-muted shrink-0 hidden sm:block">{date}</span>
+                    <span className="text-sm tabular-nums font-semibold text-fg shrink-0">{fmt(rowSubtotal)}</span>
                     <span className={`rounded-full px-2.5 py-1 text-xs font-medium shrink-0 ${statusClass(q.status)}`}>
                       {statusLabel(q.status)}
                     </span>
@@ -1021,7 +1021,7 @@ export default function QuotesView({
                 {conv && (
                   <a
                     href={`/sites/${conv.siteId}/stages/${conv.stageId}`}
-                    className="ml-10 mt-1 inline-flex items-center gap-1.5 rounded-full bg-green-50 border border-green-200 px-2.5 py-0.5 text-xs font-medium text-green-700 hover:bg-green-100 transition-colors"
+                    className="ml-10 mt-1 inline-flex items-center gap-1.5 rounded-full bg-accent-dim border border-green-200 px-2.5 py-0.5 text-xs font-medium text-accent-fg hover:bg-accent-dim transition-colors"
                   >
                     <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1040,8 +1040,8 @@ export default function QuotesView({
 
       {/* Sticky action bar — appears when quotes are selected */}
       {selectedIds.size > 0 && (
-        <div className="sticky top-14 md:top-0 z-10 flex items-center justify-between gap-3 rounded-xl border border-green-200 bg-green-50 px-4 py-2.5">
-          <span className="text-sm font-medium text-green-800">
+        <div className="sticky top-14 md:top-0 z-10 flex items-center justify-between gap-3 rounded-xl border border-border bg-accent-dim px-4 py-2.5">
+          <span className="text-sm font-medium text-accent-fg">
             {selectedIds.size} quote{selectedIds.size !== 1 ? 's' : ''} selected
           </span>
           <div className="flex items-center gap-3">
@@ -1057,7 +1057,7 @@ export default function QuotesView({
             <button
               type="button"
               onClick={() => setSelectedIds(new Set())}
-              className="text-xs text-green-700 hover:text-green-900 transition-colors"
+              className="text-xs text-accent-fg hover:text-green-900 transition-colors"
             >
               Clear
             </button>
@@ -1072,18 +1072,18 @@ export default function QuotesView({
       {/* Conversion modal */}
       {convertingQuoteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-xl border border-stone-200 bg-white p-5 shadow-lg space-y-4">
-            <h2 className="text-lg font-semibold text-stone-900">Convert to extra job</h2>
-            <p className="text-sm text-stone-500">
+          <div className="w-full max-w-md rounded-xl border border-border bg-surface p-5 shadow-lg space-y-4">
+            <h2 className="text-lg font-semibold text-fg">Convert to extra job</h2>
+            <p className="text-sm text-fg-muted">
               This will create a new extra job on the selected stage with the quote&apos;s line items copied as pricing estimates.
             </p>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Site</label>
+              <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Site</label>
               <select
                 value={convertSiteId}
                 onChange={(e) => handleSiteChangeForConvert(e.target.value)}
-                className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 focus:border-stone-400 focus:outline-none"
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-border focus:outline-none"
               >
                 <option value="">— Select site —</option>
                 {sites.map((s) => (
@@ -1093,12 +1093,12 @@ export default function QuotesView({
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Stage</label>
+              <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Stage</label>
               <select
                 value={convertStageId}
                 onChange={(e) => setConvertStageId(e.target.value)}
                 disabled={!convertSiteId || loadingStages}
-                className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 focus:border-stone-400 focus:outline-none disabled:opacity-50"
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-border focus:outline-none disabled:opacity-50"
               >
                 <option value="">
                   {!convertSiteId ? '— Select a site first —' : loadingStages ? 'Loading stages…' : convertStages.length === 0 ? '— No stages found —' : '— Select stage —'}
@@ -1125,7 +1125,7 @@ export default function QuotesView({
               <button
                 type="button"
                 onClick={() => { setConvertingQuoteId(null); setConvertError(null) }}
-                className="text-sm text-stone-500 hover:text-stone-700 transition-colors"
+                className="text-sm text-fg-muted hover:text-fg-secondary transition-colors"
               >
                 Cancel
               </button>

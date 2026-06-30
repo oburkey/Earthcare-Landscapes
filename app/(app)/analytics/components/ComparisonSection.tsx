@@ -25,36 +25,36 @@ function CompareCard({ option }: { option: CompareOption }) {
     .filter((e) => e.stat.avgPct !== null)
 
   return (
-    <div className="rounded-xl border border-stone-200 bg-white p-4 space-y-3">
-      <h3 className="text-sm font-semibold text-stone-800">{option.label}</h3>
+    <div className="rounded-xl border border-border bg-surface p-4 space-y-3">
+      <h3 className="text-sm font-semibold text-fg-secondary">{option.label}</h3>
 
       <div>
-        <p className="text-xs font-medium text-stone-500">Revenue</p>
-        <p className="text-lg font-semibold text-stone-900">{fmtCurrency(summary.revenue.total)}</p>
-        <p className="text-xs text-stone-400">
+        <p className="text-xs font-medium text-fg-muted">Revenue</p>
+        <p className="text-lg font-semibold text-fg">{fmtCurrency(summary.revenue.total)}</p>
+        <p className="text-xs text-fg-muted">
           {fmtCurrency(summary.revenue.invoiced)} invoiced · {fmtCurrency(summary.revenue.pipeline)} pipeline
         </p>
       </div>
 
       <div>
-        <p className="text-xs font-medium text-stone-500">Completion</p>
-        <p className="text-lg font-semibold text-stone-900">{fmtNumber(summary.completionPct, 0)}%</p>
-        <p className="text-xs text-stone-400">
+        <p className="text-xs font-medium text-fg-muted">Completion</p>
+        <p className="text-lg font-semibold text-fg">{fmtNumber(summary.completionPct, 0)}%</p>
+        <p className="text-xs text-fg-muted">
           {summary.completedCount} of {summary.lotCount} lots
         </p>
       </div>
 
       <div>
-        <p className="text-xs font-medium text-stone-500">Avg lot value</p>
-        <p className="text-lg font-semibold text-stone-900">{fmtCurrency(summary.avgLotValue)}</p>
+        <p className="text-xs font-medium text-fg-muted">Avg lot value</p>
+        <p className="text-lg font-semibold text-fg">{fmtCurrency(summary.avgLotValue)}</p>
       </div>
 
       <div>
-        <p className="text-xs font-medium text-stone-500">Materials variance</p>
+        <p className="text-xs font-medium text-fg-muted">Materials variance</p>
         {varianceEntries.length === 0 ? (
-          <p className="text-sm text-stone-400">No comparable lots</p>
+          <p className="text-sm text-fg-muted">No comparable lots</p>
         ) : (
-          <ul className="mt-1 space-y-0.5 text-xs text-stone-600">
+          <ul className="mt-1 space-y-0.5 text-xs text-fg-muted">
             {varianceEntries.map(({ key, stat }) => (
               <li key={key}>
                 {CATEGORY_LABELS[key]}: {fmtPct(stat.avgPct!)} ({stat.n})
@@ -81,7 +81,7 @@ export default function ComparisonSection({ sites }: { sites: SiteAnalytics[] })
         <select
           value={keyA}
           onChange={(e) => setKeyA(e.target.value)}
-          className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700"
+          className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg-secondary"
         >
           <option value="">Select a site or stage…</option>
           {options.map((opt) => (
@@ -91,7 +91,7 @@ export default function ComparisonSection({ sites }: { sites: SiteAnalytics[] })
         <select
           value={keyB}
           onChange={(e) => setKeyB(e.target.value)}
-          className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700"
+          className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg-secondary"
         >
           <option value="">Select a site or stage…</option>
           {options.map((opt) => (

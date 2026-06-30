@@ -95,7 +95,7 @@ export default async function QuotesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50">
+    <div className="min-h-screen bg-bg">
       <div className="mx-auto max-w-5xl px-4 py-6 space-y-5">
         <QuotesView
           initialQuotes={quotes}

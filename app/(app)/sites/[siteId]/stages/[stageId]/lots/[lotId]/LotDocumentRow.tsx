@@ -26,18 +26,18 @@ export default function LotDocumentRow({
     <div className="px-4 py-3.5 space-y-2">
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-stone-900 truncate">{documentName}</p>
-          <p className="text-xs text-stone-500">{documentTypeLabel}</p>
+          <p className="text-sm font-medium text-fg truncate">{documentName}</p>
+          <p className="text-xs text-fg-muted">{documentTypeLabel}</p>
         </div>
         <a href={url} target="_blank" rel="noopener noreferrer"
-          className="shrink-0 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50">
+          className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-muted hover:bg-surface-raised">
           View PDF
         </a>
         {isAdmin && !confirmDelete && (
           <button
             type="button"
             onClick={() => setConfirmDelete(true)}
-            className="shrink-0 text-stone-300 hover:text-red-500 transition-colors"
+            className="shrink-0 text-fg-muted hover:text-red-500 transition-colors"
             title="Delete document"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -48,7 +48,7 @@ export default function LotDocumentRow({
       </div>
       {confirmDelete && (
         <div className="flex items-center gap-3 flex-wrap">
-          <p className="text-xs text-stone-600">Delete &ldquo;{documentName}&rdquo;?</p>
+          <p className="text-xs text-fg-muted">Delete &ldquo;{documentName}&rdquo;?</p>
           <form action={action}>
             <input type="hidden" name="document_id" value={docId} />
             <input type="hidden" name="lot_id" value={lotId} />
@@ -65,7 +65,7 @@ export default function LotDocumentRow({
           <button
             type="button"
             onClick={() => setConfirmDelete(false)}
-            className="text-xs text-stone-500 hover:text-stone-700"
+            className="text-xs text-fg-muted hover:text-fg-secondary"
           >
             Cancel
           </button>

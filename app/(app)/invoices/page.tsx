@@ -221,9 +221,9 @@ export default async function InvoicesPage() {
     .filter((s) => s.stages.length > 0)
 
   return (
-    <div className="min-h-screen bg-stone-50">
+    <div className="min-h-screen bg-bg">
       <div className="mx-auto max-w-6xl px-4 py-6 space-y-5">
-        <h1 className="text-xl font-semibold text-stone-900">Invoices</h1>
+        <h1 className="text-xl font-semibold text-fg">Invoices</h1>
         <InvoicesView sites={sites} />
       </div>
     </div>

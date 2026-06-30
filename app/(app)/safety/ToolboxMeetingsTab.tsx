@@ -253,70 +253,70 @@ export default function ToolboxMeetingsTab({
       <div className="space-y-5">
         <div className="flex items-center gap-3">
           <button type="button" onClick={() => setView('list')}
-            className="flex items-center gap-1 text-sm text-stone-500 hover:text-stone-800 transition-colors">
+            className="flex items-center gap-1 text-sm text-fg-muted hover:text-fg-secondary transition-colors">
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
             </svg>
             Toolbox Meetings
           </button>
-          <span className="text-stone-300">/</span>
-          <h2 className="text-lg font-semibold text-stone-900">New toolbox meeting</h2>
+          <span className="text-fg-muted">/</span>
+          <h2 className="text-lg font-semibold text-fg">New toolbox meeting</h2>
         </div>
 
-        <div className="rounded-xl border border-stone-200 bg-white p-5 space-y-6">
+        <div className="rounded-xl border border-border bg-surface p-5 space-y-6">
 
           {/* Site + Date */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Site *</label>
+              <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Site *</label>
               <select value={siteId} onChange={e => setSiteId(e.target.value)}
-                className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 focus:border-stone-400 focus:outline-none">
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-border focus:outline-none">
                 <option value="">— Select site —</option>
                 {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Date *</label>
+              <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Date *</label>
               <input type="date" value={date} onChange={e => setDate(e.target.value)}
-                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 focus:border-stone-400 focus:outline-none" />
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-border focus:outline-none" />
             </div>
           </div>
 
           {/* Topic */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Topic *</label>
+            <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Topic *</label>
             <input type="text" value={topic} onChange={e => setTopic(e.target.value)}
               placeholder="e.g. Working near overhead power lines"
-              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none" />
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-border focus:outline-none" />
           </div>
 
           {/* Attendees */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Attendees</label>
+            <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Attendees</label>
             {staff.length === 0 ? (
-              <p className="text-sm text-stone-400 italic">No staff in directory</p>
+              <p className="text-sm text-fg-muted italic">No staff in directory</p>
             ) : (
-              <div className="rounded-lg border border-stone-200 max-h-48 overflow-y-auto divide-y divide-stone-50">
+              <div className="rounded-lg border border-border max-h-48 overflow-y-auto divide-y divide-border-subtle">
                 {staff.map(s => (
-                  <label key={s.id} className="flex items-center gap-2.5 px-3 py-2 hover:bg-stone-50 cursor-pointer">
+                  <label key={s.id} className="flex items-center gap-2.5 px-3 py-2 hover:bg-surface-raised cursor-pointer">
                     <input type="checkbox" checked={attendees.includes(s.full_name)} onChange={() => toggleAttendee(s.full_name)}
-                      className="h-4 w-4 rounded border-stone-300 text-green-700 focus:ring-green-600" />
-                    <span className="text-sm text-stone-800">{s.full_name}</span>
+                      className="h-4 w-4 rounded border-border text-accent-fg focus:ring-green-600" />
+                    <span className="text-sm text-fg-secondary">{s.full_name}</span>
                   </label>
                 ))}
               </div>
             )}
             {attendees.length > 0 && (
-              <p className="text-xs text-stone-500">{attendees.length} selected: {attendees.join(', ')}</p>
+              <p className="text-xs text-fg-muted">{attendees.length} selected: {attendees.join(', ')}</p>
             )}
           </div>
 
           {/* Notes */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Notes</label>
+            <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Notes</label>
             <textarea value={notes} onChange={e => setNotes(e.target.value)}
               placeholder="Any additional notes…" rows={3}
-              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none resize-none" />
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-border focus:outline-none resize-none" />
           </div>
 
           {formError && (
@@ -331,7 +331,7 @@ export default function ToolboxMeetingsTab({
             {saving ? 'Submitting…' : 'Submit toolbox meeting'}
           </button>
           <button type="button" onClick={() => setView('list')}
-            className="text-sm text-stone-500 hover:text-stone-700 transition-colors">Cancel</button>
+            className="text-sm text-fg-muted hover:text-fg-secondary transition-colors">Cancel</button>
         </div>
       </div>
     )
@@ -350,7 +350,7 @@ export default function ToolboxMeetingsTab({
 
       <div className="space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <h2 className="text-sm font-semibold text-stone-700">
+          <h2 className="text-sm font-semibold text-fg-secondary">
             Toolbox Meetings — {meetings.length} record{meetings.length !== 1 ? 's' : ''}
           </h2>
           {canManage && (
@@ -361,33 +361,33 @@ export default function ToolboxMeetingsTab({
           )}
         </div>
 
-        <div className="rounded-xl border border-stone-200 bg-white p-4">
-          <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-3">Filter</p>
+        <div className="rounded-xl border border-border bg-surface p-4">
+          <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-3">Filter</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
             <div className="space-y-1">
-              <label className="text-xs text-stone-500">From</label>
+              <label className="text-xs text-fg-muted">From</label>
               <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
-                className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-sm text-stone-900 focus:border-stone-400 focus:outline-none" />
+                className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-fg focus:border-border focus:outline-none" />
             </div>
             <div className="space-y-1">
-              <label className="text-xs text-stone-500">To</label>
+              <label className="text-xs text-fg-muted">To</label>
               <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
-                className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-sm text-stone-900 focus:border-stone-400 focus:outline-none" />
+                className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-fg focus:border-border focus:outline-none" />
             </div>
             <div className="space-y-1">
-              <label className="text-xs text-stone-500">Site</label>
+              <label className="text-xs text-fg-muted">Site</label>
               <select value={filterSite} onChange={e => setFilterSite(e.target.value)}
-                className="w-full rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-sm text-stone-900 focus:border-stone-400 focus:outline-none">
+                className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-fg focus:border-border focus:outline-none">
                 <option value="">All sites</option>
                 {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
             <div className="flex gap-2">
               <button type="button" onClick={() => { setFilterFrom(''); setFilterTo(''); setFilterSite('') }}
-                className="text-xs text-stone-400 hover:text-stone-700 transition-colors">Clear</button>
+                className="text-xs text-fg-muted hover:text-fg-secondary transition-colors">Clear</button>
               <button type="button" onClick={handleExportPdf}
                 disabled={pdfGenerating || filteredMeetings.length === 0}
-                className="flex items-center gap-1.5 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50 transition-colors">
+                className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-secondary hover:bg-surface-raised disabled:opacity-50 transition-colors">
                 {pdfGenerating ? <Spinner /> : <PdfIcon />}
                 Export PDF
               </button>
@@ -402,11 +402,11 @@ export default function ToolboxMeetingsTab({
       )}
 
       {filteredMeetings.length === 0 ? (
-        <div className="rounded-xl border border-stone-200 bg-white px-4 py-14 text-center">
-          <p className="text-sm font-medium text-stone-600">No toolbox meetings for this filter</p>
+        <div className="rounded-xl border border-border bg-surface px-4 py-14 text-center">
+          <p className="text-sm font-medium text-fg-muted">No toolbox meetings for this filter</p>
         </div>
       ) : (
-        <div className="rounded-xl border border-stone-200 bg-white overflow-hidden divide-y divide-stone-100">
+        <div className="rounded-xl border border-border bg-surface overflow-hidden divide-y divide-border-subtle">
           {filteredMeetings.map(m => {
             const isConfirming = confirmDeleteId === m.id
             return (
@@ -414,37 +414,37 @@ export default function ToolboxMeetingsTab({
                 <div className="flex-1 flex items-start gap-3 px-5 py-4 min-w-0">
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-stone-900 text-sm">{m.siteName}</span>
-                      <span className="text-xs text-stone-400">{fmtDate(m.date)}</span>
+                      <span className="font-semibold text-fg text-sm">{m.siteName}</span>
+                      <span className="text-xs text-fg-muted">{fmtDate(m.date)}</span>
                     </div>
-                    <p className="text-sm text-stone-800">{m.topic}</p>
-                    <div className="flex items-center gap-3 text-xs text-stone-400 flex-wrap">
+                    <p className="text-sm text-fg-secondary">{m.topic}</p>
+                    <div className="flex items-center gap-3 text-xs text-fg-muted flex-wrap">
                       <span>Submitted by {m.submitterName}</span>
                       {m.attendees.length > 0 && (
                         <span>· {m.attendees.length} attendee{m.attendees.length !== 1 ? 's' : ''}: {m.attendees.join(', ')}</span>
                       )}
                     </div>
                     {m.notes && (
-                      <p className="text-xs text-stone-500 whitespace-pre-wrap">{m.notes}</p>
+                      <p className="text-xs text-fg-muted whitespace-pre-wrap">{m.notes}</p>
                     )}
                   </div>
                 </div>
 
                 {isAdmin && (
-                  <div className="flex items-center px-4 border-l border-stone-100 shrink-0">
+                  <div className="flex items-center px-4 border-l border-border-subtle shrink-0">
                     {isConfirming ? (
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-stone-500">Delete?</span>
+                        <span className="text-xs text-fg-muted">Delete?</span>
                         <button type="button" onClick={() => handleDelete(m.id)} disabled={deleting}
                           className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50 transition-colors">
                           {deleting ? '…' : 'Yes'}
                         </button>
                         <button type="button" onClick={() => { setConfirmDeleteId(null); setDeleteError(null) }}
-                          className="text-xs text-stone-400 hover:text-stone-600 transition-colors">Cancel</button>
+                          className="text-xs text-fg-muted hover:text-fg-muted transition-colors">Cancel</button>
                       </div>
                     ) : (
                       <button type="button" onClick={() => setConfirmDeleteId(m.id)}
-                        className="text-xs text-stone-300 hover:text-red-500 transition-colors">Delete</button>
+                        className="text-xs text-fg-muted hover:text-red-500 transition-colors">Delete</button>
                     )}
                   </div>
                 )}

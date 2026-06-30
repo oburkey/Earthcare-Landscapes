@@ -10,15 +10,17 @@ import {
   Legend,
 } from 'chart.js'
 import type { RevenueMonthPoint } from '../lib'
+import { useChartTheme } from '../useChartTheme'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
 export default function RevenueChart({ monthly }: { monthly: RevenueMonthPoint[] }) {
+  const theme = useChartTheme()
   if (monthly.length === 0) {
     return (
-      <div className="rounded-xl border border-stone-200 bg-white p-4">
-        <h3 className="text-sm font-semibold text-stone-800">Revenue over time</h3>
-        <p className="mt-4 text-sm text-stone-400">No lots due in this range.</p>
+      <div className="rounded-xl border border-border bg-surface p-4">
+        <h3 className="text-sm font-semibold text-fg-secondary">Revenue over time</h3>
+        <p className="mt-4 text-sm text-fg-muted">No lots due in this range.</p>
       </div>
     )
   }
@@ -40,9 +42,9 @@ export default function RevenueChart({ monthly }: { monthly: RevenueMonthPoint[]
   }
 
   return (
-    <div className="rounded-xl border border-stone-200 bg-white p-4">
-      <h3 className="text-sm font-semibold text-stone-800">Revenue over time</h3>
-      <p className="mt-1 text-xs text-stone-400">Invoiced vs pipeline, by due date month</p>
+    <div className="rounded-xl border border-border bg-surface p-4">
+      <h3 className="text-sm font-semibold text-fg-secondary">Revenue over time</h3>
+      <p className="mt-1 text-xs text-fg-muted">Invoiced vs pipeline, by due date month</p>
       <div className="mt-3 h-64">
         <Bar
           data={data}
@@ -50,12 +52,13 @@ export default function RevenueChart({ monthly }: { monthly: RevenueMonthPoint[]
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-              x: { stacked: true },
-              y: { stacked: true, ticks: { callback: (v) => `$${Number(v).toLocaleString()}` } },
+              x: { stacked: true, grid: { color: theme.grid }, ticks: { color: theme.ticks } },
+              y: { stacked: true, grid: { color: theme.grid }, ticks: { color: theme.ticks, callback: (v) => `$${Number(v).toLocaleString()}` } },
             },
             plugins: {
-              legend: { position: 'bottom' },
+              legend: { position: 'bottom', labels: { color: theme.legend } },
               tooltip: {
+                ...theme.tooltip,
                 callbacks: {
                   label: (ctx) => `${ctx.dataset.label}: $${Number(ctx.parsed.y).toLocaleString()}`,
                 },

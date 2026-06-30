@@ -1,1 +1,37 @@
 @import "tailwindcss";
+
+/* Class-based dark mode — .dark on <html> activates dark: variants */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Semantic colour tokens — Tailwind generates bg-*, text-*, border-* utilities from --color-* names.
+   The utilities reference var(--color-*) at runtime, so .dark overrides take effect automatically. */
+@theme {
+  --color-bg:             #fafaf9;  /* page canvas */
+  --color-surface:        #ffffff;  /* card / panel */
+  --color-surface-raised: #f5f5f4;  /* elevated surface, hover bg */
+  --color-border:         #e7e5e4;  /* standard dividers */
+  --color-border-subtle:  #f5f5f4;  /* very faint dividers */
+  --color-fg:             #1c1917;  /* primary text */
+  --color-fg-secondary:   #44403c;  /* secondary text, nav labels */
+  --color-fg-muted:       #78716c;  /* metadata, placeholders */
+  --color-accent:         #15803d;  /* green — for bg use (white text on top) */
+  --color-accent-fg:      #15803d;  /* green — for text use on page bg */
+  --color-accent-dim:     #f0fdf4;  /* light green tint bg */
+  --color-skeleton:       #e7e5e4;  /* loading pulse */
+}
+
+/* Dark mode overrides — same CSS var names, different values */
+.dark {
+  --color-bg:             #141414;
+  --color-surface:        #1c1c1c;
+  --color-surface-raised: #252525;
+  --color-border:         #333333;
+  --color-border-subtle:  #272727;
+  --color-fg:             #f5f5f4;
+  --color-fg-secondary:   #d6d3d1;
+  --color-fg-muted:       #a8a29e;
+  --color-accent:         #166534;  /* green-800 — muted on dark sidebar, still reads as active */
+  --color-accent-fg:      #4ade80;  /* green-400 — bright enough for text on dark bg */
+  --color-accent-dim:     rgba(74, 222, 128, 0.08);
+  --color-skeleton:       #2d2d2d;
+}
