@@ -192,6 +192,7 @@ function pdfEquipmentDetailRow(
 async function downloadPreStartsPdf(
   preStarts: PreStartRow[],
   vehicles: VehicleOption[],
+  staff: StaffOption[],
   siteFilter: string,
   siteLabel: string,
   dateFrom: string,
@@ -705,6 +706,7 @@ export default function PreStartsTab({
     downloadPreStartsPdf(
       filteredPreStarts,
       vehicles,
+      staff,
       filterSite,
       siteLabel,
       filterFrom,

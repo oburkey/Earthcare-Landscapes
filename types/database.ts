@@ -230,6 +230,71 @@ export interface LotQuoteItem {
   created_at: string
 }
 
+// ── Safety Forms Engine ───────────────────────────────────────────────────
+
+export type FormItemType = 'checkbox' | 'yes_no' | 'text'
+export type SafetyFormType = 'interactive' | 'swms' | 'jsa' | 'reference'
+
+export interface FormItem {
+  id: string
+  label: string
+  type: FormItemType
+  required: boolean
+}
+
+export interface FormSection {
+  title: string
+  items: FormItem[]
+}
+
+export interface SafetyFormTemplate {
+  id: string
+  title: string
+  form_type: SafetyFormType
+  description: string | null
+  is_site_specific: boolean
+  sections: FormSection[]
+  content_html: string | null
+  require_witness: boolean
+  is_active: boolean
+  created_by: string
+  created_at: string
+  updated_at: string
+}
+
+export interface SafetyFormAssignment {
+  id: string
+  template_id: string
+  assigned_to: string
+  assigned_by: string
+  site_id: string | null
+  due_date: string | null
+  completed_at: string | null
+  created_at: string
+}
+
+export interface SafetyFormCompletion {
+  id: string
+  assignment_id: string
+  profile_id: string
+  responses: Record<string, boolean | 'yes' | 'no' | string>
+  inductee_signature_path: string | null
+  witness_signature_path: string | null
+  completed_at: string
+  notes: string | null
+}
+
+export interface SafetyReferenceDocument {
+  id: string
+  title: string
+  site_id: string
+  template_id: string | null
+  content_html: string
+  uploaded_by: string
+  created_at: string
+  updated_at: string
+}
+
 // ── Safety ────────────────────────────────────────────────────────────────────
 
 export interface PreStart {

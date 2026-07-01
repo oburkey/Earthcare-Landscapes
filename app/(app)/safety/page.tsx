@@ -10,6 +10,10 @@ import SafetyView, {
   type ToolboxMeetingRow,
   type IncidentRow,
 } from './SafetyView'
+import type { MyAssignmentRow } from './FormsTab'
+import type { TemplateRow } from './FormTemplatesTab'
+import type { AssignmentManagementRow } from './AssignFormsTab'
+import type { SafetyFormType, FormSection } from '@/types/database'
 
 export const metadata = { title: 'Safety — Earthcare Landscapes' }
 
@@ -268,6 +272,100 @@ export default async function SafetyPage() {
     incidentsExist = false
   }
 
+  // ── Safety Forms Engine ───────────────────────────────────────────────────
+  let myAssignments:  MyAssignmentRow[]         = []
+  let templates:      TemplateRow[]             = []
+  let allAssignments: AssignmentManagementRow[] = []
+  let safetyFormsExist = true
+
+  try {
+    // My assigned forms (all users)
+    const { data: myAssignmentsRaw, error: myAssErr } = await supabase
+      .from('safety_form_assignments')
+      .select(`
+        id, site_id, due_date, completed_at, created_at,
+        safety_form_templates(id, title, form_type, sections, content_html, require_witness),
+        sites(name)
+      `)
+      .eq('assigned_to', profile.id)
+      .order('created_at', { ascending: false })
+
+    if (myAssErr?.code === '42P01' || myAssErr?.message?.includes('does not exist')) {
+      safetyFormsExist = false
+    } else if (!myAssErr) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      myAssignments = (myAssignmentsRaw ?? []).map((r: any): MyAssignmentRow => ({
+        id:             r.id,
+        templateId:     r.safety_form_templates?.id ?? '',
+        templateTitle:  r.safety_form_templates?.title ?? 'Unknown',
+        formType:       (r.safety_form_templates?.form_type ?? 'interactive') as SafetyFormType,
+        isSiteSpecific: false,
+        sections:       (r.safety_form_templates?.sections ?? []) as FormSection[],
+        contentHtml:    r.safety_form_templates?.content_html ?? null,
+        requireWitness: r.safety_form_templates?.require_witness ?? false,
+        siteId:         r.site_id,
+        siteName:       r.sites?.name ?? null,
+        dueDate:        r.due_date,
+        completedAt:    r.completed_at,
+        createdAt:      r.created_at,
+      }))
+
+      // Templates (admin reads all, others get active only via RLS)
+      const { data: templatesRaw } = await supabase
+        .from('safety_form_templates')
+        .select('id, title, form_type, description, is_site_specific, sections, content_html, require_witness, is_active, created_at')
+        .order('created_at', { ascending: false })
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      templates = (templatesRaw ?? []).map((r: any): TemplateRow => ({
+        id:             r.id,
+        title:          r.title,
+        formType:       r.form_type as SafetyFormType,
+        description:    r.description,
+        isSiteSpecific: r.is_site_specific,
+        requireWitness: r.require_witness,
+        sections:       (r.sections ?? []) as FormSection[],
+        contentHtml:    r.content_html,
+        isActive:       r.is_active,
+        createdAt:      r.created_at,
+      }))
+
+      // All assignments (supervisor+ only)
+      const isSupervisorPlus = profile.role === 'supervisor' || profile.role === 'admin'
+      if (isSupervisorPlus) {
+        const { data: allAssRaw } = await supabase
+          .from('safety_form_assignments')
+          .select(`
+            id, assigned_to, site_id, due_date, completed_at, created_at,
+            safety_form_templates(title, form_type),
+            sites(name)
+          `)
+          .order('created_at', { ascending: false })
+          .limit(500)
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        allAssignments = (allAssRaw ?? []).map((r: any): AssignmentManagementRow => {
+          const worker = staff.find(s => s.id === r.assigned_to)
+          return {
+            id:            r.id,
+            templateId:    '',
+            templateTitle: r.safety_form_templates?.title ?? 'Unknown',
+            formType:      (r.safety_form_templates?.form_type ?? 'interactive') as SafetyFormType,
+            assignedTo:    r.assigned_to,
+            assigneeName:  worker ? `${worker.first_name} ${worker.last_name}`.trim() : r.assigned_to,
+            siteId:        r.site_id,
+            siteName:      r.sites?.name ?? null,
+            dueDate:       r.due_date,
+            completedAt:   r.completed_at,
+            createdAt:     r.created_at,
+          }
+        })
+      }
+    }
+  } catch {
+    safetyFormsExist = false
+  }
+
   return (
     <div className="min-h-screen bg-bg">
       <div className="mx-auto max-w-5xl px-4 py-6">
@@ -283,11 +381,15 @@ export default async function SafetyPage() {
           signoffs={signoffs}
           toolboxMeetings={toolboxMeetings}
           incidents={incidents}
+          myAssignments={myAssignments}
+          templates={templates}
+          allAssignments={allAssignments}
           tablesExist={{
             preStarts: preStartsExist,
             safetyDocuments: docsExist,
             toolboxMeetings: toolboxMeetingsExist,
             incidents: incidentsExist,
+            safetyForms: safetyFormsExist,
           }}
         />
       </div>

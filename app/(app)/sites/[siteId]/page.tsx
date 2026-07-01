@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import EditSiteForm from './EditSiteForm'
 import SitePlanManager from './SitePlanManager'
 import StageListActions from './StageListActions'
+import SiteReferenceDocs, { type ReferenceDocRow } from './SiteReferenceDocs'
 import { getR2SignedUrlSafe } from '@/lib/r2'
 
 interface Props {
@@ -34,7 +35,23 @@ export default async function SitePage({ params }: Props) {
       .order('created_at', { ascending: true }),
   ])
 
+  // Graceful: table may not exist yet
+  let refDocsRaw: Array<{ id: string; title: string; content_html: string; uploaded_by: string; created_at: string; updated_at: string }> | null = null
+  try {
+    const { data, error } = await supabase
+      .from('safety_reference_documents')
+      .select('id, title, content_html, uploaded_by, created_at, updated_at')
+      .eq('site_id', siteId)
+      .order('created_at', { ascending: false })
+    if (!error) refDocsRaw = data
+  } catch { /* table may not exist yet */ }
+
   if (!site) notFound()
+
+  const refDocs: ReferenceDocRow[] = (refDocsRaw ?? []).map(r => ({
+    id: r.id, title: r.title, contentHtml: r.content_html,
+    uploadedBy: r.uploaded_by, createdAt: r.created_at, updatedAt: r.updated_at,
+  }))
 
   // Generate signed URLs for each plan document
   type PlanWithUrl = { id: string; url: string; label: string | null }
@@ -175,6 +192,13 @@ export default async function SitePage({ params }: Props) {
             canManage={canManage}
           />
         </div>
+
+        {/* WHS Reference Documents */}
+        <SiteReferenceDocs
+          siteId={siteId}
+          docs={refDocs}
+          isAdmin={isAdmin}
+        />
 
       </div>
     </div>

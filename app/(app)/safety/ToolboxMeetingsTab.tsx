@@ -24,6 +24,7 @@ const PDF_STYLES = `<style>
 
 async function downloadToolboxMeetingsPdf(
   meetings: ToolboxMeetingRow[],
+  staff: StaffOption[],
   siteFilter: string,
   siteLabel: string,
   dateFrom: string,
@@ -234,6 +235,7 @@ export default function ToolboxMeetingsTab({
     setPdfError(null)
     downloadToolboxMeetingsPdf(
       filteredMeetings,
+      staff,
       filterSite,
       siteLabel,
       filterFrom,
