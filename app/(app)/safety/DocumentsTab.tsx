@@ -146,7 +146,7 @@ export default function DocumentsTab({
           <button
             type="button"
             onClick={() => setShowUpload(true)}
-            className="rounded-lg bg-stone-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-stone-700 transition-colors"
+            className="rounded-lg bg-green-700 px-3.5 py-2 text-sm font-medium text-white hover:bg-green-800 transition-colors"
           >
             Upload document
           </button>
@@ -200,7 +200,7 @@ export default function DocumentsTab({
               type="button"
               onClick={handleUpload}
               disabled={uploading}
-              className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-60 transition-colors"
+              className="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-60 transition-colors"
             >
               {uploading ? 'Uploading…' : 'Upload'}
             </button>

@@ -101,7 +101,7 @@ export default async function LotPage({ params }: Props) {
     // Trade status — table may not exist yet, handled gracefully below
     supabase
       .from('lot_trade_status')
-      .select('trades_completed, ready_for_landscaping, blocking_notes, updated_at, profiles(full_name)')
+      .select('trades_completed, ready_for_landscaping, blocking_notes, updated_at, profiles(first_name, last_name)')
       .eq('lot_id', lotId)
       .maybeSingle(),
     // Completion checklist — table may not exist yet, handled gracefully below
@@ -228,13 +228,13 @@ export default async function LotPage({ params }: Props) {
   // Trade status — gracefully fall back if the table doesn't exist yet
   const tradeStatusRow = tradeStatusResult.error ? null : tradeStatusResult.data
   const tradeStatusProfile = tradeStatusRow
-    ? (Array.isArray(tradeStatusRow.profiles) ? tradeStatusRow.profiles[0] : tradeStatusRow.profiles as { full_name: string } | null)
+    ? (Array.isArray(tradeStatusRow.profiles) ? tradeStatusRow.profiles[0] : tradeStatusRow.profiles as { first_name: string; last_name: string } | null)
     : null
   const tradeStatus = {
     tradesCompleted: tradeStatusRow?.trades_completed ?? [],
     readyForLandscaping: tradeStatusRow?.ready_for_landscaping ?? false,
     blockingNotes: tradeStatusRow?.blocking_notes ?? null,
-    updatedByName: tradeStatusProfile?.full_name ?? null,
+    updatedByName: tradeStatusProfile ? `${tradeStatusProfile.first_name} ${tradeStatusProfile.last_name}`.trim() : null,
     updatedAt: tradeStatusRow?.updated_at ?? null,
   }
 

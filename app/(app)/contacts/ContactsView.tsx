@@ -72,7 +72,7 @@ export default function ContactsView({ contacts, canManage }: Props) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search by name or company…"
-          className="block w-full rounded-lg border border-border bg-surface pl-9 pr-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+          className="block w-full rounded-lg border border-border bg-surface pl-9 pr-3 py-2.5 text-sm text-fg placeholder:text-fg-muted shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
         />
       </div>
 

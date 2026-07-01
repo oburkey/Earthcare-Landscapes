@@ -13,10 +13,13 @@ export default async function StaffPage() {
 
   const staff = (staffData ?? []).map((s) => ({
     id:           s.id as string,
-    full_name:    (s.full_name ?? '') as string,
+    first_name:   (s.first_name ?? '') as string,
+    last_name:    (s.last_name ?? '') as string,
+    email:        (s.email ?? null) as string | null,
     phone_number: (s.phone_number ?? null) as string | null,
     credentials:  ((s.credentials as string[]) ?? []),
     role:         s.role as Role,
+    has_login:    (s.has_login ?? true) as boolean,
   }))
 
   const allowedRoles: Role[] = profile.role === 'admin'

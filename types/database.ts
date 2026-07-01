@@ -17,13 +17,17 @@ export type PhotoType = 'before' | 'during' | 'after'
 export type DocumentType = 'site_plan' | 'drawing' | 'housing_claim' | 'other'
 
 // ── Profiles ─────────────────────────────────────────────────────────────────
-// One row per user, created automatically on signup via a DB trigger.
+// One row per person, created automatically by the handle_new_user() trigger.
+// has_login = false for stub entries (staff without app access).
 export interface Profile {
   id: string           // matches auth.users.id
-  full_name: string
+  first_name: string
+  last_name: string
+  email: string | null
   phone_number: string | null
   credentials: string[]
   role: Role
+  has_login: boolean
   created_at: string
 }
 
@@ -114,17 +118,6 @@ export interface Invitation {
 export interface ClientSiteAccess {
   client_user_id: string
   site_id: string
-}
-
-// ── Staff Members ─────────────────────────────────────────────────────────────
-// Standalone staff directory, not tied to auth accounts.
-export interface StaffMember {
-  id: string
-  full_name: string
-  phone_number: string | null
-  credentials: string[]
-  role: Role
-  created_at: string
 }
 
 // ── Contacts ──────────────────────────────────────────────────────────────────

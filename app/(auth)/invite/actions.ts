@@ -1,56 +1,60 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export async function acceptInvite(formData: FormData) {
-  const token = formData.get('token') as string
-  const fullName = formData.get('full_name') as string
-  const password = formData.get('password') as string
+  const token     = formData.get('token') as string
+  const firstName = (formData.get('first_name') as string)?.trim()
+  const lastName  = (formData.get('last_name') as string)?.trim()
+  const password  = formData.get('password') as string
+
+  if (!firstName || !lastName) return { error: 'First and last name are required.' }
+  if (!password || password.length < 8) return { error: 'Password must be at least 8 characters.' }
 
   const supabase = await createClient()
 
-  // Re-fetch the invitation to get email and role
   const { data: invitation } = await supabase
     .from('invitations')
-    .select('*')
+    .select('id, email, role, profile_id, accepted_at')
     .eq('token', token)
     .is('accepted_at', null)
     .single()
 
-  if (!invitation) {
-    return { error: 'This invitation is no longer valid.' }
+  if (!invitation) return { error: 'This invitation is no longer valid.' }
+
+  if (!invitation.profile_id) {
+    return { error: 'This invitation uses an older format. Please ask an admin to re-send your invite.' }
   }
 
-  // Create the Supabase auth user
-  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-    email: invitation.email,
-    password,
-    options: {
-      data: { full_name: fullName },
-    },
-  })
+  const admin = createAdminClient()
 
-  if (signUpError || !signUpData.user) {
-    return { error: signUpError?.message ?? 'Could not create account.' }
-  }
+  // Set the password on the existing stub auth user
+  const { error: updateError } = await admin.auth.admin.updateUserById(
+    invitation.profile_id,
+    { password, email_confirm: true }
+  )
 
-  // The profiles row is created by a DB trigger (see schema.sql).
-  // We update it with the correct role and name.
-  const { error: profileError } = await supabase
+  if (updateError) return { error: updateError.message }
+
+  // Activate the profile and set their name
+  const { error: profileError } = await admin
     .from('profiles')
-    .update({ full_name: fullName, role: invitation.role })
-    .eq('id', signUpData.user.id)
+    .update({
+      first_name: firstName,
+      last_name:  lastName,
+      role:       invitation.role,
+      has_login:  true,
+    })
+    .eq('id', invitation.profile_id)
 
-  if (profileError) {
-    return { error: 'Account created but profile setup failed. Contact support.' }
-  }
+  if (profileError) return { error: 'Password set but profile update failed. Contact support.' }
 
-  // Mark the invitation as used
-  await supabase
+  // Mark invitation accepted
+  await admin
     .from('invitations')
     .update({ accepted_at: new Date().toISOString() })
     .eq('id', invitation.id)
 
-  redirect('/dashboard')
+  return { success: true }
 }

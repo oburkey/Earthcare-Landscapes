@@ -38,10 +38,12 @@
       "Bash(npx tailwindcss *)",
       "Bash(findstr /i \"dark variant\")",
       "PowerShell(npm run *)",
+      "PowerShell(git pull *)",
       "Bash(xxd \"C:/Users/Ollie/desktop/earthcare/app/\\(app\\)/ThemeToggle.tsx\")",
       "Bash(xxd \"C:/Users/Ollie/desktop/earthcare/app/\\(app\\)/AppNav.tsx\")",
       "Bash(sed -i 's/text-xs font-semibold uppercase tracking-wide text-fg-muted/text-xs font-semibold uppercase tracking-wide text-fg-secondary/g' 'C:/Users/Ollie/desktop/earthcare/app/\\(app\\)/sites/[siteId]/stages/[stageId]/extra-jobs/[extraJobId]/ExtraJobPricing.tsx')",
-      "Bash(sed -i 's/text-xs font-semibold uppercase tracking-wide text-fg-muted/text-xs font-semibold uppercase tracking-wide text-fg-secondary/g' 'C:/Users/Ollie/desktop/earthcare/app/\\(app\\)/sites/[siteId]/stages/[stageId]/MaterialsSummary.tsx')"
+      "Bash(sed -i 's/text-xs font-semibold uppercase tracking-wide text-fg-muted/text-xs font-semibold uppercase tracking-wide text-fg-secondary/g' 'C:/Users/Ollie/desktop/earthcare/app/\\(app\\)/sites/[siteId]/stages/[stageId]/MaterialsSummary.tsx')",
+      "PowerShell(git *)"
     ]
   }
 }

@@ -218,7 +218,7 @@ async function downloadPreStartsPdf(
       <td>${ps.date}</td>
       <td>${ps.siteName}</td>
       <td>${ps.submitterName}</td>
-      <td>${ps.crewPresent.join(', ') || '—'}</td>
+      <td>${ps.crewPresent.map(id => { const s = staff.find(m => m.id === id); return s ? s.first_name + ' ' + s.last_name : id }).join(', ') || '—'}</td>
       <td>${ps.weather.join(', ') || '—'}</td>
       <td>${hazard}</td>
       <td class="${ps.ppeConfirmed ? 'ok' : 'bad'}">${ps.ppeConfirmed ? '✓' : '✗'}</td>
@@ -456,6 +456,12 @@ export default function PreStartsTab({
 }: Props) {
   const isSupervisorPlus = role === 'supervisor' || role === 'admin'
   const isAdmin          = role === 'admin'
+
+  const staffName = (id: string) => {
+    const s = staff.find(m => m.id === id)
+    return s ? `${s.first_name} ${s.last_name}` : id
+  }
+  const crewNames = (ids: string[]) => ids.map(staffName).join(', ')
 
   const machineryVehicles = vehicles.filter(v => v.vehicle_type === 'Machinery')
   const truckVehicles     = vehicles.filter(v => v.vehicle_type === 'Truck')
@@ -793,7 +799,7 @@ export default function PreStartsTab({
             <div className="col-span-2 sm:col-span-3">
               <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-1">Crew Present</p>
               <p className="text-sm text-fg">
-                {ps.crewPresent.length > 0 ? ps.crewPresent.join(', ') : <span className="text-fg-muted italic">None listed</span>}
+                {ps.crewPresent.length > 0 ? crewNames(ps.crewPresent) : <span className="text-fg-muted italic">None listed</span>}
               </p>
             </div>
           </div>
@@ -981,12 +987,12 @@ export default function PreStartsTab({
                       {staff.map(s => (
                         <label key={s.id} className="flex items-center gap-1.5 text-sm text-fg-secondary cursor-pointer">
                           <input type="checkbox"
-                            checked={editCrewPresent.includes(s.full_name)}
+                            checked={editCrewPresent.includes(s.id)}
                             onChange={() => setEditCrewPresent(prev =>
-                              prev.includes(s.full_name) ? prev.filter(n => n !== s.full_name) : [...prev, s.full_name]
+                              prev.includes(s.id) ? prev.filter(n => n !== s.id) : [...prev, s.id]
                             )}
                             className="rounded border-border text-fg focus:ring-border" />
-                          {s.full_name}
+                          {s.first_name} {s.last_name}
                         </label>
                       ))}
                     </div>
@@ -1009,7 +1015,7 @@ export default function PreStartsTab({
                   {editError && <p className="text-sm text-red-600">{editError}</p>}
                   <div className="flex items-center gap-3">
                     <button type="button" onClick={() => handleEditSave(ps.id)} disabled={editSaving}
-                      className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-800 disabled:opacity-50 transition-colors">
+                      className="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50 transition-colors">
                       {editSaving ? 'Saving…' : 'Save changes'}
                     </button>
                     <button type="button" onClick={() => { setEditMode(false); setEditError(null) }}
@@ -1089,15 +1095,15 @@ export default function PreStartsTab({
               <div className="rounded-lg border border-border max-h-48 overflow-y-auto divide-y divide-border-subtle">
                 {staff.map(s => (
                   <label key={s.id} className="flex items-center gap-2.5 px-3 py-2 hover:bg-surface-raised cursor-pointer">
-                    <input type="checkbox" checked={crewPresent.includes(s.full_name)} onChange={() => toggleCrew(s.full_name)}
+                    <input type="checkbox" checked={crewPresent.includes(s.id)} onChange={() => toggleCrew(s.id)}
                       className="h-4 w-4 rounded border-border text-green-700 focus:ring-green-600" />
-                    <span className="text-sm text-fg">{s.full_name}</span>
+                    <span className="text-sm text-fg">{s.first_name} {s.last_name}</span>
                   </label>
                 ))}
               </div>
             )}
             {crewPresent.length > 0 && (
-              <p className="text-xs text-fg-muted">{crewPresent.length} selected: {crewPresent.join(', ')}</p>
+              <p className="text-xs text-fg-muted">{crewPresent.length} selected: {crewNames(crewPresent)}</p>
             )}
           </div>
 
@@ -1306,7 +1312,7 @@ export default function PreStartsTab({
         {/* Actions */}
         <div className="flex items-center gap-3">
           <button type="button" onClick={handleSubmit} disabled={saving || compressingPhotos}
-            className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-60 transition-colors">
+            className="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-60 transition-colors">
             {saving ? 'Submitting…' : 'Submit pre-start'}
           </button>
           <button type="button" onClick={() => setView('list')}
@@ -1339,7 +1345,7 @@ export default function PreStartsTab({
               )}
             </div>
             <button type="button" onClick={openNew}
-              className="rounded-lg bg-stone-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-stone-700 transition-colors">
+              className="rounded-lg bg-green-700 px-3.5 py-2 text-sm font-medium text-white hover:bg-green-800 transition-colors">
               New pre-start
             </button>
           </div>
@@ -1384,7 +1390,7 @@ export default function PreStartsTab({
       {!isSupervisorPlus && (
         <div className="flex justify-end">
           <button type="button" onClick={openNew}
-            className="rounded-lg bg-stone-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-stone-700 transition-colors">
+            className="rounded-lg bg-green-700 px-3.5 py-2 text-sm font-medium text-white hover:bg-green-800 transition-colors">
             New pre-start
           </button>
         </div>

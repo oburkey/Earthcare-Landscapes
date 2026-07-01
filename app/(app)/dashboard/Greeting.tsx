@@ -9,12 +9,10 @@ export default function Greeting({ name }: Props) {
   const timeOfDay =
     hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
 
-  const firstName = name.split(' ')[0]
-
   return (
     <div>
       <h1 className="text-2xl font-semibold text-fg">
-        {timeOfDay}, {firstName}
+        {timeOfDay}, {name}
       </h1>
       <p className="mt-0.5 text-sm text-fg-muted">
         Here&apos;s what&apos;s on today.

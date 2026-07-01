@@ -124,9 +124,11 @@ async function _contacts(db: Db) {
 
 async function _staff(db: Db) {
   const { data } = await db
-    .from('staff_members')
-    .select('id, full_name, phone_number, credentials, role')
-    .order('full_name', { ascending: true })
+    .from('profiles')
+    .select('id, first_name, last_name, email, phone_number, credentials, role, has_login')
+    .neq('role', 'client')
+    .order('last_name', { ascending: true })
+    .order('first_name', { ascending: true })
   return data ?? []
 }
 

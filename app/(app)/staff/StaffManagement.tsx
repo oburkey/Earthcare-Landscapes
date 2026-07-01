@@ -8,10 +8,13 @@ type ActionState = { error?: string; success?: string } | null
 
 interface StaffMember {
   id: string
-  full_name: string
+  first_name: string
+  last_name: string
+  email: string | null
   phone_number: string | null
   credentials: string[]
   role: Role
+  has_login: boolean
 }
 
 interface Props {
@@ -80,11 +83,23 @@ export default function StaffManagement({ staff, canManage, allowedRoles }: Prop
               <div className="flex items-center justify-between px-4 py-4">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-fg">{member.full_name || 'Unnamed'}</span>
+                    <span className="text-sm font-semibold text-fg">
+                      {member.first_name || member.last_name
+                        ? `${member.first_name} ${member.last_name}`.trim()
+                        : 'Unnamed'}
+                    </span>
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ROLE_BADGE[member.role]}`}>
                       {ROLE_LABELS[member.role]}
                     </span>
+                    {!member.has_login && (
+                      <span className="rounded-full bg-surface-raised px-2 py-0.5 text-xs font-medium text-fg-muted">
+                        No login
+                      </span>
+                    )}
                   </div>
+                  {member.email && (
+                    <p className="mt-0.5 text-xs text-fg-muted">{member.email}</p>
+                  )}
                   {member.phone_number && (
                     <a href={`tel:${member.phone_number}`} className="mt-0.5 block text-sm text-fg-muted hover:text-fg-secondary">
                       {member.phone_number}
@@ -139,15 +154,46 @@ function AddForm({ allowedRoles, onSuccess }: { allowedRoles: Role[]; onSuccess:
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="add-name" className="block text-sm font-medium text-fg-secondary">
-              Full name <span className="text-red-500">*</span>
+            <label htmlFor="add-first-name" className="block text-sm font-medium text-fg-secondary">
+              First name <span className="text-red-500">*</span>
             </label>
             <input
-              id="add-name"
-              name="full_name"
+              id="add-first-name"
+              name="first_name"
               type="text"
               required
-              placeholder="e.g. Jake Morrison"
+              placeholder="e.g. Jake"
+              autoComplete="given-name"
+              className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+            />
+          </div>
+          <div>
+            <label htmlFor="add-last-name" className="block text-sm font-medium text-fg-secondary">
+              Last name <span className="text-red-500">*</span>
+            </label>
+            <input
+              id="add-last-name"
+              name="last_name"
+              type="text"
+              required
+              placeholder="e.g. Morrison"
+              autoComplete="family-name"
+              className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="add-email" className="block text-sm font-medium text-fg-secondary">
+              Email
+            </label>
+            <input
+              id="add-email"
+              name="email"
+              type="email"
+              placeholder="e.g. jake@earthcare.com.au"
+              autoComplete="email"
               className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
             />
           </div>
@@ -173,7 +219,7 @@ function AddForm({ allowedRoles, onSuccess }: { allowedRoles: Role[]; onSuccess:
             id="add-role"
             name="role"
             defaultValue="worker"
-            className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-surface"
+            className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
           >
             {allowedRoles.map((r) => (
               <option key={r} value={r}>{ROLE_LABELS[r]}</option>
@@ -235,13 +281,38 @@ function EditForm({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label htmlFor={`name-${member.id}`} className="block text-sm font-medium text-fg-secondary">Full name</label>
+            <label htmlFor={`first-${member.id}`} className="block text-sm font-medium text-fg-secondary">First name</label>
             <input
-              id={`name-${member.id}`}
-              name="full_name"
+              id={`first-${member.id}`}
+              name="first_name"
               type="text"
               required
-              defaultValue={member.full_name}
+              defaultValue={member.first_name}
+              className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+            />
+          </div>
+          <div>
+            <label htmlFor={`last-${member.id}`} className="block text-sm font-medium text-fg-secondary">Last name</label>
+            <input
+              id={`last-${member.id}`}
+              name="last_name"
+              type="text"
+              required
+              defaultValue={member.last_name}
+              className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label htmlFor={`email-${member.id}`} className="block text-sm font-medium text-fg-secondary">Email</label>
+            <input
+              id={`email-${member.id}`}
+              name="email"
+              type="email"
+              defaultValue={member.email ?? ''}
+              placeholder="e.g. jake@earthcare.com.au"
               className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
             />
           </div>
@@ -264,7 +335,7 @@ function EditForm({
             id={`role-${member.id}`}
             name="role"
             defaultValue={member.role}
-            className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-surface"
+            className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
           >
             {allowedRoles.map((r) => (
               <option key={r} value={r}>{ROLE_LABELS[r]}</option>
@@ -303,7 +374,12 @@ function EditForm({
 
       {/* Delete */}
       <div className="pt-1 border-t border-border-subtle">
-        {!confirmDelete ? (
+        {member.has_login ? (
+          <p className="text-xs text-fg-muted">
+            This person has an active login account. Manage their account through the{' '}
+            <a href="/users" className="underline hover:text-fg-secondary">Users page</a>.
+          </p>
+        ) : !confirmDelete ? (
           <button
             onClick={() => setConfirmDelete(true)}
             className="text-sm text-red-500 hover:text-red-700"

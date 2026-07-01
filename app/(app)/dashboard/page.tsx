@@ -254,7 +254,7 @@ export default async function DashboardPage() {
     <div className="min-h-screen bg-bg">
       <div className="mx-auto max-w-4xl px-4 py-6 space-y-6">
 
-        <Greeting name={profile.full_name} />
+        <Greeting name={profile.first_name} />
 
         {/* Section 1 — Summary cards (leading_hand+) */}
         {isLeadingHand && (

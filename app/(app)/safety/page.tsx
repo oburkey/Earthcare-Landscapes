@@ -26,11 +26,13 @@ export default async function SafetyPage() {
     .order('name')
   const sites: SiteOption[] = (sitesRaw ?? []) as SiteOption[]
 
-  // Staff members (for crew selector)
+  // Staff (for crew selector) — all non-client profiles
   const { data: staffRaw } = await supabase
-    .from('staff_members')
-    .select('id, full_name')
-    .order('full_name')
+    .from('profiles')
+    .select('id, first_name, last_name')
+    .neq('role', 'client')
+    .order('last_name')
+    .order('first_name')
   const staff: StaffOption[] = (staffRaw ?? []) as StaffOption[]
 
   // Vehicles (for machinery selector — all types passed, filtered to Machinery in the form)
@@ -54,7 +56,7 @@ export default async function SafetyPage() {
         using_truck, truck_id, truck_checks,
         using_trailer, trailer_checks,
         notes, created_at,
-        sites(name), profiles(full_name)
+        sites(name), profiles(first_name, last_name)
       `)
       .order('date', { ascending: false })
       .order('created_at', { ascending: false })
@@ -85,7 +87,7 @@ export default async function SafetyPage() {
         siteId:         r.site_id,
         siteName:       r.sites?.name ?? 'Unknown',
         submittedBy:    r.submitted_by,
-        submitterName:  r.profiles?.full_name ?? 'Unknown',
+        submitterName:  r.profiles ? `${r.profiles.first_name} ${r.profiles.last_name}`.trim() : 'Unknown',
         date:           r.date,
         crewPresent:    r.crew_present ?? [],
         weather:        r.weather ?? [],
@@ -119,7 +121,7 @@ export default async function SafetyPage() {
     const [docsResult, mySignoffsResult] = await Promise.all([
       supabase
         .from('safety_documents')
-        .select('id, title, description, file_path, uploaded_by, created_at, profiles(full_name)')
+        .select('id, title, description, file_path, uploaded_by, created_at, profiles(first_name, last_name)')
         .order('created_at', { ascending: false }),
       supabase
         .from('document_signoffs')
@@ -146,7 +148,7 @@ export default async function SafetyPage() {
         description:  r.description,
         filePath:     r.file_path,
         uploadedBy:   r.uploaded_by,
-        uploaderName: r.profiles?.full_name ?? 'Unknown',
+        uploaderName: r.profiles ? `${r.profiles.first_name} ${r.profiles.last_name}`.trim() : 'Unknown',
         signoffCount: countMap[r.id] ?? 0,
         createdAt:    r.created_at,
       }))
@@ -155,7 +157,7 @@ export default async function SafetyPage() {
       const isSupervisorPlus = profile.role === 'supervisor' || profile.role === 'admin'
       let signoffsQuery = supabase
         .from('document_signoffs')
-        .select('id, document_id, signed_by, signed_at, signature_notes, profiles(full_name), safety_documents(title)')
+        .select('id, document_id, signed_by, signed_at, signature_notes, profiles(first_name, last_name), safety_documents(title)')
         .order('signed_at', { ascending: false })
       if (!isSupervisorPlus) {
         signoffsQuery = signoffsQuery.eq('signed_by', profile.id)
@@ -168,7 +170,7 @@ export default async function SafetyPage() {
         documentId:     r.document_id,
         documentTitle:  r.safety_documents?.title ?? 'Unknown',
         signedBy:       r.signed_by,
-        signerName:     r.profiles?.full_name ?? 'Unknown',
+        signerName:     r.profiles ? `${r.profiles.first_name} ${r.profiles.last_name}`.trim() : 'Unknown',
         signedAt:       r.signed_at,
         signatureNotes: r.signature_notes,
       }))
@@ -184,7 +186,7 @@ export default async function SafetyPage() {
   try {
     const { data, error } = await supabase
       .from('toolbox_meetings')
-      .select('id, site_id, date, topic, notes, attendees, submitted_by, created_at, sites(name), profiles(full_name)')
+      .select('id, site_id, date, topic, notes, attendees, submitted_by, created_at, sites(name), profiles(first_name, last_name)')
       .order('date', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(300)
@@ -202,7 +204,7 @@ export default async function SafetyPage() {
         notes:         r.notes,
         attendees:     r.attendees ?? [],
         submittedBy:   r.submitted_by,
-        submitterName: r.profiles?.full_name ?? 'Unknown',
+        submitterName: r.profiles ? `${r.profiles.first_name} ${r.profiles.last_name}`.trim() : 'Unknown',
         createdAt:     r.created_at,
       }))
     }
@@ -220,7 +222,7 @@ export default async function SafetyPage() {
       .select(`
         id, site_id, date, time, type, description,
         people_involved, immediate_action, reported_by, admin_notes, created_at,
-        sites(name), profiles(full_name)
+        sites(name), profiles(first_name, last_name)
       `)
       .order('date', { ascending: false })
       .order('created_at', { ascending: false })
@@ -256,7 +258,7 @@ export default async function SafetyPage() {
         peopleInvolved:  r.people_involved ?? null,
         immediateAction: r.immediate_action ?? null,
         reportedBy:      r.reported_by,
-        reporterName:    r.profiles?.full_name ?? 'Unknown',
+        reporterName:    r.profiles ? `${r.profiles.first_name} ${r.profiles.last_name}`.trim() : 'Unknown',
         adminNotes:      r.admin_notes ?? null,
         photoPaths:      photosByIncident[r.id] ?? [],
         createdAt:       r.created_at,

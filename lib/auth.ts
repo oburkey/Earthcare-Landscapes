@@ -15,10 +15,13 @@ export async function requireAuth(): Promise<Profile> {
   ) {
     return {
       id: 'local-dev',
-      full_name: 'Local Dev',
+      first_name: 'Local',
+      last_name: 'Dev',
+      email: null,
       role: 'admin',
       phone_number: null,
       credentials: [],
+      has_login: true,
       created_at: new Date().toISOString(),
     }
   }

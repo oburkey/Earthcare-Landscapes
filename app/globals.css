@@ -34,4 +34,11 @@
   --color-accent-fg:      #4ade80;  /* green-400 — bright enough for text on dark bg */
   --color-accent-dim:     rgba(74, 222, 128, 0.08);
   --color-skeleton:       #2d2d2d;
+
+  /* Shift the green scale one step darker in dark mode.
+     Tailwind v4 generates bg-green-N as var(--color-green-N), so these
+     remaps apply globally — buttons, checkboxes, focus rings, active states. */
+  --color-green-600: #15803d;  /* was green-600, now green-700 value */
+  --color-green-700: #166534;  /* was green-700, now green-800 value */
+  --color-green-800: #14532d;  /* was green-800, now green-900 value */
 }

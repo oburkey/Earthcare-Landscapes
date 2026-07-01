@@ -13,7 +13,7 @@ export type PreStartsSetter = Dispatch<SetStateAction<PreStartRow[]>>
 // ── Shared types ──────────────────────────────────────────────────────────────
 
 export type SiteOption    = { id: string; name: string }
-export type StaffOption   = { id: string; full_name: string }
+export type StaffOption   = { id: string; first_name: string; last_name: string }
 export type VehicleOption = {
   id:            string
   make:          string
@@ -166,7 +166,7 @@ export default function SafetyView({
             onClick={() => setActiveTab(tab.id)}
             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
               activeTab === tab.id
-                ? 'bg-stone-900 text-white'
+                ? 'bg-green-700 text-white'
                 : 'text-fg-muted hover:bg-surface-raised'
             }`}
           >
@@ -185,7 +185,7 @@ export default function SafetyView({
           vehicles={vehicles}
           role={profile.role}
           userId={profile.id}
-          userName={profile.full_name}
+          userName={`${profile.first_name} ${profile.last_name}`.trim()}
           today={today}
           tableExists={tablesExist.preStarts}
         />
@@ -198,7 +198,7 @@ export default function SafetyView({
           signoffs={signoffs}
           role={profile.role}
           userId={profile.id}
-          userName={profile.full_name}
+          userName={`${profile.first_name} ${profile.last_name}`.trim()}
           isSupervisorPlus={isSupervisorPlus}
           tableExists={tablesExist.safetyDocuments}
         />
@@ -221,7 +221,7 @@ export default function SafetyView({
           staff={staff}
           role={profile.role}
           userId={profile.id}
-          userName={profile.full_name}
+          userName={`${profile.first_name} ${profile.last_name}`.trim()}
           today={today}
           tableExists={tablesExist.toolboxMeetings}
           canManage={isLeadingHandPlus}
@@ -236,7 +236,7 @@ export default function SafetyView({
           sites={sites}
           role={profile.role}
           userId={profile.id}
-          userName={profile.full_name}
+          userName={`${profile.first_name} ${profile.last_name}`.trim()}
           today={today}
           tableExists={tablesExist.incidents}
           canManage={isLeadingHandPlus}

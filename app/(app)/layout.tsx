@@ -14,7 +14,7 @@ export default async function AppLayout({
 
   return (
     <div className="min-h-screen bg-bg">
-      <AppNav role={profile.role as Role} name={profile.full_name} />
+      <AppNav role={profile.role as Role} name={`${profile.first_name} ${profile.last_name}`.trim()} />
       {/* On mobile: push content below the fixed top bar. On md+: push content right of the fixed sidebar. */}
       <div className="pt-14 md:pt-0 md:ml-60">
         {children}

@@ -42,7 +42,7 @@ async function downloadToolboxMeetingsPdf(
     <td>${fmtDate(m.date)}</td>
     <td>${m.siteName}</td>
     <td>${m.topic}</td>
-    <td>${m.attendees.join(', ') || '—'}</td>
+    <td>${m.attendees.map(id => { const s = staff.find(m => m.id === id); return s ? s.first_name + ' ' + s.last_name : id }).join(', ') || '—'}</td>
     <td>${m.submitterName}</td>
     <td>${m.notes ?? '—'}</td>
   </tr>`).join('')
@@ -148,6 +148,12 @@ export default function ToolboxMeetingsTab({
   isAdmin,
 }: Props) {
   const [view, setView] = useState<'list' | 'new'>('list')
+
+  const staffName = (id: string) => {
+    const s = staff.find(m => m.id === id)
+    return s ? `${s.first_name} ${s.last_name}` : id
+  }
+  const attendeeNames = (ids: string[]) => ids.map(staffName).join(', ')
 
   // Filter state
   const [filterSite, setFilterSite] = useState('')
@@ -299,15 +305,15 @@ export default function ToolboxMeetingsTab({
               <div className="rounded-lg border border-border max-h-48 overflow-y-auto divide-y divide-border-subtle">
                 {staff.map(s => (
                   <label key={s.id} className="flex items-center gap-2.5 px-3 py-2 hover:bg-surface-raised cursor-pointer">
-                    <input type="checkbox" checked={attendees.includes(s.full_name)} onChange={() => toggleAttendee(s.full_name)}
+                    <input type="checkbox" checked={attendees.includes(s.id)} onChange={() => toggleAttendee(s.id)}
                       className="h-4 w-4 rounded border-border text-accent-fg focus:ring-green-600" />
-                    <span className="text-sm text-fg-secondary">{s.full_name}</span>
+                    <span className="text-sm text-fg-secondary">{s.first_name} {s.last_name}</span>
                   </label>
                 ))}
               </div>
             )}
             {attendees.length > 0 && (
-              <p className="text-xs text-fg-muted">{attendees.length} selected: {attendees.join(', ')}</p>
+              <p className="text-xs text-fg-muted">{attendees.length} selected: {attendeeNames(attendees)}</p>
             )}
           </div>
 
@@ -327,7 +333,7 @@ export default function ToolboxMeetingsTab({
         {/* Actions */}
         <div className="flex items-center gap-3">
           <button type="button" onClick={handleSubmit} disabled={saving}
-            className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-60 transition-colors">
+            className="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-60 transition-colors">
             {saving ? 'Submitting…' : 'Submit toolbox meeting'}
           </button>
           <button type="button" onClick={() => setView('list')}
@@ -355,7 +361,7 @@ export default function ToolboxMeetingsTab({
           </h2>
           {canManage && (
             <button type="button" onClick={openNew}
-              className="rounded-lg bg-stone-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-stone-700 transition-colors">
+              className="rounded-lg bg-green-700 px-3.5 py-2 text-sm font-medium text-white hover:bg-green-800 transition-colors">
               + New toolbox meeting
             </button>
           )}
@@ -421,7 +427,7 @@ export default function ToolboxMeetingsTab({
                     <div className="flex items-center gap-3 text-xs text-fg-muted flex-wrap">
                       <span>Submitted by {m.submitterName}</span>
                       {m.attendees.length > 0 && (
-                        <span>· {m.attendees.length} attendee{m.attendees.length !== 1 ? 's' : ''}: {m.attendees.join(', ')}</span>
+                        <span>· {m.attendees.length} attendee{m.attendees.length !== 1 ? 's' : ''}: {attendeeNames(m.attendees)}</span>
                       )}
                     </div>
                     {m.notes && (
