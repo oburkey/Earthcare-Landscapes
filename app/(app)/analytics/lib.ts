@@ -408,8 +408,11 @@ export function buildAnalyticsData(input: {
   completedLots: CompletedLotRow[]
   quotes: QuoteRow[]
   plantRatioSettings: RatioRow[]
+  // All lots/quotes unfiltered by date — used only for the drill-down section
+  allLots?: LotRow[]
+  allQuotes?: QuoteRow[]
 }): AnalyticsData {
-  const { rangeLabel, pipelineStartDate, pipelineEndDate, completionStartDate, completionEndDate, sites, stages, lots, completedLots, quotes, plantRatioSettings } = input
+  const { rangeLabel, pipelineStartDate, pipelineEndDate, completionStartDate, completionEndDate, sites, stages, lots, completedLots, quotes, plantRatioSettings, allLots, allQuotes } = input
 
   const lotCalcs = buildLotCalcs(lots, quotes)
   const lotsWithQuotes = lotCalcs.filter((l) => l.hasQuoteData)
@@ -496,8 +499,11 @@ export function buildAnalyticsData(input: {
   const actualRear = totalRearM2 > 0 ? totalRearPlants / totalRearM2 : null
 
   // ── Sections 3 & 4: site → stage → lot drill-down ───────────────────────────
+  // Uses allLots/allQuotes when provided so the drill-down ignores the date range filter.
+  const drillLotCalcs = allLots ? buildLotCalcs(allLots, allQuotes ?? quotes) : lotCalcs
+
   const lotsByStage = new Map<string, LotCalc[]>()
-  for (const lot of lotCalcs) {
+  for (const lot of drillLotCalcs) {
     const arr = lotsByStage.get(lot.stageId) ?? []
     arr.push(lot)
     lotsByStage.set(lot.stageId, arr)
@@ -530,7 +536,7 @@ export function buildAnalyticsData(input: {
 
       return { id: site.id, name: site.name, summary: siteSummary, stages: stageAnalytics }
     })
-    .filter((site) => site.summary.lotCount > 0)
+    .filter((site) => site.stages.some((s) => s.lots.length > 0))
 
   return {
     rangeLabel,

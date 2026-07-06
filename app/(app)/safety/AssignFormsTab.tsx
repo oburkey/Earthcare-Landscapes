@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { assignForm, revokeAssignment } from './forms-actions'
+import { assignForm, revokeAssignment, getCompletionPdfData } from './forms-actions'
+import { generateFormCompletionPdf } from './formPdf'
 import type { SafetyFormType } from '@/types/database'
 
 export type AssignmentManagementRow = {
@@ -41,6 +42,22 @@ export default function AssignFormsTab({ assignments: initial, templates, worker
   const [revoking, setRevoking]                 = useState<string | null>(null)
   const [successMsg, setSuccessMsg]             = useState<string | null>(null)
   const [showForm, setShowForm]                 = useState(false)
+  const [downloadingId, setDownloadingId]       = useState<string | null>(null)
+  const [pdfError, setPdfError]                 = useState<string | null>(null)
+
+  async function handleDownload(assignmentId: string) {
+    setDownloadingId(assignmentId)
+    setPdfError(null)
+    try {
+      const result = await getCompletionPdfData(assignmentId)
+      if ('error' in result) { setPdfError(result.error); return }
+      await generateFormCompletionPdf(result)
+    } catch {
+      setPdfError('Failed to generate PDF. Please try again.')
+    } finally {
+      setDownloadingId(null)
+    }
+  }
 
   function toggleWorker(id: string) {
     setSelectedWorkers(prev => {
@@ -113,6 +130,7 @@ export default function AssignFormsTab({ assignments: initial, templates, worker
   return (
     <div className="space-y-6">
       {error    && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {pdfError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{pdfError}</p>}
       {successMsg && <p className="rounded-lg bg-accent-dim px-3 py-2 text-sm text-accent-fg">{successMsg}</p>}
 
       {/* Assign form */}
@@ -229,9 +247,21 @@ export default function AssignFormsTab({ assignments: initial, templates, worker
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {a.completedAt ? (
-                    <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-accent-dim text-accent-fg">
-                      Completed
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-accent-dim text-accent-fg">
+                        Completed
+                      </span>
+                      {a.id && (
+                        <button
+                          type="button"
+                          onClick={() => handleDownload(a.id)}
+                          disabled={downloadingId === a.id}
+                          className="text-xs font-medium text-fg-muted hover:text-green-700 disabled:opacity-50 transition-colors"
+                        >
+                          {downloadingId === a.id ? 'Generating…' : 'PDF'}
+                        </button>
+                      )}
+                    </div>
                   ) : (
                     <>
                       <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700">

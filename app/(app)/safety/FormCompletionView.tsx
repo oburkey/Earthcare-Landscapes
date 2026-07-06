@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import SignaturePad, { type SignaturePadHandle } from './SignaturePad'
 import { submitFormCompletion } from './forms-actions'
+import { generateFormCompletionPdf } from './formPdf'
 import type { FormSection, SafetyFormType } from '@/types/database'
 
 export interface CompletionAssignment {
@@ -13,6 +14,7 @@ export interface CompletionAssignment {
   contentHtml: string | null
   requireWitness: boolean
   siteName: string | null
+  workerName: string
 }
 
 interface Props {
@@ -74,6 +76,10 @@ export default function FormCompletionView({ assignment, onClose, onCompleted }:
       return
     }
 
+    // Capture signature data URLs before submission so we can embed them in the PDF
+    const inducteeDataUrl = inducteeRef.current?.toDataURL() ?? null
+    const witnessDataUrl  = witnessRef.current?.toDataURL()  ?? null
+
     setSubmitting(true)
     try {
       const fd = new FormData()
@@ -81,12 +87,9 @@ export default function FormCompletionView({ assignment, onClose, onCompleted }:
       fd.set('responses', JSON.stringify(responses))
       fd.set('notes', notes)
 
-      const inducteeDataUrl = inducteeRef.current?.toDataURL()
       if (inducteeDataUrl) {
         fd.append('inductee_signature', await dataUrlToFile(inducteeDataUrl, 'inductee.png'))
       }
-
-      const witnessDataUrl = witnessRef.current?.toDataURL()
       if (witnessDataUrl) {
         fd.append('witness_signature', await dataUrlToFile(witnessDataUrl, 'witness.png'))
       }
@@ -96,6 +99,22 @@ export default function FormCompletionView({ assignment, onClose, onCompleted }:
         setError(result.error)
         return
       }
+
+      // Fire-and-forget PDF download using locally captured data — no server roundtrip needed
+      generateFormCompletionPdf({
+        templateTitle:        assignment.templateTitle,
+        formType:             assignment.formType,
+        workerName:           assignment.workerName,
+        siteName:             assignment.siteName,
+        completedAt:          new Date().toISOString(),
+        sections:             assignment.sections,
+        contentHtml:          assignment.contentHtml,
+        requireWitness:       assignment.requireWitness,
+        responses,
+        inducteeSignatureUrl: inducteeDataUrl,
+        witnessSignatureUrl:  assignment.requireWitness ? witnessDataUrl : null,
+        notes:                notes.trim() || null,
+      }).catch(() => {}) // PDF failure must never block form submission
 
       onCompleted(assignment.id)
       onClose()
@@ -197,9 +216,9 @@ export default function FormCompletionView({ assignment, onClose, onCompleted }:
 
         {/* ── SWMS / JSA document content ──────────────────────────────────── */}
         {(assignment.formType === 'swms' || assignment.formType === 'jsa') && assignment.contentHtml && (
-          <div className="rounded-xl border border-border bg-surface p-5">
+          <div className="rounded-xl border border-border p-5" style={{ backgroundColor: '#fff', color: '#111' }}>
             <div
-              className="prose prose-sm max-w-none text-fg"
+              className="prose prose-sm max-w-none"
               dangerouslySetInnerHTML={{ __html: assignment.contentHtml }}
             />
           </div>

@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import FormCompletionView, { type CompletionAssignment } from './FormCompletionView'
+import { getCompletionPdfData } from './forms-actions'
+import { generateFormCompletionPdf } from './formPdf'
 import type { SafetyFormType } from '@/types/database'
 
 export type MyAssignmentRow = {
@@ -23,6 +25,7 @@ export type MyAssignmentRow = {
 interface Props {
   assignments: MyAssignmentRow[]
   tableExists: boolean
+  workerName: string
 }
 
 const TYPE_LABEL: Record<SafetyFormType, string> = {
@@ -39,9 +42,25 @@ const TYPE_COLOUR: Record<SafetyFormType, string> = {
   reference:   'bg-surface-raised text-fg-muted',
 }
 
-export default function FormsTab({ assignments, tableExists }: Props) {
+export default function FormsTab({ assignments, tableExists, workerName }: Props) {
   const [localAssignments, setLocalAssignments] = useState<MyAssignmentRow[]>(assignments)
-  const [active, setActive] = useState<MyAssignmentRow | null>(null)
+  const [active, setActive]                     = useState<MyAssignmentRow | null>(null)
+  const [downloadingId, setDownloadingId]       = useState<string | null>(null)
+  const [downloadError, setDownloadError]       = useState<string | null>(null)
+
+  async function handleDownload(assignmentId: string) {
+    setDownloadingId(assignmentId)
+    setDownloadError(null)
+    try {
+      const result = await getCompletionPdfData(assignmentId)
+      if ('error' in result) { setDownloadError(result.error); return }
+      await generateFormCompletionPdf(result)
+    } catch {
+      setDownloadError('Failed to generate PDF. Please try again.')
+    } finally {
+      setDownloadingId(null)
+    }
+  }
 
   const outstanding = localAssignments.filter(a => !a.completedAt)
   const completed   = localAssignments.filter(a =>  a.completedAt)
@@ -73,10 +92,15 @@ export default function FormsTab({ assignments, tableExists }: Props) {
             contentHtml:    active.contentHtml,
             requireWitness: active.requireWitness,
             siteName:       active.siteName,
+            workerName,
           }}
           onClose={() => setActive(null)}
           onCompleted={markCompleted}
         />
+      )}
+
+      {downloadError && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{downloadError}</p>
       )}
 
       <div className="space-y-6">
@@ -132,8 +156,8 @@ export default function FormsTab({ assignments, tableExists }: Props) {
             </h2>
             <div className="rounded-xl border border-border bg-surface divide-y divide-border-subtle overflow-hidden">
               {completed.map(a => (
-                <div key={a.id} className="flex items-center justify-between px-4 py-3 gap-3 opacity-70">
-                  <div className="min-w-0 flex-1">
+                <div key={a.id} className="flex items-center justify-between px-4 py-3 gap-3">
+                  <div className="min-w-0 flex-1 opacity-70">
                     <div className="flex items-center gap-2 mb-0.5">
                       <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium ${TYPE_COLOUR[a.formType]}`}>
                         {TYPE_LABEL[a.formType]}
@@ -145,7 +169,14 @@ export default function FormsTab({ assignments, tableExists }: Props) {
                       Completed {new Date(a.completedAt!).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </p>
                   </div>
-                  <span className="shrink-0 text-xs text-fg-muted">Done</span>
+                  <button
+                    type="button"
+                    onClick={() => handleDownload(a.id)}
+                    disabled={downloadingId === a.id}
+                    className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-secondary hover:bg-surface-raised disabled:opacity-50 transition-colors"
+                  >
+                    {downloadingId === a.id ? 'Generating…' : 'Download PDF'}
+                  </button>
                 </div>
               ))}
             </div>

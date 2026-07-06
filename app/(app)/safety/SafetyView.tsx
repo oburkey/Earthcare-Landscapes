@@ -156,14 +156,23 @@ export default function SafetyView({
 
   const [activeTab, setActiveTab] = useState<Tab>('my_forms')
 
+  // Tab visibility per role:
+  // worker        → My Forms, Pre-starts
+  // leading_hand  → + Toolbox Meetings, Incidents
+  // supervisor    → + Documents, Sign-offs, Assign Forms
+  // admin         → + Form Templates
   const tabs: Array<{ id: Tab; label: string }> = [
-    { id: 'my_forms',          label: 'My Forms' },
-    ...(isLeadingHandPlus ? [{ id: 'prestarts' as Tab, label: 'Pre-starts' }] : []),
-    { id: 'documents',         label: 'Documents' },
-    { id: 'signoffs',          label: 'Sign-offs' },
-    { id: 'toolbox_meetings',  label: 'Toolbox Meetings' },
-    { id: 'incidents',         label: 'Incidents' },
-    ...(isSupervisorPlus ? [{ id: 'assign_forms' as Tab, label: 'Assign Forms' }] : []),
+    { id: 'my_forms',   label: 'My Forms' },
+    { id: 'prestarts',  label: 'Pre-starts' },
+    ...(isLeadingHandPlus ? [
+      { id: 'toolbox_meetings' as Tab, label: 'Toolbox Meetings' },
+      { id: 'incidents'        as Tab, label: 'Incidents' },
+    ] : []),
+    ...(isSupervisorPlus ? [
+      { id: 'documents'    as Tab, label: 'Documents' },
+      { id: 'signoffs'     as Tab, label: 'Sign-offs' },
+      { id: 'assign_forms' as Tab, label: 'Assign Forms' },
+    ] : []),
     ...(profile.role === 'admin' ? [{ id: 'form_templates' as Tab, label: 'Form Templates' }] : []),
   ]
 
@@ -190,7 +199,7 @@ export default function SafetyView({
       </div>
 
       {/* Tab content */}
-      {activeTab === 'prestarts' && isLeadingHandPlus && (
+      {activeTab === 'prestarts' && (
         <PreStartsTab
           preStarts={localPreStarts}
           onPreStartsChange={setLocalPreStarts}
@@ -205,7 +214,7 @@ export default function SafetyView({
         />
       )}
 
-      {activeTab === 'documents' && (
+      {activeTab === 'documents' && isSupervisorPlus && (
         <DocumentsTab
           docs={safetyDocs}
           mySignoffIds={mySignoffIds}
@@ -218,7 +227,7 @@ export default function SafetyView({
         />
       )}
 
-      {activeTab === 'signoffs' && (
+      {activeTab === 'signoffs' && isSupervisorPlus && (
         <SignoffsTab
           signoffs={signoffs}
           docs={safetyDocs}
@@ -227,7 +236,7 @@ export default function SafetyView({
         />
       )}
 
-      {activeTab === 'toolbox_meetings' && (
+      {activeTab === 'toolbox_meetings' && isLeadingHandPlus && (
         <ToolboxMeetingsTab
           meetings={localToolboxMeetings}
           onMeetingsChange={setLocalToolboxMeetings}
@@ -243,7 +252,7 @@ export default function SafetyView({
         />
       )}
 
-      {activeTab === 'incidents' && (
+      {activeTab === 'incidents' && isLeadingHandPlus && (
         <IncidentsTab
           incidents={localIncidents}
           onIncidentsChange={setLocalIncidents}
@@ -262,6 +271,7 @@ export default function SafetyView({
         <FormsTab
           assignments={myAssignments}
           tableExists={tablesExist.safetyForms}
+          workerName={`${profile.first_name} ${profile.last_name}`.trim()}
         />
       )}
 

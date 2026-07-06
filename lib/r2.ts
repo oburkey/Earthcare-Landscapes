@@ -78,3 +78,23 @@ export async function getR2SignedUrl(
     { expiresIn: expiresInSeconds }
   )
 }
+
+// Fetches the file server-side (no CORS) and returns it as a data URL.
+// Returns '' on any error so callers can treat it as "no file".
+export async function getR2FileAsDataUrl(
+  key: string,
+  mimeType = 'image/png'
+): Promise<string> {
+  try {
+    const client   = createClient()
+    const response = await client.send(new GetObjectCommand({ Bucket: getBucket(), Key: key }))
+    if (!response.Body) return ''
+    const chunks: Uint8Array[] = []
+    for await (const chunk of response.Body as AsyncIterable<Uint8Array>) {
+      chunks.push(chunk)
+    }
+    return `data:${mimeType};base64,${Buffer.concat(chunks).toString('base64')}`
+  } catch {
+    return ''
+  }
+}

@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAuth } from '@/lib/auth'
-import { uploadToR2, deleteFromR2 } from '@/lib/r2'
+import { uploadToR2, deleteFromR2, getR2FileAsDataUrl } from '@/lib/r2'
 import type { Role, SafetyFormType, FormSection } from '@/types/database'
 
 const ROLE_LEVEL: Record<Role, number> = {
@@ -228,6 +228,103 @@ export async function submitFormCompletion(formData: FormData) {
 
   revalidatePath('/safety')
   return { success: true }
+}
+
+// ── Completed form PDF data ───────────────────────────────────────────────
+
+type CompletionPdfData = {
+  workerName: string
+  siteName: string | null
+  completedAt: string
+  formType: SafetyFormType
+  templateTitle: string
+  sections: FormSection[]
+  contentHtml: string | null
+  requireWitness: boolean
+  responses: Record<string, boolean | 'yes' | 'no' | string>
+  inducteeSignatureUrl: string | null
+  witnessSignatureUrl: string | null
+  notes: string | null
+}
+
+export async function getCompletionPdfData(
+  assignmentId: string
+): Promise<CompletionPdfData | { error: string }> {
+  const profile = await requireAuth()
+  const admin   = createAdminClient()
+
+  const { data: asgn, error: aErr } = await admin
+    .from('safety_form_assignments')
+    .select(`
+      id, assigned_to,
+      profiles!assigned_to (first_name, last_name),
+      sites (name),
+      safety_form_templates (title, form_type, sections, content_html, require_witness)
+    `)
+    .eq('id', assignmentId)
+    .single()
+
+  if (aErr || !asgn) return { error: 'Assignment not found' }
+
+  // Workers / leading hands can only download their own completed forms
+  if (ROLE_LEVEL[profile.role] < ROLE_LEVEL['supervisor'] && asgn.assigned_to !== profile.id) {
+    return { error: 'Access denied' }
+  }
+
+  const { data: comp, error: cErr } = await admin
+    .from('safety_form_completions')
+    .select('responses, inductee_signature_path, witness_signature_path, completed_at, notes')
+    .eq('assignment_id', assignmentId)
+    .order('completed_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (cErr || !comp) return { error: 'Completion record not found' }
+
+  // Supabase join results can be objects or single-element arrays depending on schema hints
+  const workerProfile = (Array.isArray(asgn.profiles) ? asgn.profiles[0] : asgn.profiles) as
+    | { first_name: string; last_name: string }
+    | null
+  const site = (Array.isArray(asgn.sites) ? asgn.sites[0] : asgn.sites) as
+    | { name: string }
+    | null
+  const template = (
+    Array.isArray(asgn.safety_form_templates)
+      ? asgn.safety_form_templates[0]
+      : asgn.safety_form_templates
+  ) as {
+    title: string
+    form_type: string
+    sections: unknown
+    content_html: string | null
+    require_witness: boolean
+  } | null
+
+  if (!workerProfile || !template) return { error: 'Related data not found' }
+
+  const [inducteeUrl, witnessUrl] = await Promise.all([
+    comp.inductee_signature_path
+      ? getR2FileAsDataUrl(comp.inductee_signature_path)
+      : Promise.resolve(''),
+    comp.witness_signature_path
+      ? getR2FileAsDataUrl(comp.witness_signature_path)
+      : Promise.resolve(''),
+  ])
+
+  return {
+    workerName:          `${workerProfile.first_name} ${workerProfile.last_name}`.trim(),
+    siteName:            site?.name ?? null,
+    completedAt:         comp.completed_at as string,
+    formType:            template.form_type as SafetyFormType,
+    templateTitle:       template.title,
+    sections:            (template.sections as FormSection[]) ?? [],
+    contentHtml:         template.content_html ?? null,
+    requireWitness:      template.require_witness,
+    responses:           (comp.responses as Record<string, boolean | 'yes' | 'no' | string>) ?? {},
+    inducteeSignatureUrl: inducteeUrl || null,
+    witnessSignatureUrl:  witnessUrl  || null,
+    notes:               comp.notes as string | null ?? null,
+  }
 }
 
 // ── Site Reference Documents ───────────────────────────────────────────────

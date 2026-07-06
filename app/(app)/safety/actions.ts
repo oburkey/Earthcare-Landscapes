@@ -12,7 +12,7 @@ const ROLE_LEVEL: Record<Role, number> = {
 
 export async function submitPreStart(formData: FormData) {
   const profile = await requireAuth()
-  if (ROLE_LEVEL[profile.role] < ROLE_LEVEL['leading_hand']) {
+  if (ROLE_LEVEL[profile.role] < ROLE_LEVEL['worker']) {
     return { error: 'Insufficient permissions' }
   }
 

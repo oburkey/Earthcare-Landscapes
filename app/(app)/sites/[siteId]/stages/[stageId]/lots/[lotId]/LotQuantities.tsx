@@ -357,17 +357,6 @@ export default function LotQuantities({
         })}
       </div>
 
-      {/* Recalculate plants button — estimate mode only */}
-      {isEstimated && plantRatios && !disabled && (
-        <button
-          type="button"
-          onClick={recalculatePlants}
-          className="rounded-lg border border-green-200 bg-accent-dim px-3 py-1.5 text-xs font-medium text-accent-fg hover:bg-accent-dim transition-colors"
-        >
-          Recalculate plants from garden bed
-        </button>
-      )}
-
       {/* Status badge */}
       {activeQuote && (
         <div>
@@ -633,6 +622,17 @@ export default function LotQuantities({
       )}
       {saved && (
         <p className="rounded-lg bg-accent-dim px-3 py-2 text-sm text-accent-fg">Saved successfully.</p>
+      )}
+
+      {/* Recalculate plants button — estimate mode only */}
+      {isEstimated && plantRatios && !disabled && (
+        <button
+          type="button"
+          onClick={recalculatePlants}
+          className="w-full rounded-lg border border-green-200 bg-accent-dim px-3 py-2 text-xs font-medium text-accent-fg hover:bg-accent-dim transition-colors"
+        >
+          Recalculate plants from garden bed
+        </button>
       )}
 
       {/* Actions */}

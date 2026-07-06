@@ -44,13 +44,13 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     supabase.from('plant_ratio_settings').select('site_id, front_ratio, rear_ratio'),
   ])
 
+  // Date-filtered lots — used for revenue/materials charts and summary cards only
   let lotsQuery = supabase
     .from('lots')
     .select('id, lot_number, stage_id, due_date, build_complete, invoiced, contract_price')
   if (pipelineStartDate && pipelineEndDate) {
     lotsQuery = lotsQuery.gte('due_date', pipelineStartDate).lt('due_date', pipelineEndDate)
   }
-  const lotsResult = await lotsQuery
 
   let completedQuery = supabase
     .from('lots')
@@ -59,27 +59,40 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   if (completionStartDate && completionEndDate) {
     completedQuery = completedQuery.gte('build_completed_at', completionStartDate).lt('build_completed_at', completionEndDate)
   }
-  const completedResult = await completedQuery
 
-  const lots = (lotsResult.data ?? []) as LotRow[]
-  const lotIds = lots.map((l) => l.id)
+  // All lots (no date filter) — used only for the drill-down section
+  const allLotsQuery = supabase
+    .from('lots')
+    .select('id, lot_number, stage_id, due_date, build_complete, invoiced, contract_price')
+
+  const [lotsResult, completedResult, allLotsResult] = await Promise.all([lotsQuery, completedQuery, allLotsQuery])
+
+  const lots    = (lotsResult.data    ?? []) as LotRow[]
+  const allLots = (allLotsResult.data ?? []) as LotRow[]
+  const lotIds    = lots.map((l) => l.id)
+  const allLotIds = allLots.map((l) => l.id)
+
+  const QUOTE_SELECT = `
+    lot_id, is_estimated, status,
+    lot_quote_items(
+      item_name, quantity, unit_price_snapshot,
+      quote_template_items(
+        unit_price, plant_category,
+        quote_template_sections(name, is_client_extra)
+      )
+    )
+  `
 
   let quotes: QuoteRow[] = []
   if (lotIds.length > 0) {
-    const quotesResult = await supabase
-      .from('lot_quotes')
-      .select(`
-        lot_id, is_estimated, status,
-        lot_quote_items(
-          item_name, quantity, unit_price_snapshot,
-          quote_template_items(
-            unit_price, plant_category,
-            quote_template_sections(name, is_client_extra)
-          )
-        )
-      `)
-      .in('lot_id', lotIds)
+    const quotesResult = await supabase.from('lot_quotes').select(QUOTE_SELECT).in('lot_id', lotIds)
     quotes = (quotesResult.data ?? []) as unknown as QuoteRow[]
+  }
+
+  let allQuotes: QuoteRow[] = []
+  if (allLotIds.length > 0) {
+    const allQuotesResult = await supabase.from('lot_quotes').select(QUOTE_SELECT).in('lot_id', allLotIds)
+    allQuotes = (allQuotesResult.data ?? []) as unknown as QuoteRow[]
   }
 
   const data = buildAnalyticsData({
@@ -94,6 +107,8 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     completedLots: (completedResult.data ?? []) as CompletedLotRow[],
     quotes,
     plantRatioSettings: (ratiosResult.data ?? []) as RatioRow[],
+    allLots,
+    allQuotes,
   })
 
   return (
