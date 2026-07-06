@@ -6,14 +6,19 @@ import { createClient } from '@/lib/supabase/client'
 import { acceptInvite } from './actions'
 
 interface Props {
-  token: string
-  email: string
+  token:             string
+  email:             string
+  profileId:         string | null  // null = email-only invite (user sets own name)
+  existingFirstName: string | null  // set for staff-first invites
+  existingLastName:  string | null
 }
 
-export default function AcceptInviteForm({ token, email }: Props) {
-  const router = useRouter()
-  const [error, setError] = useState<string | null>(null)
+export default function AcceptInviteForm({ token, email, profileId, existingFirstName, existingLastName }: Props) {
+  const router  = useRouter()
+  const [error,   setError]   = useState<string | null>(null)
   const [pending, setPending] = useState(false)
+
+  const isStaffFirst = profileId !== null // name locked; only show password
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -22,6 +27,13 @@ export default function AcceptInviteForm({ token, email }: Props) {
 
     const formData = new FormData(e.currentTarget)
     formData.set('token', token)
+
+    // For staff-first invites, inject the existing name so the action can use it
+    if (isStaffFirst) {
+      if (existingFirstName) formData.set('first_name', existingFirstName)
+      if (existingLastName)  formData.set('last_name',  existingLastName)
+    }
+
     const result = await acceptInvite(formData)
 
     if (result?.error) {
@@ -30,7 +42,7 @@ export default function AcceptInviteForm({ token, email }: Props) {
       return
     }
 
-    // Stub user's password is now set — sign in client-side
+    // Account is ready — sign in client-side
     const supabase = createClient()
     const { error: signInError } = await supabase.auth.signInWithPassword({
       email,
@@ -57,34 +69,37 @@ export default function AcceptInviteForm({ token, email }: Props) {
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label htmlFor="first_name" className="block text-sm font-medium text-stone-700">
-            First name
-          </label>
-          <input
-            id="first_name"
-            name="first_name"
-            type="text"
-            required
-            autoComplete="given-name"
-            className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
-          />
+      {/* Name fields — only shown for email-only invites */}
+      {!isStaffFirst && (
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="first_name" className="block text-sm font-medium text-stone-700">
+              First name
+            </label>
+            <input
+              id="first_name"
+              name="first_name"
+              type="text"
+              required
+              autoComplete="given-name"
+              className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+            />
+          </div>
+          <div>
+            <label htmlFor="last_name" className="block text-sm font-medium text-stone-700">
+              Last name
+            </label>
+            <input
+              id="last_name"
+              name="last_name"
+              type="text"
+              required
+              autoComplete="family-name"
+              className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+            />
+          </div>
         </div>
-        <div>
-          <label htmlFor="last_name" className="block text-sm font-medium text-stone-700">
-            Last name
-          </label>
-          <input
-            id="last_name"
-            name="last_name"
-            type="text"
-            required
-            autoComplete="family-name"
-            className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
-          />
-        </div>
-      </div>
+      )}
 
       <div>
         <label htmlFor="password" className="block text-sm font-medium text-stone-700">
@@ -96,8 +111,10 @@ export default function AcceptInviteForm({ token, email }: Props) {
           type="password"
           required
           minLength={8}
+          autoComplete="new-password"
           className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
         />
+        <p className="mt-1 text-xs text-stone-400">Minimum 8 characters</p>
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}

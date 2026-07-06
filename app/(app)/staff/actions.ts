@@ -172,7 +172,8 @@ export async function deleteStaffMember(
     return { error: 'This person has an active login account. Manage their account through the Users page.' }
   }
 
-  // Delete the stub auth user — cascades to profiles via ON DELETE CASCADE
+  // DB migration_profile_fk_set_null.sql added ON DELETE SET NULL to all FK
+  // references to profiles(id) — deleting the auth user is sufficient.
   const { error } = await admin.auth.admin.deleteUser(memberId)
 
   if (error) return { error: error.message }
