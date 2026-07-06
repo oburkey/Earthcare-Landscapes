@@ -1,8 +1,7 @@
 import Link from 'next/link'
 import { requireAuth } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { getCachedDashboardData, getCachedTradeStatusByLotIds, getCachedMaterialsPlanningData, getCachedPlantRatioSettings } from '@/lib/data'
-import { FRONT_BED_ITEMS, REAR_BED_ITEMS, DEFAULT_FRONT_RATIO, DEFAULT_REAR_RATIO } from '@/app/(app)/materials/lib'
+import { getCachedDashboardData, getCachedTradeStatusByLotIds } from '@/lib/data'
 import Greeting from './Greeting'
 import FortnightCalendar, { type CalendarItem } from './FortnightCalendar'
 import ExtraJobsList, { type ExtraJobItem } from './ExtraJobsList'
@@ -22,7 +21,7 @@ function toYmd(d: Date): string {
 export default async function DashboardPage() {
   const profile = await requireAuth()
   const isLeadingHand = ['leading_hand', 'supervisor', 'admin'].includes(profile.role)
-  const isSupervisor = ['supervisor', 'admin'].includes(profile.role)
+  const isSupervisor  = ['supervisor', 'admin'].includes(profile.role)
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -37,14 +36,15 @@ export default async function DashboardPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let lotsData: any[] = []
   let tradeStatus: Record<string, { trades_completed: string[]; ready_for_landscaping: boolean }> = {}
-  let totalPlants = 0
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let extraJobs: any[] = []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let preStarts: any[] = []
   let vehicleAlertCount = 0
   let incidentCount = 0
+  let overdueLotCount = 0
 
+  // All roles: fortnight lots + trade status
   try {
     const { lotsData: ld } = await getCachedDashboardData(fortnightStr)
     lotsData = ld
@@ -53,61 +53,47 @@ export default async function DashboardPage() {
     // graceful fallback
   }
 
+  // All roles: overdue lots count + extra jobs
+  try {
+    const supabase = await createClient()
+
+    const { count } = await supabase
+      .from('lots')
+      .select('id', { count: 'exact', head: true })
+      .lt('due_date', todayStr)
+      .neq('status', 'complete')
+    overdueLotCount = count ?? 0
+
+    const { data: ejData } = await supabase
+      .from('extra_jobs')
+      .select('id, title, status, due_date, stages!inner(id, name, sites!inner(id, name))')
+      .neq('status', 'complete')
+      .order('due_date', { ascending: true, nullsFirst: false })
+    extraJobs = ejData ?? []
+  } catch {
+    // graceful fallback
+  }
+
+  // Leading hand+: recent incidents
   if (isLeadingHand) {
-    // Plant count for next 2 weeks
-    try {
-      const { lots: matLots } = await getCachedMaterialsPlanningData(todayStr, fortnightStr)
-      const ratioSettings = await getCachedPlantRatioSettings()
-
-      for (const lot of matLots) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const lotAny = lot as any
-        const estimate = lotAny.lot_quotes?.find((q: { is_estimated: boolean }) => q.is_estimated)
-        const items = estimate?.lot_quote_items ?? []
-        const stage = Array.isArray(lotAny.stages) ? lotAny.stages[0] : lotAny.stages
-        const site = stage ? (Array.isArray(stage.sites) ? stage.sites[0] : stage.sites) : null
-        const siteId = site?.id ?? ''
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const override = ratioSettings.find((s: any) => s.site_id === siteId)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const global = ratioSettings.find((s: any) => s.site_id === null)
-        const src = override ?? global
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const frontRatio = (src as any)?.front_ratio ?? DEFAULT_FRONT_RATIO
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const rearRatio = (src as any)?.rear_ratio ?? DEFAULT_REAR_RATIO
-
-        let frontM2 = 0, rearM2 = 0
-        for (const item of items) {
-          const qty = Number(item.quantity ?? 0)
-          if (FRONT_BED_ITEMS.includes(item.item_name)) frontM2 += qty
-          if (REAR_BED_ITEMS.includes(item.item_name)) rearM2 += qty
-        }
-        totalPlants += Math.round(frontM2 * frontRatio) + Math.round(rearM2 * rearRatio)
-      }
-    } catch {
-      // graceful fallback
-    }
-
-    // Extra jobs
     try {
       const supabase = await createClient()
+      const weekAgo = new Date(today)
+      weekAgo.setDate(weekAgo.getDate() - 7)
       const { data } = await supabase
-        .from('extra_jobs')
-        .select('id, title, status, due_date, stages!inner(id, name, sites!inner(id, name))')
-        .neq('status', 'complete')
-        .order('due_date', { ascending: true, nullsFirst: false })
-      extraJobs = data ?? []
+        .from('incidents')
+        .select('id')
+        .gte('date', toYmd(weekAgo))
+      incidentCount = (data ?? []).length
     } catch {
-      // graceful fallback
+      // table may not exist
     }
   }
 
+  // Supervisor+: pre-starts this week + vehicle alerts
   if (isSupervisor) {
     const supabase = await createClient()
 
-    // Pre-starts this week (Mon-Fri)
     const dayOfWeek = today.getDay()
     const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
     const monday = new Date(today)
@@ -127,7 +113,6 @@ export default async function DashboardPage() {
       // table may not exist
     }
 
-    // Vehicles with rego/service due in 7 days
     const weekAhead = new Date(today)
     weekAhead.setDate(weekAhead.getDate() + 7)
     const weekAheadStr = toYmd(weekAhead)
@@ -140,20 +125,6 @@ export default async function DashboardPage() {
       vehicleAlertCount = (data ?? []).length
     } catch {
       // graceful fallback
-    }
-
-    // Recent incidents
-    const weekAgo = new Date(today)
-    weekAgo.setDate(weekAgo.getDate() - 7)
-
-    try {
-      const { data } = await supabase
-        .from('incidents')
-        .select('id')
-        .gte('date', toYmd(weekAgo))
-      incidentCount = (data ?? []).length
-    } catch {
-      // table may not exist
     }
   }
 
@@ -250,64 +221,63 @@ export default async function DashboardPage() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
+  const showVehicleAlert = isSupervisor && vehicleAlertCount > 0
+  const showIncidents    = isLeadingHand && incidentCount > 0
+
   return (
     <div className="min-h-screen bg-bg">
       <div className="mx-auto max-w-4xl px-4 py-6 space-y-6">
 
         <Greeting name={profile.first_name} />
 
-        {/* Section 1 — Summary cards (leading_hand+) */}
-        {isLeadingHand && (
-          <div className="grid grid-cols-3 gap-3">
-            <MetricCard
-              label="Due this fortnight"
-              value={lotsData.length}
-              color="blue"
-              href="/schedule"
-            />
-            <MetricCard
-              label="Blocked lots"
-              value={blockedCount}
-              color={blockedCount > 0 ? 'amber' : 'green'}
-              href="/schedule"
-            />
-            <MetricCard
-              label="Upcoming plants"
-              value={totalPlants}
-              color="green"
-              href="/materials"
-            />
-          </div>
-        )}
+        {/* Section 1 — Summary cards (all roles) */}
+        <div className="grid grid-cols-3 gap-3">
+          <MetricCard
+            label="Due this fortnight"
+            value={lotsData.length}
+            color="blue"
+            href="/schedule"
+          />
+          <MetricCard
+            label="Blocked lots"
+            value={blockedCount}
+            color={blockedCount > 0 ? 'amber' : 'green'}
+            href="/schedule"
+          />
+          <MetricCard
+            label="Overdue lots"
+            value={overdueLotCount}
+            color={overdueLotCount > 0 ? 'red' : 'green'}
+            href="/schedule"
+          />
+        </div>
 
-        {/* Section 2 — Fortnight calendar (leading_hand+) */}
-        {isLeadingHand && (
-          <section>
-            <h2 className="text-base font-semibold text-fg-secondary mb-3">Next 2 weeks</h2>
-            <FortnightCalendar items={calendarItems} />
-          </section>
-        )}
+        {/* Section 2 — Fortnight calendar (all roles) */}
+        <section>
+          <h2 className="text-base font-semibold text-fg-secondary mb-3">Next 2 weeks</h2>
+          <FortnightCalendar items={calendarItems} />
+        </section>
 
-        {/* Section 3 — Extra jobs to complete (leading_hand+, hidden if empty) */}
-        {isLeadingHand && <ExtraJobsList jobs={extraJobItems} />}
+        {/* Section 3 — Extra jobs to complete (all roles, hidden if empty) */}
+        <ExtraJobsList jobs={extraJobItems} />
 
         {/* Section 4 — Pre-starts this week (supervisor+) */}
         {isSupervisor && preStartDays.length > 0 && (
           <PreStartsWeek days={preStartDays} />
         )}
 
-        {/* Section 5 — Needs attention (supervisor+, hidden if nothing) */}
-        {isSupervisor && (vehicleAlertCount > 0 || incidentCount > 0) && (
+        {/* Section 5 — Needs attention: vehicle alerts (supervisor+), incidents (leading_hand+) */}
+        {(showVehicleAlert || showIncidents) && (
           <section>
             <h2 className="text-base font-semibold text-fg-secondary mb-3">Needs attention</h2>
             <div className="grid grid-cols-2 gap-3">
-              {vehicleAlertCount > 0 && (
+              {showVehicleAlert && (
                 <Link href="/vehicles" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 hover:bg-amber-100 transition-colors">
                   <p className="text-xl font-bold text-amber-700">{vehicleAlertCount}</p>
                   <p className="text-xs text-amber-600">Rego / service due in 7 days</p>
                 </Link>
               )}
-              {incidentCount > 0 && (
+              {showIncidents && (
                 <Link href="/safety" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 hover:bg-red-100 transition-colors">
                   <p className="text-xl font-bold text-red-700">{incidentCount}</p>
                   <p className="text-xs text-red-600">Incident{incidentCount !== 1 ? 's' : ''} in last 7 days</p>
