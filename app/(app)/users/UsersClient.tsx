@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createInvite, createEmailInvite, resendInvite, revokeInvite, deleteUserAccount } from './actions'
+import { createInvite, createEmailInvite, resendInvite, revokeInvite, deleteUserAccount, saveProfileEmail } from './actions'
 import type { Role } from '@/types/database'
 
 const ROLE_LABELS: Record<Role, string> = {
@@ -12,7 +12,7 @@ const ROLE_LABELS: Record<Role, string> = {
 const INVITABLE_ROLES: Role[] = ['worker', 'leading_hand', 'supervisor', 'admin']
 
 interface Invitable  { id: string; name: string; email: string; roleLabel: string; role: Role }
-interface NoEmail    { id: string; name: string; roleLabel: string }
+interface NoEmail    { id: string; name: string; roleLabel: string; role: Role }
 interface ActiveUser { id: string; name: string; email: string | null; roleLabel: string; role: Role }
 
 interface PendingInvite {
@@ -35,21 +35,31 @@ function expiresAt(invite: PendingInvite): Date {
 }
 
 export default function UsersClient({
-  invitable, noEmail, pending: initialPending, activeUsers: initialActive, currentUserId,
+  invitable:     initialInvitable,
+  noEmail:       initialNoEmail,
+  pending:       initialPending,
+  activeUsers:   initialActive,
+  currentUserId,
 }: Props) {
+  const [invitable,   setInvitable]   = useState<Invitable[]>(initialInvitable)
+  const [noEmailList, setNoEmailList] = useState<NoEmail[]>(initialNoEmail)
   const [pending,     setPending]     = useState<PendingInvite[]>(initialPending)
   const [activeUsers, setActiveUsers] = useState<ActiveUser[]>(initialActive)
 
-  const [actingId,    setActingId]    = useState<string | null>(null)
-  const [confirmDel,  setConfirmDel]  = useState<string | null>(null)
-  const [error,       setError]       = useState<string | null>(null)
-  const [success,     setSuccess]     = useState<string | null>(null)
+  const [actingId,   setActingId]   = useState<string | null>(null)
+  const [confirmDel, setConfirmDel] = useState<string | null>(null)
+  const [error,      setError]      = useState<string | null>(null)
+  const [success,    setSuccess]    = useState<string | null>(null)
 
-  // Email-only invite form state
+  // Email-only invite form
   const [showEmailForm, setShowEmailForm] = useState(false)
   const [emailInput,    setEmailInput]    = useState('')
   const [roleInput,     setRoleInput]     = useState<Role>('worker')
   const [emailSending,  setEmailSending]  = useState(false)
+
+  // Inline email edit for no-email staff
+  const [editingEmailId, setEditingEmailId] = useState<string | null>(null)
+  const [emailDraft,     setEmailDraft]     = useState('')
 
   function notify(msg: string) { setSuccess(msg); setTimeout(() => setSuccess(null), 5000) }
   function fail(msg: string)   { setError(msg) }
@@ -78,6 +88,28 @@ export default function UsersClient({
     setEmailInput(''); setRoleInput('worker'); setShowEmailForm(false)
   }
 
+  // ── Save email for no-email staff ─────────────────────────────────────────
+
+  async function handleSaveEmail(person: NoEmail) {
+    if (!emailDraft.trim()) return
+    setActingId(person.id); setError(null); setSuccess(null)
+    const result = await saveProfileEmail(person.id, emailDraft)
+    setActingId(null)
+    if (result?.error) { fail(result.error); return }
+    // Move from noEmail list to invitable list
+    setNoEmailList(prev => prev.filter(p => p.id !== person.id))
+    setInvitable(prev => [...prev, {
+      id:        person.id,
+      name:      person.name,
+      email:     result.email!,
+      roleLabel: person.roleLabel,
+      role:      person.role,
+    }].sort((a, b) => a.name.localeCompare(b.name)))
+    setEditingEmailId(null)
+    setEmailDraft('')
+    notify(`Email saved for ${person.name}. You can now send them an invite.`)
+  }
+
   // ── Resend ────────────────────────────────────────────────────────────────
 
   async function handleResend(inviteId: string) {
@@ -85,7 +117,6 @@ export default function UsersClient({
     const result = await resendInvite(inviteId)
     setActingId(null)
     if (result?.error) { fail(result.error); return }
-    // Replace old invite with a fresh one (page will reload on next visit; for now just remove)
     setPending(prev => prev.filter(i => i.id !== inviteId))
     notify(`Invite resent to ${result.email}.`)
   }
@@ -230,7 +261,7 @@ export default function UsersClient({
       {/* ── Staff without app access ───────────────────────────────────── */}
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-fg-secondary uppercase tracking-wide">Staff Without App Access</h2>
-        {invitable.length === 0 && noEmail.length === 0 ? (
+        {invitable.length === 0 && noEmailList.length === 0 ? (
           <p className="text-sm text-fg-muted">All staff members have login accounts or pending invitations.</p>
         ) : (
           <div className="rounded-xl border border-border bg-surface divide-y divide-border-subtle overflow-hidden">
@@ -250,13 +281,59 @@ export default function UsersClient({
                 </button>
               </div>
             ))}
-            {noEmail.map(person => (
-              <div key={person.id} className="flex items-center justify-between px-4 py-3 gap-3 opacity-60">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-fg">{person.name}</p>
-                  <p className="text-xs text-fg-muted">{person.roleLabel} · No email on file</p>
-                </div>
-                <span className="shrink-0 text-xs text-fg-muted">Add email first</span>
+
+            {noEmailList.map(person => (
+              <div key={person.id} className="px-4 py-3">
+                {editingEmailId === person.id ? (
+                  <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-fg mb-1.5">{person.name}</p>
+                      <input
+                        type="email"
+                        autoFocus
+                        placeholder="email@example.com"
+                        value={emailDraft}
+                        onChange={e => setEmailDraft(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') { e.preventDefault(); handleSaveEmail(person) }
+                          if (e.key === 'Escape') { setEditingEmailId(null); setEmailDraft('') }
+                        }}
+                        className="w-full rounded-lg border border-border bg-bg px-3 py-1.5 text-sm text-fg placeholder:text-fg-muted focus:outline-none focus:ring-1 focus:ring-green-600"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0 mt-5">
+                      <button
+                        type="button"
+                        onClick={() => handleSaveEmail(person)}
+                        disabled={actingId === person.id || !emailDraft.trim()}
+                        className="rounded-lg bg-green-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-800 disabled:opacity-50 transition-colors"
+                      >
+                        {actingId === person.id ? 'Saving…' : 'Save'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setEditingEmailId(null); setEmailDraft('') }}
+                        className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-secondary hover:bg-surface-raised transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-fg">{person.name}</p>
+                      <p className="text-xs text-fg-muted">{person.roleLabel} · No email on file</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setEditingEmailId(person.id); setEmailDraft('') }}
+                      className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-secondary hover:bg-surface-raised transition-colors"
+                    >
+                      Add email
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

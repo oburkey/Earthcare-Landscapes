@@ -202,6 +202,38 @@ export async function revokeInvite(inviteId: string) {
   return { success: true }
 }
 
+// ── Save email address for a no-email staff record ────────────────────────────
+
+export async function saveProfileEmail(profileId: string, email: string) {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Admin only.' }
+
+  const trimmed = email.trim().toLowerCase()
+  if (!trimmed) return { error: 'Email is required.' }
+
+  const admin = createAdminClient()
+
+  // Ensure this is a non-login staff record (safety guard)
+  const { data: target } = await admin
+    .from('profiles')
+    .select('has_login')
+    .eq('id', profileId)
+    .single()
+
+  if (!target)           return { error: 'Profile not found.' }
+  if (target.has_login)  return { error: 'Use the Staff page to edit active user profiles.' }
+
+  const { error } = await admin
+    .from('profiles')
+    .update({ email: trimmed })
+    .eq('id', profileId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/users')
+  return { success: true, email: trimmed }
+}
+
 // ── Delete active user account ────────────────────────────────────────────────
 
 export async function deleteUserAccount(profileId: string) {

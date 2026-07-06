@@ -67,6 +67,7 @@ export default async function UsersPage() {
     id:        p.id,
     name:      `${p.first_name} ${p.last_name}`.trim(),
     roleLabel: ROLE_LABELS[p.role as Role] ?? p.role,
+    role:      p.role as Role,
   }))
 
   const pending = (pendingRaw ?? []).map(i => ({
