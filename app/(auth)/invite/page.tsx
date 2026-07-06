@@ -3,7 +3,7 @@
 // They set their name and password to complete account creation.
 
 import { notFound } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import AcceptInviteForm from './AcceptInviteForm'
 
 export const metadata = { title: 'Accept Invitation — Earthcare Landscapes' }
@@ -17,7 +17,7 @@ export default async function InvitePage({ searchParams }: Props) {
 
   if (!token) notFound()
 
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   // Look up the invitation
   const { data: invitation } = await supabase
