@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useActionState, useEffect } from 'react'
+import { useState, useActionState } from 'react'
 import { createExtraJob } from '@/app/(app)/sites/[siteId]/stages/[stageId]/extra-jobs/new/actions'
 import { EXTRA_JOB_STATUS_OPTIONS } from '@/lib/lotStatus'
 import type { ActionState } from '@/types/actions'
@@ -17,13 +17,11 @@ export default function QuickAddExtraJobModal({ sites }: { sites: Site[] }) {
   const selectedSite = sites.find((s) => s.id === selectedSiteId)
   const stages       = selectedSite?.stages ?? []
 
-  // Reset stage when site changes
-  useEffect(() => { setStageId('') }, [selectedSiteId])
-
-  // Auto-select if only one stage in the chosen site
-  useEffect(() => {
-    if (stages.length === 1) setStageId(stages[0].id)
-  }, [stages])
+  function handleSiteChange(siteId: string) {
+    setSiteId(siteId)
+    const stgs = sites.find((s) => s.id === siteId)?.stages ?? []
+    setStageId(stgs.length === 1 ? stgs[0].id : '')
+  }
 
   function handleClose() {
     setOpen(false)
@@ -79,7 +77,7 @@ export default function QuickAddExtraJobModal({ sites }: { sites: Site[] }) {
                   <select
                     id="qaj-site"
                     value={selectedSiteId}
-                    onChange={(e) => setSiteId(e.target.value)}
+                    onChange={(e) => handleSiteChange(e.target.value)}
                     className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
                   >
                     <option value="">Select…</option>
