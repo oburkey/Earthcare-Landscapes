@@ -32,6 +32,15 @@ export type ApprovedExtraJob = {
   amount: number
 }
 
+export type ApprovedProgressClaim = {
+  id: string
+  claimNumber: number
+  stageName: string
+  siteName: string
+  amount: number
+  percentage: number | null
+}
+
 // ── Formatting ────────────────────────────────────────────────────────────────
 
 function fmt(n: number): string {
@@ -161,20 +170,23 @@ async function downloadCombinedPDF(
 export default function ApprovedPanel({
   lots,
   extraJobs,
+  progressClaims,
 }: {
   lots: ApprovedLot[]
   extraJobs: ApprovedExtraJob[]
+  progressClaims: ApprovedProgressClaim[]
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
-  const [selectedLotIds, setSelectedLotIds]   = useState<Set<string>>(() => new Set(lots.map((l) => l.id)))
-  const [selectedJobIds, setSelectedJobIds]   = useState<Set<string>>(() => new Set(extraJobs.map((j) => j.id)))
+  const [selectedLotIds, setSelectedLotIds]         = useState<Set<string>>(() => new Set(lots.map((l) => l.id)))
+  const [selectedJobIds, setSelectedJobIds]         = useState<Set<string>>(() => new Set(extraJobs.map((j) => j.id)))
+  const [selectedClaimIds, setSelectedClaimIds]     = useState<Set<string>>(() => new Set(progressClaims.map((c) => c.id)))
   const [invoiceDate, setInvoiceDate]         = useState(() => new Date().toISOString().slice(0, 10))
   const [notes, setNotes]                     = useState('')
   const [generating, setGenerating]           = useState(false)
   const [error, setError]                     = useState<string | null>(null)
   const [isPending, startTransition]          = useTransition()
-  const hasSelections = selectedLotIds.size > 0 || selectedJobIds.size > 0
+  const hasSelections = selectedLotIds.size > 0 || selectedJobIds.size > 0 || selectedClaimIds.size > 0
 
   // Keep selections in sync when props update (page refresh after invoicing)
   const prevLotIds = useRef(new Set(lots.map((l) => l.id)))
@@ -201,19 +213,22 @@ export default function ApprovedPanel({
     return () => window.removeEventListener('beforeunload', handler)
   }, [hasSelections])
 
-  const selectedLots = lots.filter((l) => selectedLotIds.has(l.id))
-  const selectedJobs = extraJobs.filter((j) => selectedJobIds.has(j.id))
+  const selectedLots   = lots.filter((l) => selectedLotIds.has(l.id))
+  const selectedJobs   = extraJobs.filter((j) => selectedJobIds.has(j.id))
+  const selectedClaims = progressClaims.filter((c) => selectedClaimIds.has(c.id))
 
   const runningTotal =
     selectedLots.reduce((s, l) => s + (l.contractPrice ?? (l.standardAmount + l.clientExtrasAmount)), 0) +
-    selectedJobs.reduce((s, j) => s + j.amount, 0)
+    selectedJobs.reduce((s, j) => s + j.amount, 0) +
+    selectedClaims.reduce((s, c) => s + c.amount, 0)
 
   function handleMarkAsInvoiced() {
     setError(null)
     startTransition(async () => {
       const fd = new FormData()
-      fd.set('lot_ids',      [...selectedLotIds].join(','))
-      fd.set('extra_job_ids', [...selectedJobIds].join(','))
+      fd.set('lot_ids',            [...selectedLotIds].join(','))
+      fd.set('extra_job_ids',     [...selectedJobIds].join(','))
+      fd.set('progress_claim_ids', [...selectedClaimIds].join(','))
       fd.set('total_amount', String(runningTotal))
       fd.set('invoice_date', new Date(invoiceDate + 'T00:00:00').toISOString())
       fd.set('notes',        notes)
@@ -223,12 +238,13 @@ export default function ApprovedPanel({
       } else {
         setSelectedLotIds(new Set())
         setSelectedJobIds(new Set())
+        setSelectedClaimIds(new Set())
         router.refresh()
       }
     })
   }
 
-  const total = lots.length + extraJobs.length
+  const total = lots.length + extraJobs.length + progressClaims.length
   if (total === 0) return null
 
   return (
@@ -248,9 +264,11 @@ export default function ApprovedPanel({
           Approved for Invoicing
         </span>
         <span className="text-xs text-accent-fg font-medium shrink-0">
-          {lots.length > 0 && `${lots.length} lot${lots.length !== 1 ? 's' : ''}`}
-          {lots.length > 0 && extraJobs.length > 0 && ' · '}
-          {extraJobs.length > 0 && `${extraJobs.length} extra job${extraJobs.length !== 1 ? 's' : ''}`}
+          {[
+            lots.length > 0          ? `${lots.length} lot${lots.length !== 1 ? 's' : ''}` : null,
+            extraJobs.length > 0     ? `${extraJobs.length} extra job${extraJobs.length !== 1 ? 's' : ''}` : null,
+            progressClaims.length > 0 ? `${progressClaims.length} claim${progressClaims.length !== 1 ? 's' : ''}` : null,
+          ].filter(Boolean).join(' · ')}
         </span>
       </button>
 
@@ -319,6 +337,41 @@ export default function ApprovedPanel({
                         <span className="text-fg-muted"> · {job.siteName}</span>
                       </span>
                       <span className="text-sm tabular-nums font-medium text-fg-secondary shrink-0">{fmt(job.amount)}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Progress claims */}
+          {progressClaims.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-accent-fg uppercase tracking-wide mb-2">Progress Claims</p>
+              <div className="rounded-xl border border-green-200 dark:border-green-800 overflow-hidden divide-y divide-green-100 dark:divide-green-900">
+                {progressClaims.map((claim) => {
+                  const checked = selectedClaimIds.has(claim.id)
+                  return (
+                    <label
+                      key={claim.id}
+                      className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${checked ? 'bg-green-50 dark:bg-green-900/20' : 'bg-surface hover:bg-green-50 dark:hover:bg-green-900/20'}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => setSelectedClaimIds((prev) => {
+                          const next = new Set(prev)
+                          if (next.has(claim.id)) next.delete(claim.id); else next.add(claim.id)
+                          return next
+                        })}
+                        className="h-4 w-4 rounded border-border text-accent-fg focus:ring-green-600 cursor-pointer shrink-0"
+                      />
+                      <span className="text-sm text-fg-secondary flex-1 min-w-0">
+                        <span className="font-medium">Claim #{claim.claimNumber}</span>
+                        <span className="text-fg-muted"> · {claim.siteName} · {claim.stageName}</span>
+                        {claim.percentage != null && <span className="text-fg-muted"> · {claim.percentage}%</span>}
+                      </span>
+                      <span className="text-sm tabular-nums font-medium text-fg-secondary shrink-0">{fmt(claim.amount)}</span>
                     </label>
                   )
                 })}

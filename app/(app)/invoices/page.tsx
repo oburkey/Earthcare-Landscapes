@@ -4,8 +4,9 @@ import InvoicesView from './InvoicesView'
 import ApprovedPanel from './ApprovedPanel'
 import InvoiceHistory from './InvoiceHistory'
 import type { SiteData, StageData, LotRow, LotSection, ExtraJobRow } from './InvoicesView'
-import type { ApprovedLot, ApprovedExtraJob } from './ApprovedPanel'
+import type { ApprovedLot, ApprovedExtraJob, ApprovedProgressClaim } from './ApprovedPanel'
 import type { InvoiceRun } from './InvoiceHistory'
+import type { ProgressClaimRow } from './ProgressClaimsSection'
 import { getExtraJobsPricing } from '@/app/(app)/sites/[siteId]/stages/[stageId]/extra-jobs/[extraJobId]/pricing-actions'
 
 export const metadata = { title: 'Invoices — Earthcare Landscapes' }
@@ -227,9 +228,37 @@ export default async function InvoicesPage() {
     invoiceRunsRaw.flatMap((r: any) => r.extra_job_ids ?? [])
   )
 
+  // ── Query 4: Progress claims (graceful fallback) ───────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let progressClaimsByStage = new Map<string, any[]>()
+  try {
+    const stageIds = activeSites.flatMap((s) =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (s.stages ?? []).filter((st: any) => !st.completed_at && st.is_contract_pricing).map((st: any) => st.id)
+    )
+    if (stageIds.length > 0) {
+      const { data, error } = await supabase
+        .from('progress_claims')
+        .select('id, stage_id, claim_number, percentage, claim_amount, notes, pending_review, approved_for_invoicing, invoiced')
+        .in('stage_id', stageIds)
+        .order('claim_number', { ascending: true })
+      if (!error && data) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for (const claim of data as any[]) {
+          const list = progressClaimsByStage.get(claim.stage_id) ?? []
+          list.push(claim)
+          progressClaimsByStage.set(claim.stage_id, list)
+        }
+      }
+    }
+  } catch {
+    // table doesn't exist yet — skip gracefully
+  }
+
   // ── Build view data ───────────────────────────────────────────────────────
-  const approvedLots: ApprovedLot[]     = []
-  const approvedExtraJobs: ApprovedExtraJob[] = []
+  const approvedLots: ApprovedLot[]              = []
+  const approvedExtraJobs: ApprovedExtraJob[]    = []
+  const approvedProgressClaims: ApprovedProgressClaim[] = []
 
   const sites: SiteData[] = activeSites
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -302,7 +331,37 @@ export default async function InvoicesPage() {
             return { id: j.id, title: j.title, status: j.status, total }
           })
 
-          return { id: stage.id, name: stage.name, lots, extraJobs }
+          const isContractPricing = stage.is_contract_pricing ?? false
+          const totalContractValue = lots.reduce((s, l) => s + (l.contractPrice ?? 0), 0)
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const rawClaims: any[] = progressClaimsByStage.get(stage.id) ?? []
+          const progressClaims: ProgressClaimRow[] = rawClaims.map((c) => ({
+            id:                   c.id,
+            claimNumber:          c.claim_number,
+            percentage:           c.percentage != null ? Number(c.percentage) : null,
+            claimAmount:          Number(c.claim_amount),
+            notes:                c.notes,
+            pendingReview:        c.pending_review ?? false,
+            approvedForInvoicing: c.approved_for_invoicing ?? false,
+            invoiced:             c.invoiced ?? false,
+          }))
+
+          // Collect approved-for-invoicing (not yet invoiced) progress claims for the panel
+          for (const c of progressClaims) {
+            if (c.approvedForInvoicing && !c.invoiced) {
+              approvedProgressClaims.push({
+                id:          c.id,
+                claimNumber: c.claimNumber,
+                stageName:   stage.name,
+                siteName:    site.name,
+                amount:      c.claimAmount,
+                percentage:  c.percentage,
+              })
+            }
+          }
+
+          return { id: stage.id, name: stage.name, lots, extraJobs, isContractPricing, progressClaims, totalContractValue }
         })
         .filter((st) => st.lots.length > 0 || st.extraJobs.length > 0)
       return { id: site.id, name: site.name, clientContact: site.client_contact ?? null, stages }
@@ -313,6 +372,7 @@ export default async function InvoicesPage() {
   // Build lookup maps for resolving IDs in history
   const lotById = new Map<string, { lotNumber: string; siteName: string; stageName: string }>()
   const extraJobById = new Map<string, { title: string; siteName: string }>()
+  const progressClaimById = new Map<string, { claimNumber: number; stageName: string; siteName: string; amount: number }>()
   for (const site of activeSites) {
     for (const stage of (site.stages ?? [])) {
       for (const lot of (stage.lots ?? [])) {
@@ -323,25 +383,46 @@ export default async function InvoicesPage() {
       }
     }
   }
+  for (const [stageId, claims] of progressClaimsByStage) {
+    for (const site of activeSites) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const stage = (site.stages ?? []).find((st: any) => st.id === stageId)
+      if (stage) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for (const c of claims as any[]) {
+          progressClaimById.set(c.id, {
+            claimNumber: c.claim_number,
+            stageName:   stage.name,
+            siteName:    site.name,
+            amount:      Number(c.claim_amount),
+          })
+        }
+        break
+      }
+    }
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const invoiceHistory: InvoiceRun[] = invoiceRunsRaw.map((r: any): InvoiceRun => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const profileData = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles as any
-    const lotIds: string[]      = r.lot_ids      ?? []
-    const extraJobIds: string[] = r.extra_job_ids ?? []
+    const lotIds: string[]           = r.lot_ids            ?? []
+    const extraJobIds: string[]      = r.extra_job_ids      ?? []
+    const progressClaimIds: string[] = r.progress_claim_ids ?? []
     return {
       id:               r.id,
       invoicedAt:       r.invoiced_at,
       invoicedByName:   profileData
         ? `${profileData.first_name ?? ''} ${profileData.last_name ?? ''}`.trim() || null
         : null,
-      totalAmount:      r.total_amount,
-      notes:            r.notes,
-      lotCount:         lotIds.length,
-      extraJobCount:    extraJobIds.length,
-      lotDetails:       lotIds.map((id) => lotById.get(id) ?? { lotNumber: id.slice(0, 8), siteName: '—', stageName: '—' }),
-      extraJobDetails:  extraJobIds.map((id) => extraJobById.get(id) ?? { title: id.slice(0, 8), siteName: '—' }),
+      totalAmount:         r.total_amount,
+      notes:               r.notes,
+      lotCount:            lotIds.length,
+      extraJobCount:       extraJobIds.length,
+      progressClaimCount:  progressClaimIds.length,
+      lotDetails:          lotIds.map((id) => lotById.get(id) ?? { lotNumber: id.slice(0, 8), siteName: '—', stageName: '—' }),
+      extraJobDetails:     extraJobIds.map((id) => extraJobById.get(id) ?? { title: id.slice(0, 8), siteName: '—' }),
+      progressClaimDetails: progressClaimIds.map((id) => progressClaimById.get(id) ?? { claimNumber: 0, stageName: '—', siteName: '—', amount: 0 }),
     }
   })
 
@@ -349,7 +430,7 @@ export default async function InvoicesPage() {
     <div className="min-h-screen bg-bg">
       <div className="mx-auto max-w-6xl px-4 py-6 space-y-5">
         <h1 className="text-xl font-semibold text-fg">Invoices</h1>
-        <ApprovedPanel lots={approvedLots} extraJobs={approvedExtraJobs} />
+        <ApprovedPanel lots={approvedLots} extraJobs={approvedExtraJobs} progressClaims={approvedProgressClaims} />
         <InvoicesView sites={sites} isAdmin={true} />
         <InvoiceHistory runs={invoiceHistory} />
       </div>

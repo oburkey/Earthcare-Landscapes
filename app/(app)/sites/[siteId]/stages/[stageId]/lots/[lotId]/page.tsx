@@ -12,6 +12,8 @@ import LotDocumentRow from './LotDocumentRow'
 import LotDocumentPreview from './LotDocumentPreview'
 import LotQuantities from './LotQuantities'
 import LotStatusToggles from './LotStatusToggles'
+import SubcontractorCosts from './SubcontractorCosts'
+import type { SubcontractorCostRow } from './SubcontractorCosts'
 import TradeStatusSection from './TradeStatusSection'
 import ChecklistSection from './ChecklistSection'
 import { getR2SignedUrlSafe } from '@/lib/r2'
@@ -55,6 +57,7 @@ export default async function LotPage({ params }: Props) {
     { data: quotesData },
     tradeStatusResult,
     checklistResult,
+    subcontractorCostsResult,
   ] = await Promise.all([
     supabase
       .from('lots')
@@ -111,6 +114,12 @@ export default async function LotPage({ params }: Props) {
       .from('lot_checklist_items')
       .select('item_key, completed, response, completed_date')
       .eq('lot_id', lotId),
+    // Subcontractor costs — table may not exist yet
+    supabase
+      .from('subcontractor_costs')
+      .select('id, trade, trade_label, invoice_amount, invoice_date, notes')
+      .eq('lot_id', lotId)
+      .order('created_at', { ascending: true }),
   ])
 
   // Fall back to query without flag columns if they don't exist yet
@@ -246,6 +255,18 @@ export default async function LotPage({ params }: Props) {
   // Completion checklist — gracefully fall back if the table doesn't exist yet
   const checklistItems = checklistResult.error ? [] : (checklistResult.data ?? [])
 
+  // Subcontractor costs — gracefully fall back if table doesn't exist yet
+  const subcontractorCosts: SubcontractorCostRow[] = subcontractorCostsResult.error
+    ? []
+    : (subcontractorCostsResult.data ?? []).map((c) => ({
+        id:             c.id,
+        trade:          c.trade,
+        trade_label:    c.trade_label,
+        invoice_amount: Number(c.invoice_amount),
+        invoice_date:   c.invoice_date,
+        notes:          c.notes,
+      }))
+
   // Quotes
   const estimatedQuote = quotesData?.find((q) => q.is_estimated) ?? null
   const finalQuote     = quotesData?.find((q) => !q.is_estimated) ?? null
@@ -364,6 +385,21 @@ export default async function LotPage({ params }: Props) {
               contractPrice={contractPrice}
               showClientExtras={showClientExtras}
               plantRatios={plantRatios}
+            />
+          </div>
+        )}
+
+        {/* ── Subcontractor Costs (contract-priced lots, admin only) ────────── */}
+        {isAdmin && contractPrice != null && (
+          <div>
+            <h2 className="text-base font-semibold text-fg-secondary mb-3">Subcontractor Costs</h2>
+            <SubcontractorCosts
+              lotId={lotId}
+              siteId={siteId}
+              stageId={stageId}
+              initialCosts={subcontractorCosts}
+              contractPrice={contractPrice}
+              isAdmin={isAdmin}
             />
           </div>
         )}

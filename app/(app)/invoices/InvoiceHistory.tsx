@@ -12,8 +12,10 @@ export type InvoiceRun = {
   notes: string | null
   lotCount: number
   extraJobCount: number
+  progressClaimCount: number
   lotDetails: Array<{ lotNumber: string; siteName: string; stageName: string }>
   extraJobDetails: Array<{ title: string; siteName: string }>
+  progressClaimDetails: Array<{ claimNumber: number; stageName: string; siteName: string; amount: number }>
 }
 
 // ── Formatting ────────────────────────────────────────────────────────────────
@@ -53,7 +55,7 @@ export default function InvoiceHistory({ runs }: { runs: InvoiceRun[] }) {
         <div className="border-t border-border-subtle divide-y divide-border-subtle">
           {runs.map((run) => {
             const isExpanded = expandedRun === run.id
-            const itemCount  = run.lotCount + run.extraJobCount
+            const itemCount  = run.lotCount + run.extraJobCount + run.progressClaimCount
             return (
               <div key={run.id}>
                 <button
@@ -105,6 +107,19 @@ export default function InvoiceHistory({ runs }: { runs: InvoiceRun[] }) {
                             <p key={i} className="text-sm text-fg-secondary">
                               {job.title}
                               <span className="text-fg-muted"> · {job.siteName}</span>
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {run.progressClaimDetails.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-fg-muted uppercase tracking-wide mb-1.5">Progress Claims</p>
+                        <div className="space-y-1">
+                          {run.progressClaimDetails.map((claim, i) => (
+                            <p key={i} className="text-sm text-fg-secondary">
+                              Claim #{claim.claimNumber} — {fmt(claim.amount)}
+                              <span className="text-fg-muted"> · {claim.siteName} · {claim.stageName}</span>
                             </p>
                           ))}
                         </div>

@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { toggleInvoiced, togglePendingReview, toggleApprovedForInvoicing } from './actions'
 import { getExtraJobsPricing } from '@/app/(app)/sites/[siteId]/stages/[stageId]/extra-jobs/[extraJobId]/pricing-actions'
 import { LOGO_DATA_URL } from '@/lib/pdfAssets'
+import ProgressClaimsSection from './ProgressClaimsSection'
+import type { ProgressClaimRow } from './ProgressClaimsSection'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -53,6 +55,9 @@ export type StageData = {
   name: string
   lots: LotRow[]
   extraJobs: ExtraJobRow[]
+  isContractPricing: boolean
+  progressClaims: ProgressClaimRow[]
+  totalContractValue: number
 }
 
 export type SiteData = {
@@ -932,6 +937,16 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                             ))}
                           </div>
                         </div>
+                      )}
+
+                      {/* Progress claims — contract-priced stages only */}
+                      {stage.isContractPricing && (
+                        <ProgressClaimsSection
+                          stageId={stage.id}
+                          initialClaims={stage.progressClaims}
+                          totalContractValue={stage.totalContractValue}
+                          isAdmin={isAdmin}
+                        />
                       )}
 
                       </div>}{/* end isStageExpanded */}

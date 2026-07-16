@@ -79,32 +79,38 @@ export async function markAsInvoiced(
   const profile = await requireAuth()
   if (profile.role !== 'admin') return { error: 'Only admins can create invoice runs.' }
 
-  const lotIdsRaw      = formData.get('lot_ids')      as string
-  const extraJobIdsRaw = formData.get('extra_job_ids') as string
-  const totalAmountRaw = formData.get('total_amount')  as string
-  const notes          = (formData.get('notes') as string)?.trim() || null
-  const invoiceDate    = (formData.get('invoice_date') as string) || new Date().toISOString()
+  const lotIdsRaw          = formData.get('lot_ids')           as string
+  const extraJobIdsRaw     = formData.get('extra_job_ids')      as string
+  const progressClaimIdsRaw = formData.get('progress_claim_ids') as string
+  const totalAmountRaw     = formData.get('total_amount')       as string
+  const notes              = (formData.get('notes') as string)?.trim() || null
+  const invoiceDate        = (formData.get('invoice_date') as string) || new Date().toISOString()
 
-  const lotIds      = lotIdsRaw      ? lotIdsRaw.split(',').filter(Boolean)      : []
-  const extraJobIds = extraJobIdsRaw ? extraJobIdsRaw.split(',').filter(Boolean) : []
-  const totalAmount = totalAmountRaw ? parseFloat(totalAmountRaw) || null        : null
+  const lotIds           = lotIdsRaw           ? lotIdsRaw.split(',').filter(Boolean)           : []
+  const extraJobIds      = extraJobIdsRaw      ? extraJobIdsRaw.split(',').filter(Boolean)      : []
+  const progressClaimIds = progressClaimIdsRaw ? progressClaimIdsRaw.split(',').filter(Boolean) : []
+  const totalAmount      = totalAmountRaw ? parseFloat(totalAmountRaw) || null : null
 
-  if (lotIds.length === 0 && extraJobIds.length === 0) {
-    return { error: 'No lots or extra jobs selected.' }
+  if (lotIds.length === 0 && extraJobIds.length === 0 && progressClaimIds.length === 0) {
+    return { error: 'Nothing selected.' }
   }
 
-  const supabase = await createClient()
+  const supabase   = await createClient()
+  const invoicedAt = invoiceDate
 
-  const { error: runError } = await supabase
+  const { data: runData, error: runError } = await supabase
     .from('invoice_runs')
     .insert({
-      invoiced_by:   profile.id,
-      invoiced_at:   invoiceDate,
-      lot_ids:       lotIds,
-      extra_job_ids: extraJobIds,
-      total_amount:  totalAmount,
+      invoiced_by:        profile.id,
+      invoiced_at:        invoicedAt,
+      lot_ids:            lotIds,
+      extra_job_ids:      extraJobIds,
+      progress_claim_ids: progressClaimIds,
+      total_amount:       totalAmount,
       notes,
     })
+    .select('id')
+    .single()
   if (runError) return { error: runError.message }
 
   if (lotIds.length > 0) {
@@ -112,6 +118,14 @@ export async function markAsInvoiced(
       .from('lots')
       .update({ invoiced: true, approved_for_invoicing: false })
       .in('id', lotIds)
+    if (error) return { error: error.message }
+  }
+
+  if (progressClaimIds.length > 0) {
+    const { error } = await supabase
+      .from('progress_claims')
+      .update({ invoiced: true, approved_for_invoicing: false, invoice_run_id: runData.id, invoiced_at: invoicedAt })
+      .in('id', progressClaimIds)
     if (error) return { error: error.message }
   }
 
