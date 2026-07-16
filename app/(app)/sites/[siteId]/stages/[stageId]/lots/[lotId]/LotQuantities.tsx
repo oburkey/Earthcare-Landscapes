@@ -136,17 +136,17 @@ export default function LotQuantities({
   plantRatios,
 }: Props) {
   const [open, setOpen] = useState(false)
-  // Default to Final once estimate data has been saved, so leading hands don't
-  // accidentally overwrite the estimate during regular site visits.
-  // Also default to Final when a contract price is set.
-  const hasEstimateData = !!estimatedQuote && estimatedQuote.items.some((i) => i.quantity !== null)
+  // Default to Final when final data exists, or when a contract price is set.
+  // Checking finalQuote (not estimatedQuote) is the correct condition — we want
+  // to show Final only when Final data has actually been entered.
+  const hasFinalData = !!finalQuote && finalQuote.items.some((i) => i.quantity !== null)
   const hasContractPrice = contractPrice != null && contractPrice > 0
-  const [isEstimated, setIsEstimated] = useState(hasContractPrice ? false : !hasEstimateData)
+  const [isEstimated, setIsEstimated] = useState(hasContractPrice ? false : !hasFinalData)
   const activeQuote = isEstimated ? estimatedQuote : finalQuote
   // The quote matching the initial active mode above — used to seed initial
   // state below (must NOT always be estimatedQuote, or "Final" mode would
   // open showing Estimate data when it defaults to Final).
-  const initialQuote = hasEstimateData ? finalQuote : estimatedQuote
+  const initialQuote = hasFinalData ? finalQuote : estimatedQuote
 
   const allItems = useMemo(
     () => sections.flatMap((s) => s.items.map((item) => ({ ...item, isClientExtra: s.isClientExtra ?? false }))),

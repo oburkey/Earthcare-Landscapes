@@ -20,6 +20,22 @@ export async function setStageComplete(
   if (!stageId) return { error: 'Stage ID is missing.' }
 
   const supabase = await createClient()
+
+  // Guard: all lots in the stage must be complete before the stage can be marked done
+  const { data: stageLots } = await supabase
+    .from('lots')
+    .select('id, status')
+    .eq('stage_id', stageId)
+
+  if (stageLots && stageLots.length > 0) {
+    const incomplete = stageLots.filter((l) => l.status !== 'complete').length
+    if (incomplete > 0) {
+      return {
+        error: `${incomplete} lot${incomplete !== 1 ? 's' : ''} in this stage ${incomplete !== 1 ? 'are' : 'is'} not yet complete. Mark all lots complete before marking the stage as complete.`,
+      }
+    }
+  }
+
   const { error } = await supabase
     .from('stages')
     .update({ completed_at: new Date().toISOString() })

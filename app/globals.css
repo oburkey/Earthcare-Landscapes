@@ -34,7 +34,14 @@
   --color-accent-fg:      #4ade80;  /* green-400 — bright enough for text on dark bg */
   --color-accent-dim:     rgba(74, 222, 128, 0.08);
   --color-skeleton:       #2d2d2d;
+}
 
+/* Invert the browser's native calendar picker icon in dark mode */
+.dark input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
+.dark {
   /* Shift the green scale one step darker in dark mode.
      Tailwind v4 generates bg-green-N as var(--color-green-N), so these
      remaps apply globally — buttons, checkboxes, focus rings, active states. */

@@ -128,7 +128,7 @@ export default function EditLotForm({
               step="0.01"
               defaultValue={contractPrice ?? defaultContractPrice ?? ''}
               placeholder="0.00"
-              className="block w-full rounded-lg border border-border pl-7 pr-3 py-2.5 text-sm shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+              className="block w-full rounded-lg border border-border bg-surface pl-7 pr-3 py-2.5 text-sm text-fg shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
             />
           </div>
           <p className="mt-1 text-xs text-fg-muted">

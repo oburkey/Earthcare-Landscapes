@@ -205,6 +205,15 @@ export default async function StagePage({ params }: Props) {
                             {tradeBadge.label}
                           </span>
                         )}
+                        {(lot as unknown as { invoiced?: boolean }).invoiced ? (
+                          <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                            Invoiced
+                          </span>
+                        ) : (lot as unknown as { quant_done?: boolean }).quant_done ? (
+                          <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-surface-raised text-fg-muted">
+                            Quant Done
+                          </span>
+                        ) : null}
                       </div>
                       {lot.due_date && (
                         <p className="mt-1 text-xs text-fg-muted">

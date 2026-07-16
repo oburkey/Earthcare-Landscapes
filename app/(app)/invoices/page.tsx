@@ -28,16 +28,14 @@ export default async function InvoicesPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const activeSites = (sitesRaw ?? []).filter((s: any) => !s.completed_at)
 
-  // Collect qualifying lot IDs (build_complete OR quant_done)
-  const qualifyingLotIds: string[] = []
+  // Collect all lot IDs across all active stages (no status filter — show everything)
+  const allLotIds: string[] = []
   for (const site of activeSites) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const stage of (site.stages ?? []) as any[]) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const lot of (stage.lots ?? []) as any[]) {
-        if (lot.build_complete || lot.quant_done) {
-          qualifyingLotIds.push(lot.id)
-        }
+        allLotIds.push(lot.id)
       }
     }
   }
@@ -143,7 +141,7 @@ export default async function InvoicesPage() {
     return { standard, extras, sections }
   }
 
-  if (qualifyingLotIds.length > 0) {
+  if (allLotIds.length > 0) {
     const quotesResult = await supabase
       .from('lot_quotes')
       .select(`
@@ -156,7 +154,7 @@ export default async function InvoicesPage() {
           )
         )
       `)
-      .in('lot_id', qualifyingLotIds)
+      .in('lot_id', allLotIds)
 
     if (quotesResult.data) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -186,7 +184,6 @@ export default async function InvoicesPage() {
           const siteShowClientExtras = (site as any).has_client_extras ?? true
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const lots: LotRow[] = ((stage.lots ?? []) as any[])
-            .filter((l) => l.build_complete || l.quant_done)
             .map((lot): LotRow => {
               const amounts          = amountByLot.get(lot.id) ?? { standard: 0, extras: 0, sections: [] }
               const showClientExtras = siteShowClientExtras && (lot.has_client_extras ?? true)

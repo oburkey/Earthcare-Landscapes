@@ -60,7 +60,7 @@ async function _stage(db: Db, stageId: string) {
       .select(`
         id, name, site_plan_path, is_contract_pricing, default_contract_price,
         sites!inner(id, name),
-        lots(id, lot_number, status, due_date, scheduled_date, build_complete)
+        lots(id, lot_number, status, due_date, scheduled_date, build_complete, quant_done, invoiced)
       `)
       .eq('id', stageId)
       .single(),

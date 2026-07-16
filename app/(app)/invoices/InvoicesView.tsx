@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { toggleInvoiced } from './actions'
 import { getExtraJobsPricing } from '@/app/(app)/sites/[siteId]/stages/[stageId]/extra-jobs/[extraJobId]/pricing-actions'
 import { LOGO_DATA_URL } from '@/lib/pdfAssets'
@@ -415,6 +416,7 @@ async function downloadPDF(
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function InvoicesView({ sites }: { sites: SiteData[] }) {
+  const router = useRouter()
   const [expandedSites, setExpandedSites] = useState<Set<string>>(new Set())
   // Stages start collapsed by default
   const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set())
@@ -582,9 +584,9 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
   if (sites.length === 0) {
     return (
       <div className="rounded-xl border border-border bg-surface px-4 py-16 text-center">
-        <p className="text-sm font-medium text-fg-muted">No lots ready for invoicing</p>
+        <p className="text-sm font-medium text-fg-muted">No active sites with lots</p>
         <p className="mt-1 text-sm text-fg-muted">
-          Lots appear here once marked as Build Complete or Quant Done.
+          Lots will appear here once stages are added to an active site.
         </p>
       </div>
     )
@@ -737,10 +739,15 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
                               const invoiced = invoicedMap[lot.id] ?? lot.invoiced
                               const selected = selectedLots.has(lot.id)
                               const genning  = generating.has(lot.id)
+                              const lotUrl   = `/sites/${site.id}/stages/${stage.id}/lots/${lot.id}`
 
                               return (
-                                <tr key={lot.id} className={`border-b border-border-subtle transition-colors ${selected ? 'bg-accent-dim' : 'hover:bg-surface-raised'}`}>
-                                  <td className="py-2.5 pr-3">
+                                <tr
+                                  key={lot.id}
+                                  onClick={() => router.push(lotUrl)}
+                                  className={`border-b border-border-subtle transition-colors cursor-pointer ${selected ? 'bg-accent-dim' : 'hover:bg-surface-raised'}`}
+                                >
+                                  <td className="py-2.5 pr-3" onClick={e => e.stopPropagation()}>
                                     <input
                                       type="checkbox"
                                       checked={selected}
@@ -767,7 +774,7 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
                                     {lot.contractPrice != null ? <span className="text-fg-muted">—</span> : (lot.clientExtrasAmount > 0 ? fmt(lot.clientExtrasAmount) : <span className="text-fg-muted">—</span>)}
                                   </td>
                                   <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg">{fmt(total)}</td>
-                                  <td className="py-2.5 px-3 text-center">
+                                  <td className="py-2.5 px-3 text-center" onClick={e => e.stopPropagation()}>
                                     <button
                                       type="button"
                                       disabled={isPending}
@@ -777,7 +784,7 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
                                       {invoiced ? 'Invoiced' : 'Invoice'}
                                     </button>
                                   </td>
-                                  <td className="py-2.5 pl-2">
+                                  <td className="py-2.5 pl-2" onClick={e => e.stopPropagation()}>
                                     <button
                                       type="button"
                                       onClick={() => exportLotClaimSheet(site, stage.name, lot)}
@@ -813,11 +820,16 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
                           </p>
                           <div className="rounded-xl border border-border overflow-hidden divide-y divide-border-subtle">
                             {stage.extraJobs.map((job) => (
-                              <div key={job.id} className={`flex items-center gap-3 px-4 py-2.5 transition-colors ${selectedExtraJobs.has(job.id) ? 'bg-amber-50' : 'hover:bg-surface-raised'}`}>
+                              <div
+                                key={job.id}
+                                onClick={() => router.push(`/sites/${site.id}/stages/${stage.id}/extra-jobs/${job.id}`)}
+                                className={`flex items-center gap-3 px-4 py-2.5 transition-colors cursor-pointer ${selectedExtraJobs.has(job.id) ? 'bg-amber-50' : 'hover:bg-surface-raised'}`}
+                              >
                                 <input
                                   type="checkbox"
                                   checked={selectedExtraJobs.has(job.id)}
                                   onChange={() => toggleExtraJobSelection(job.id)}
+                                  onClick={e => e.stopPropagation()}
                                   className="h-4 w-4 rounded border-border text-amber-600 focus:ring-amber-500 cursor-pointer shrink-0"
                                 />
                                 <span className="text-sm text-fg-secondary flex-1 truncate">{job.title}</span>

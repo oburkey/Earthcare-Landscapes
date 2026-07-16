@@ -9,6 +9,7 @@ import EditLotForm from './EditLotForm'
 import PhotoUpload from '@/app/_components/PhotoUpload'
 import LotDocumentUpload from './LotDocumentUpload'
 import LotDocumentRow from './LotDocumentRow'
+import LotDocumentPreview from './LotDocumentPreview'
 import LotQuantities from './LotQuantities'
 import LotStatusToggles from './LotStatusToggles'
 import TradeStatusSection from './TradeStatusSection'
@@ -184,12 +185,13 @@ export default async function LotPage({ params }: Props) {
   }
 
   // Documents
-  type DocWithUrl = { id: string; document_name: string; document_type: string; url: string }
+  type DocWithUrl = { id: string; document_name: string; document_type: string; url: string; storage_path: string }
   let documents: DocWithUrl[] = []
   if (docRows && docRows.length > 0) {
     const signed = await Promise.all(
       docRows.map(async (d) => ({
         id: d.id, document_name: d.document_name, document_type: d.document_type,
+        storage_path: d.storage_path,
         url: await getR2SignedUrlSafe(d.storage_path),
       }))
     )
@@ -408,21 +410,24 @@ export default async function LotPage({ params }: Props) {
             </div>
           )}
           {documents.length > 0 ? (
-            <div className="rounded-xl border border-border bg-surface overflow-hidden divide-y divide-border-subtle">
-              {documents.map((doc) => (
-                <LotDocumentRow
-                  key={doc.id}
-                  docId={doc.id}
-                  documentName={doc.document_name}
-                  documentTypeLabel={DOC_TYPE_LABELS[doc.document_type] ?? doc.document_type}
-                  url={doc.url}
-                  lotId={lotId}
-                  siteId={siteId}
-                  stageId={stageId}
-                  isAdmin={isAdmin}
-                />
-              ))}
-            </div>
+            <>
+              <div className="rounded-xl border border-border bg-surface overflow-hidden divide-y divide-border-subtle">
+                {documents.map((doc) => (
+                  <LotDocumentRow
+                    key={doc.id}
+                    docId={doc.id}
+                    documentName={doc.document_name}
+                    documentTypeLabel={DOC_TYPE_LABELS[doc.document_type] ?? doc.document_type}
+                    url={doc.url}
+                    lotId={lotId}
+                    siteId={siteId}
+                    stageId={stageId}
+                    isAdmin={isAdmin}
+                  />
+                ))}
+              </div>
+              <LotDocumentPreview documents={documents} />
+            </>
           ) : (
             <p className="text-sm text-fg-muted text-center py-4">No documents yet.</p>
           )}
