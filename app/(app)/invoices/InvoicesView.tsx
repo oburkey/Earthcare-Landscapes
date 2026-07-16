@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { toggleInvoiced } from './actions'
+import { toggleInvoiced, togglePendingReview, toggleApprovedForInvoicing } from './actions'
 import { getExtraJobsPricing } from '@/app/(app)/sites/[siteId]/stages/[stageId]/extra-jobs/[extraJobId]/pricing-actions'
 import { LOGO_DATA_URL } from '@/lib/pdfAssets'
 
@@ -31,8 +31,11 @@ export type LotRow = {
   buildComplete: boolean
   quantDone: boolean
   invoiced: boolean
+  pendingReview: boolean
+  approvedForInvoicing: boolean
   standardAmount: number
   clientExtrasAmount: number
+  estimateTotal: number | null
   sections: LotSection[]
   showClientExtras: boolean
   contractPrice: number | null
@@ -415,7 +418,7 @@ async function downloadPDF(
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function InvoicesView({ sites }: { sites: SiteData[] }) {
+export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; isAdmin: boolean }) {
   const router = useRouter()
   const [expandedSites, setExpandedSites] = useState<Set<string>>(new Set())
   // Stages start collapsed by default
@@ -423,6 +426,16 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
   const [invoicedMap, setInvoicedMap] = useState<Record<string, boolean>>(
     () => Object.fromEntries(
       sites.flatMap((s) => s.stages.flatMap((st) => st.lots.map((l) => [l.id, l.invoiced])))
+    )
+  )
+  const [pendingReviewMap, setPendingReviewMap] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(
+      sites.flatMap((s) => s.stages.flatMap((st) => st.lots.map((l) => [l.id, l.pendingReview])))
+    )
+  )
+  const [approvedMap, setApprovedMap] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(
+      sites.flatMap((s) => s.stages.flatMap((st) => st.lots.map((l) => [l.id, l.approvedForInvoicing])))
     )
   )
   const [selectedLots, setSelectedLots]           = useState<Set<string>>(new Set())
@@ -484,6 +497,39 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
       const result = await toggleInvoiced(null, fd)
       if (result?.error) {
         setInvoicedMap((prev) => ({ ...prev, [lotId]: current }))
+        setActionError(result.error)
+      }
+    })
+  }
+
+  function handleTogglePendingReview(lotId: string, current: boolean) {
+    const next = !current
+    setPendingReviewMap((prev) => ({ ...prev, [lotId]: next }))
+    setActionError(null)
+    startTransition(async () => {
+      const fd = new FormData()
+      fd.set('lot_id', lotId)
+      fd.set('value', String(next))
+      const result = await togglePendingReview(null, fd)
+      if (result?.error) {
+        setPendingReviewMap((prev) => ({ ...prev, [lotId]: current }))
+        setActionError(result.error)
+      }
+    })
+  }
+
+  function handleToggleApprovedForInvoicing(lotId: string, current: boolean) {
+    const next = !current
+    setApprovedMap((prev) => ({ ...prev, [lotId]: next }))
+    if (next) setPendingReviewMap((prev) => ({ ...prev, [lotId]: false }))
+    setActionError(null)
+    startTransition(async () => {
+      const fd = new FormData()
+      fd.set('lot_id', lotId)
+      fd.set('value', String(next))
+      const result = await toggleApprovedForInvoicing(null, fd)
+      if (result?.error) {
+        setApprovedMap((prev) => ({ ...prev, [lotId]: current }))
         setActionError(result.error)
       }
     })
@@ -640,8 +686,10 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
 
       {/* Site cards */}
       {sites.map((site) => {
-        const isExpanded = expandedSites.has(site.id)
-        const totalLots  = site.stages.reduce((n, st) => n + st.lots.length, 0)
+        const isExpanded        = expandedSites.has(site.id)
+        const totalLots         = site.stages.reduce((n, st) => n + st.lots.length, 0)
+        const sitePendingCount  = site.stages.reduce((n, st) => n + st.lots.filter((l) => pendingReviewMap[l.id] ?? l.pendingReview).length, 0)
+        const siteApprovedCount = site.stages.reduce((n, st) => n + st.lots.filter((l) => approvedMap[l.id] ?? l.approvedForInvoicing).length, 0)
 
         return (
           <div key={site.id} className="rounded-xl border border-border bg-surface overflow-hidden">
@@ -659,8 +707,10 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
               {site.clientContact && (
                 <span className="text-xs text-fg-muted shrink-0 hidden sm:block">{site.clientContact}</span>
               )}
-              <span className="text-xs text-fg-muted shrink-0">
-                {site.stages.length} stage{site.stages.length !== 1 ? 's' : ''} · {totalLots} lot{totalLots !== 1 ? 's' : ''}
+              <span className="text-xs text-fg-muted shrink-0 flex items-center gap-2">
+                <span>{site.stages.length} stage{site.stages.length !== 1 ? 's' : ''} · {totalLots} lot{totalLots !== 1 ? 's' : ''}</span>
+                {sitePendingCount > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">{sitePendingCount} pending</span>}
+                {siteApprovedCount > 0 && <span className="rounded-full bg-accent-dim px-2 py-0.5 text-xs text-accent-fg">{siteApprovedCount} approved</span>}
               </span>
             </button>
 
@@ -670,8 +720,11 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
                   const totStd        = stage.lots.reduce((s, l) => s + (l.contractPrice != null ? 0 : l.standardAmount), 0)
                   const totExtra      = stage.lots.reduce((s, l) => s + (l.contractPrice != null ? 0 : l.clientExtrasAmount), 0)
                   const totContract   = stage.lots.reduce((s, l) => s + (l.contractPrice ?? 0), 0)
-                  const totAmt        = totStd + totExtra + totContract
-                  const allSel        = stage.lots.length > 0 && stage.lots.every((l) => selectedLots.has(l.id))
+                  const totAmt             = totStd + totExtra + totContract
+                  const totEstimate        = stage.lots.reduce((s, l) => s + (l.estimateTotal ?? 0), 0)
+                  const stagePendingCount  = stage.lots.filter((l) => pendingReviewMap[l.id] ?? l.pendingReview).length
+                  const stageApprovedCount = stage.lots.filter((l) => approvedMap[l.id] ?? l.approvedForInvoicing).length
+                  const allSel             = stage.lots.length > 0 && stage.lots.every((l) => selectedLots.has(l.id))
                   const someSel       = stage.lots.some((l) => selectedLots.has(l.id))
                   const summaryId     = `summary-${stage.id}`
                   const isStageExpanded = expandedStages.has(stage.id)
@@ -698,10 +751,14 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
                             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                           </svg>
                           <h3 className="text-sm font-semibold text-fg-secondary">{stage.name}</h3>
-                          <span className="text-xs text-fg-muted">
-                            {stage.lots.length} lot{stage.lots.length !== 1 ? 's' : ''}
-                            {stage.extraJobs.length > 0 && ` · ${stage.extraJobs.length} extra job${stage.extraJobs.length !== 1 ? 's' : ''}`}
-                            {totAmt > 0 && ` · ${fmt(totAmt)}`}
+                          <span className="text-xs text-fg-muted flex items-center gap-2">
+                            <span>
+                              {stage.lots.length} lot{stage.lots.length !== 1 ? 's' : ''}
+                              {stage.extraJobs.length > 0 && ` · ${stage.extraJobs.length} extra job${stage.extraJobs.length !== 1 ? 's' : ''}`}
+                              {totAmt > 0 && ` · ${fmt(totAmt)}`}
+                            </span>
+                            {stagePendingCount > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">{stagePendingCount} pending</span>}
+                            {stageApprovedCount > 0 && <span className="rounded-full bg-accent-dim px-2 py-0.5 text-xs text-accent-fg">{stageApprovedCount} approved</span>}
                           </span>
                         </button>
                         <button
@@ -726,6 +783,9 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
                               <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 pr-6 whitespace-nowrap">Lot</th>
                               <th className="text-center text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Build Complete</th>
                               <th className="text-center text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Quant Done</th>
+                              <th className="text-center text-xs font-semibold text-amber-600 uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Pending</th>
+                              <th className="text-center text-xs font-semibold text-accent-fg uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Approved</th>
+                              <th className="text-right text-xs font-semibold text-fg-muted uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Estimate</th>
                               <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Standard Amount</th>
                               <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Client Extras</th>
                               <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Total</th>
@@ -767,6 +827,37 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
                                   <td className="py-2.5 px-3 text-center">
                                     {lot.quantDone ? <span className="text-green-600 font-semibold">✓</span> : <span className="text-fg-muted">—</span>}
                                   </td>
+                                  <td className="py-2.5 px-3 text-center" onClick={e => e.stopPropagation()}>
+                                    <button
+                                      type="button"
+                                      disabled={!isAdmin || isPending}
+                                      onClick={() => handleTogglePendingReview(lot.id, pendingReviewMap[lot.id] ?? lot.pendingReview)}
+                                      className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors whitespace-nowrap ${
+                                        (pendingReviewMap[lot.id] ?? lot.pendingReview)
+                                          ? 'bg-amber-100 text-amber-700'
+                                          : 'text-fg-muted hover:bg-surface-raised'
+                                      } disabled:opacity-40`}
+                                    >
+                                      {(pendingReviewMap[lot.id] ?? lot.pendingReview) ? 'Pending' : '—'}
+                                    </button>
+                                  </td>
+                                  <td className="py-2.5 px-3 text-center" onClick={e => e.stopPropagation()}>
+                                    <button
+                                      type="button"
+                                      disabled={!isAdmin || isPending}
+                                      onClick={() => handleToggleApprovedForInvoicing(lot.id, approvedMap[lot.id] ?? lot.approvedForInvoicing)}
+                                      className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors whitespace-nowrap ${
+                                        (approvedMap[lot.id] ?? lot.approvedForInvoicing)
+                                          ? 'bg-accent-dim text-accent-fg'
+                                          : 'text-fg-muted hover:bg-surface-raised'
+                                      } disabled:opacity-40`}
+                                    >
+                                      {(approvedMap[lot.id] ?? lot.approvedForInvoicing) ? 'Approved' : '—'}
+                                    </button>
+                                  </td>
+                                  <td className="py-2.5 px-3 text-right tabular-nums text-fg-muted">
+                                    {lot.estimateTotal != null ? fmt(lot.estimateTotal) : <span className="text-fg-muted">—</span>}
+                                  </td>
                                   <td className="py-2.5 px-3 text-right tabular-nums text-fg-secondary">
                                     {lot.contractPrice != null ? <span className="text-fg-muted">—</span> : fmt(lot.standardAmount)}
                                   </td>
@@ -800,7 +891,8 @@ export default function InvoicesView({ sites }: { sites: SiteData[] }) {
                             })}
 
                             <tr className="border-t-2 border-border bg-surface-raised">
-                              <td colSpan={4} className="py-2.5 pr-6 font-semibold text-fg-secondary">Stage Total</td>
+                              <td colSpan={6} className="py-2.5 pr-6 font-semibold text-fg-secondary">Stage Total</td>
+                              <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg-muted">{totEstimate > 0 ? fmt(totEstimate) : <span className="text-fg-muted">—</span>}</td>
                               <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg-secondary">{fmt(totStd)}</td>
                               <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg-secondary">
                                 {totExtra > 0 ? fmt(totExtra) : <span className="text-fg-muted">—</span>}

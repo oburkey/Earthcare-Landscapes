@@ -6,6 +6,7 @@ import Greeting from './Greeting'
 import FortnightCalendar, { type CalendarItem } from './FortnightCalendar'
 import ExtraJobsList, { type ExtraJobItem } from './ExtraJobsList'
 import PreStartsWeek, { type PreStartDay } from './PreStartsWeek'
+import QuickAddExtraJobModal from './QuickAddExtraJobModal'
 import type { ExtraJobStatus } from '@/types/database'
 
 export const metadata = { title: 'Dashboard — Earthcare Landscapes' }
@@ -22,6 +23,7 @@ export default async function DashboardPage() {
   const profile = await requireAuth()
   const isLeadingHand = ['leading_hand', 'supervisor', 'admin'].includes(profile.role)
   const isSupervisor  = ['supervisor', 'admin'].includes(profile.role)
+  const isAdmin       = profile.role === 'admin'
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -43,6 +45,9 @@ export default async function DashboardPage() {
   let vehicleAlertCount = 0
   let incidentCount = 0
   let overdueLotCount = 0
+  let pendingReviewCount = 0
+  let approvedForInvoicingCount = 0
+  let sitesForModal: Array<{ id: string; name: string; stages: Array<{ id: string; name: string }> }> = []
 
   // All roles: fortnight lots + trade status
   try {
@@ -74,6 +79,21 @@ export default async function DashboardPage() {
     // graceful fallback
   }
 
+  // Admin: pending review + approved for invoicing counts
+  if (isAdmin) {
+    try {
+      const supabase = await createClient()
+      const [{ count: pCount }, { count: aCount }] = await Promise.all([
+        supabase.from('lots').select('id', { count: 'exact', head: true }).eq('pending_review', true),
+        supabase.from('lots').select('id', { count: 'exact', head: true }).eq('approved_for_invoicing', true),
+      ])
+      pendingReviewCount = pCount ?? 0
+      approvedForInvoicingCount = aCount ?? 0
+    } catch {
+      // columns may not exist yet
+    }
+  }
+
   // Leading hand+: recent incidents
   if (isLeadingHand) {
     try {
@@ -90,9 +110,28 @@ export default async function DashboardPage() {
     }
   }
 
-  // Supervisor+: pre-starts this week + vehicle alerts
+  // Supervisor+: sites+stages for quick-add modal + pre-starts this week + vehicle alerts
   if (isSupervisor) {
     const supabase = await createClient()
+
+    try {
+      const { data: sitesRaw } = await supabase
+        .from('sites')
+        .select('id, name, stages(id, name, order)')
+        .is('completed_at', null)
+        .order('name', { ascending: true })
+      sitesForModal = (sitesRaw ?? []).map((s) => ({
+        id: s.id,
+        name: s.name,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        stages: [...((s.stages as any[]) ?? [])]
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
+          .map((st: { id: string; name: string }) => ({ id: st.id, name: st.name })),
+      }))
+    } catch {
+      // graceful fallback — modal button won't show
+    }
 
     const dayOfWeek = today.getDay()
     const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
@@ -228,7 +267,14 @@ export default async function DashboardPage() {
     <div className="min-h-screen bg-bg">
       <div className="mx-auto max-w-4xl px-4 py-6 space-y-6">
 
-        <Greeting name={profile.first_name} />
+        <div className="flex items-start justify-between gap-3">
+          <Greeting name={profile.first_name} />
+          {isSupervisor && sitesForModal.length > 0 && (
+            <div className="hidden sm:block shrink-0 pt-1">
+              <QuickAddExtraJobModal sites={sitesForModal} />
+            </div>
+          )}
+        </div>
 
         {/* Section 1 — Summary cards (all roles) */}
         <div className="grid grid-cols-3 gap-3">
@@ -251,6 +297,24 @@ export default async function DashboardPage() {
             href="/schedule"
           />
         </div>
+
+        {/* Section 1b — Invoicing cards (admin only) */}
+        {isAdmin && (
+          <div className="grid grid-cols-2 gap-3">
+            <MetricCard
+              label="Pending review"
+              value={pendingReviewCount}
+              color={pendingReviewCount > 0 ? 'amber' : 'green'}
+              href="/invoices"
+            />
+            <MetricCard
+              label="Approved for invoicing"
+              value={approvedForInvoicingCount}
+              color={approvedForInvoicingCount > 0 ? 'blue' : 'green'}
+              href="/invoices"
+            />
+          </div>
+        )}
 
         {/* Section 2 — Fortnight calendar (all roles) */}
         <section>

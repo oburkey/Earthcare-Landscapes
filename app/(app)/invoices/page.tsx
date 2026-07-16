@@ -1,7 +1,11 @@
 import { requireAuth, requireRole } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import InvoicesView from './InvoicesView'
+import ApprovedPanel from './ApprovedPanel'
+import InvoiceHistory from './InvoiceHistory'
 import type { SiteData, StageData, LotRow, LotSection, ExtraJobRow } from './InvoicesView'
+import type { ApprovedLot, ApprovedExtraJob } from './ApprovedPanel'
+import type { InvoiceRun } from './InvoiceHistory'
 import { getExtraJobsPricing } from '@/app/(app)/sites/[siteId]/stages/[stageId]/extra-jobs/[extraJobId]/pricing-actions'
 
 export const metadata = { title: 'Invoices — Earthcare Landscapes' }
@@ -13,26 +17,45 @@ export default async function InvoicesPage() {
   const supabase = await createClient()
 
   // ── Query 1: Sites → stages → lots ───────────────────────────────────────
-  const { data: sitesRaw } = await supabase
-    .from('sites')
-    .select(`
-      id, name, client_contact, completed_at, has_client_extras,
-      stages(id, name, order, is_contract_pricing,
-        lots(id, lot_number, build_complete, quant_done, invoiced, has_client_extras, contract_price),
-        extra_jobs(id, title, status)
-      )
-    `)
-    .order('name')
-
-  // Filter to active (non-completed) sites
+  // Try with new columns; fall back if SQL migration hasn't run yet.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const activeSites = (sitesRaw ?? []).filter((s: any) => !s.completed_at)
+  let activeSites: any[] = []
+  {
+    const { data, error } = await supabase
+      .from('sites')
+      .select(`
+        id, name, client_contact, completed_at, has_client_extras,
+        stages(id, name, order, completed_at, is_contract_pricing,
+          lots(id, lot_number, build_complete, quant_done, invoiced, pending_review, approved_for_invoicing, has_client_extras, contract_price),
+          extra_jobs(id, title, status)
+        )
+      `)
+      .order('name')
 
-  // Collect all lot IDs across all active stages (no status filter — show everything)
+    if (!error && data) {
+      activeSites = data.filter((s: any) => !s.completed_at)
+    } else {
+      // Fallback: query without new columns
+      const fallback = await supabase
+        .from('sites')
+        .select(`
+          id, name, client_contact, completed_at, has_client_extras,
+          stages(id, name, order, is_contract_pricing,
+            lots(id, lot_number, build_complete, quant_done, invoiced, has_client_extras, contract_price),
+            extra_jobs(id, title, status)
+          )
+        `)
+        .order('name')
+      activeSites = (fallback.data ?? []).filter((s: any) => !s.completed_at)
+    }
+  }
+
+  // Collect all lot IDs (across all active, non-completed stages)
   const allLotIds: string[] = []
   for (const site of activeSites) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const stage of (site.stages ?? []) as any[]) {
+      if (stage.completed_at) continue  // skip completed stages
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const lot of (stage.lots ?? []) as any[]) {
         allLotIds.push(lot.id)
@@ -40,11 +63,12 @@ export default async function InvoicesPage() {
     }
   }
 
-  // Collect all extra job IDs (from all active stages, regardless of lot status)
+  // Collect all extra job IDs
   const allExtraJobIds: string[] = []
   for (const site of activeSites) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const stage of (site.stages ?? []) as any[]) {
+      if (stage.completed_at) continue
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const job of (stage.extra_jobs ?? []) as any[]) {
         allExtraJobIds.push(job.id)
@@ -52,27 +76,25 @@ export default async function InvoicesPage() {
     }
   }
 
-  // Fetch extra job pricing totals (server action callable from server component)
+  // Extra job pricing
   const extraJobPricingData = allExtraJobIds.length > 0
     ? await getExtraJobsPricing(allExtraJobIds)
     : []
   const extraJobTotalById = new Map(extraJobPricingData.map((d) => [d.id, d.total]))
 
-  // ── Query 2: All quotes for qualifying lots (best quote per lot selected in JS) ──
-  // Scoring: approved > submitted > draft; final > estimated (matching MaterialsSummary logic)
+  // ── Query 2: Quotes — separate estimate vs final per lot ──────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function bestQuoteScore(q: any): number {
     const statusScore = q.status === 'approved' ? 3 : q.status === 'submitted' ? 2 : 1
-    const typeScore   = q.is_estimated ? 0 : 1   // final preferred over estimated
-    return statusScore * 10 + typeScore
+    return statusScore
   }
 
   type AmountData = { standard: number; extras: number; sections: LotSection[] }
-  const amountByLot = new Map<string, AmountData>()
+  const amountByLot   = new Map<string, AmountData>()
+  const estimateByLot = new Map<string, number>()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function buildSections(items: any[]): { standard: number; extras: number; sections: LotSection[] } {
-    // Group items by section_id, compute amounts, sort for PDF output
+  function buildSections(items: any[]): AmountData {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sectionMap = new Map<string, any>()
     let standard = 0, extras = 0
@@ -99,7 +121,7 @@ export default async function InvoicesPage() {
       if (isExtra) extras += amount
       else standard += amount
 
-      if (qty === 0) continue  // zero-qty items don't appear in PDF
+      if (qty === 0) continue
 
       if (!sectionMap.has(sectionId)) {
         sectionMap.set(sectionId, { name: sectionName, isClientExtra: isExtra, orderIndex: sectionOrder, items: [] })
@@ -127,7 +149,7 @@ export default async function InvoicesPage() {
           isClientExtra: s.isClientExtra,
           orderIndex:    s.orderIndex,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          items:         sortedItems.map((i: any) => ({
+          items: sortedItems.map((i: any) => ({
             name:     i.name,
             quantity: i.quantity,
             unit:     i.unit,
@@ -158,26 +180,63 @@ export default async function InvoicesPage() {
 
     if (quotesResult.data) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const byLot = new Map<string, any[]>()
+      const byLot = new Map<string, { finals: any[]; estimates: any[] }>()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const q of quotesResult.data as any[]) {
-        const arr = byLot.get(q.lot_id) ?? []
-        arr.push(q)
-        byLot.set(q.lot_id, arr)
+        if (!byLot.has(q.lot_id)) byLot.set(q.lot_id, { finals: [], estimates: [] })
+        if (q.is_estimated) byLot.get(q.lot_id)!.estimates.push(q)
+        else byLot.get(q.lot_id)!.finals.push(q)
       }
-      for (const [lotId, quotes] of byLot) {
-        const best = [...quotes].sort((a, b) => bestQuoteScore(b) - bestQuoteScore(a))[0]
-        amountByLot.set(lotId, buildSections(best.lot_quote_items ?? []))
+
+      for (const [lotId, { finals, estimates }] of byLot) {
+        let estimateData: AmountData | null = null
+
+        if (estimates.length > 0) {
+          const best = [...estimates].sort((a, b) => bestQuoteScore(b) - bestQuoteScore(a))[0]
+          estimateData = buildSections(best.lot_quote_items ?? [])
+          estimateByLot.set(lotId, estimateData.standard + estimateData.extras)
+        }
+
+        if (finals.length > 0) {
+          const best = [...finals].sort((a, b) => bestQuoteScore(b) - bestQuoteScore(a))[0]
+          amountByLot.set(lotId, buildSections(best.lot_quote_items ?? []))
+        } else if (estimateData) {
+          // No final quote yet — use estimate sections as fallback for PDF
+          amountByLot.set(lotId, estimateData)
+        }
       }
     }
   }
 
-  // ── Build structured view data ────────────────────────────────────────────
+  // ── Invoice runs (graceful fallback if table doesn't exist) ───────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let invoiceRunsRaw: any[] = []
+  try {
+    const { data, error } = await supabase
+      .from('invoice_runs')
+      .select('id, invoiced_at, invoiced_by, total_amount, notes, lot_ids, extra_job_ids, profiles(first_name, last_name)')
+      .order('invoiced_at', { ascending: false })
+      .limit(50)
+    if (!error) invoiceRunsRaw = data ?? []
+  } catch {
+    // table doesn't exist yet — skip gracefully
+  }
+
+  const invoicedExtraJobIds = new Set<string>(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    invoiceRunsRaw.flatMap((r: any) => r.extra_job_ids ?? [])
+  )
+
+  // ── Build view data ───────────────────────────────────────────────────────
+  const approvedLots: ApprovedLot[]     = []
+  const approvedExtraJobs: ApprovedExtraJob[] = []
+
   const sites: SiteData[] = activeSites
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .map((site: any): SiteData => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const stages: StageData[] = ([...(site.stages ?? [])] as any[])
+        .filter((stage) => !stage.completed_at)  // exclude completed stages
         .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
         .map((stage): StageData => {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -187,29 +246,62 @@ export default async function InvoicesPage() {
             .map((lot): LotRow => {
               const amounts          = amountByLot.get(lot.id) ?? { standard: 0, extras: 0, sections: [] }
               const showClientExtras = siteShowClientExtras && (lot.has_client_extras ?? true)
+
+              // Collect approved lots for the panel
+              if (lot.approved_for_invoicing) {
+                approvedLots.push({
+                  id:                  lot.id,
+                  lotNumber:           lot.lot_number,
+                  siteName:            site.name,
+                  clientContact:       site.client_contact ?? null,
+                  siteId:              site.id,
+                  stageName:           stage.name,
+                  stageId:             stage.id,
+                  standardAmount:      amounts.standard,
+                  clientExtrasAmount:  showClientExtras ? amounts.extras : 0,
+                  contractPrice:       lot.contract_price != null ? Number(lot.contract_price) : null,
+                  showClientExtras,
+                  sections:            amounts.sections,
+                })
+              }
+
               return {
-                id:                 lot.id,
-                lotNumber:          lot.lot_number,
-                buildComplete:      lot.build_complete ?? false,
-                quantDone:          lot.quant_done     ?? false,
-                invoiced:           lot.invoiced        ?? false,
-                standardAmount:     amounts.standard,
-                clientExtrasAmount: showClientExtras ? amounts.extras : 0,
-                sections:           amounts.sections,
+                id:                   lot.id,
+                lotNumber:            lot.lot_number,
+                buildComplete:        lot.build_complete        ?? false,
+                quantDone:            lot.quant_done            ?? false,
+                invoiced:             lot.invoiced              ?? false,
+                pendingReview:        lot.pending_review        ?? false,
+                approvedForInvoicing: lot.approved_for_invoicing ?? false,
+                standardAmount:       amounts.standard,
+                clientExtrasAmount:   showClientExtras ? amounts.extras : 0,
+                estimateTotal:        estimateByLot.get(lot.id) ?? null,
+                sections:             amounts.sections,
                 showClientExtras,
-                contractPrice:      lot.contract_price != null ? Number(lot.contract_price) : null,
+                contractPrice:        lot.contract_price != null ? Number(lot.contract_price) : null,
               }
             })
             .sort((a, b) =>
               a.lotNumber.localeCompare(b.lotNumber, undefined, { numeric: true })
             )
+
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const extraJobs: ExtraJobRow[] = ((stage.extra_jobs ?? []) as any[]).map((j): ExtraJobRow => ({
-            id:     j.id,
-            title:  j.title,
-            status: j.status,
-            total:  extraJobTotalById.get(j.id) ?? 0,
-          }))
+          const extraJobs: ExtraJobRow[] = ((stage.extra_jobs ?? []) as any[]).map((j): ExtraJobRow => {
+            const total = extraJobTotalById.get(j.id) ?? 0
+            // Collect non-invoiced extra jobs with pricing for the panel
+            if (!invoicedExtraJobIds.has(j.id) && total > 0) {
+              approvedExtraJobs.push({
+                id:       j.id,
+                title:    j.title,
+                siteName: site.name,
+                siteId:   site.id,
+                stageId:  stage.id,
+                amount:   total,
+              })
+            }
+            return { id: j.id, title: j.title, status: j.status, total }
+          })
+
           return { id: stage.id, name: stage.name, lots, extraJobs }
         })
         .filter((st) => st.lots.length > 0 || st.extraJobs.length > 0)
@@ -217,11 +309,49 @@ export default async function InvoicesPage() {
     })
     .filter((s) => s.stages.length > 0)
 
+  // ── Invoice history ───────────────────────────────────────────────────────
+  // Build lookup maps for resolving IDs in history
+  const lotById = new Map<string, { lotNumber: string; siteName: string; stageName: string }>()
+  const extraJobById = new Map<string, { title: string; siteName: string }>()
+  for (const site of activeSites as any[]) {
+    for (const stage of (site.stages ?? []) as any[]) {
+      for (const lot of (stage.lots ?? []) as any[]) {
+        lotById.set(lot.id, { lotNumber: lot.lot_number, siteName: site.name, stageName: stage.name })
+      }
+      for (const job of (stage.extra_jobs ?? []) as any[]) {
+        extraJobById.set(job.id, { title: job.title, siteName: site.name })
+      }
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const invoiceHistory: InvoiceRun[] = invoiceRunsRaw.map((r: any): InvoiceRun => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const profileData = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles as any
+    const lotIds: string[]      = r.lot_ids      ?? []
+    const extraJobIds: string[] = r.extra_job_ids ?? []
+    return {
+      id:               r.id,
+      invoicedAt:       r.invoiced_at,
+      invoicedByName:   profileData
+        ? `${profileData.first_name ?? ''} ${profileData.last_name ?? ''}`.trim() || null
+        : null,
+      totalAmount:      r.total_amount,
+      notes:            r.notes,
+      lotCount:         lotIds.length,
+      extraJobCount:    extraJobIds.length,
+      lotDetails:       lotIds.map((id) => lotById.get(id) ?? { lotNumber: id.slice(0, 8), siteName: '—', stageName: '—' }),
+      extraJobDetails:  extraJobIds.map((id) => extraJobById.get(id) ?? { title: id.slice(0, 8), siteName: '—' }),
+    }
+  })
+
   return (
     <div className="min-h-screen bg-bg">
       <div className="mx-auto max-w-6xl px-4 py-6 space-y-5">
         <h1 className="text-xl font-semibold text-fg">Invoices</h1>
-        <InvoicesView sites={sites} />
+        <ApprovedPanel lots={approvedLots} extraJobs={approvedExtraJobs} />
+        <InvoicesView sites={sites} isAdmin={true} />
+        <InvoiceHistory runs={invoiceHistory} />
       </div>
     </div>
   )

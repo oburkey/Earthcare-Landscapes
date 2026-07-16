@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toggleLotFlag } from './actions'
 
-type Flag = 'build_complete' | 'quant_done' | 'invoiced' | 'has_client_extras'
+type Flag = 'build_complete' | 'quant_done' | 'invoiced' | 'has_client_extras' | 'pending_review' | 'approved_for_invoicing'
 
 interface Props {
   lotId: string
@@ -15,6 +15,8 @@ interface Props {
   invoiced: boolean
   hasClientExtras: boolean
   siteHasClientExtras: boolean
+  pendingReview: boolean
+  approvedForInvoicing: boolean
   canSupervise: boolean
   isAdmin: boolean
 }
@@ -26,21 +28,26 @@ export default function LotStatusToggles({
   invoiced: initInvoiced,
   hasClientExtras: initClientExtras,
   siteHasClientExtras,
+  pendingReview: initPendingReview,
+  approvedForInvoicing: initApprovedForInvoicing,
   canSupervise,
   isAdmin,
 }: Props) {
   const router = useRouter()
-  const [buildComplete,   setBuildComplete]   = useState(initBuild)
-  const [quantDone,       setQuantDone]       = useState(initQuant)
-  const [invoiced,        setInvoiced]        = useState(initInvoiced)
-  const [hasClientExtras, setHasClientExtras] = useState(initClientExtras)
-  const [error, setError]                     = useState<string | null>(null)
-  const [isPending, startTransition]          = useTransition()
+  const [buildComplete,        setBuildComplete]        = useState(initBuild)
+  const [quantDone,            setQuantDone]            = useState(initQuant)
+  const [invoiced,             setInvoiced]             = useState(initInvoiced)
+  const [hasClientExtras,      setHasClientExtras]      = useState(initClientExtras)
+  const [pendingReview,        setPendingReview]        = useState(initPendingReview)
+  const [approvedForInvoicing, setApprovedForInvoicing] = useState(initApprovedForInvoicing)
+  const [error, setError]             = useState<string | null>(null)
+  const [isPending, startTransition]  = useTransition()
 
   function toggle(flag: Flag, current: boolean, set: (v: boolean) => void, refresh = false) {
     const next = !current
     set(next)
     setError(null)
+    if (flag === 'approved_for_invoicing' && next) setPendingReview(false)
     startTransition(async () => {
       const fd = new FormData()
       fd.set('lot_id',   lotId)
@@ -104,6 +111,24 @@ export default function LotStatusToggles({
               title={!siteHasClientExtras ? 'Disabled at site level' : undefined}
             >
               Client Extras
+            </button>
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => toggle('pending_review', pendingReview, setPendingReview)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors disabled:opacity-60 ${
+                pendingReview ? 'bg-amber-100 text-amber-700' : 'bg-surface-raised text-fg-muted hover:bg-surface-raised'
+              }`}
+            >
+              Pending Review
+            </button>
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => toggle('approved_for_invoicing', approvedForInvoicing, setApprovedForInvoicing)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors disabled:opacity-60 ${pill(approvedForInvoicing)}`}
+            >
+              Approved for Invoicing
             </button>
           </>
         )}

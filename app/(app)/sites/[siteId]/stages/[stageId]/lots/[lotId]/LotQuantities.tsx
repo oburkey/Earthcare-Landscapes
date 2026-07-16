@@ -46,6 +46,7 @@ type Props = {
   stageId: string
   isAdmin: boolean
   canManage: boolean
+  canSupervise?: boolean
   sections: TemplateSection[]
   estimatedQuote: QuoteData
   finalQuote: QuoteData
@@ -129,7 +130,7 @@ const DEFAULT_YES_TOGGLES = new Set<string>([])
 
 export default function LotQuantities({
   lotId, siteId, stageId,
-  isAdmin, canManage,
+  isAdmin, canManage, canSupervise,
   sections, estimatedQuote, finalQuote,
   showClientExtras = true,
   contractPrice,
@@ -310,7 +311,8 @@ export default function LotQuantities({
 
   const currentStatus = activeQuote?.status ?? 'draft'
   const isApproved    = currentStatus === 'approved'
-  const disabled      = isApproved || !canManage
+  const disabled            = isApproved || !canManage
+  const fineGradingDisabled = isApproved || !(canSupervise ?? canManage)
 
   const colClass = isAdmin
     ? 'grid-cols-[1fr_100px_80px_80px]'
@@ -547,6 +549,7 @@ export default function LotQuantities({
             const lineTotal   = isAdmin && item.unit_price != null
               ? resolvedQty * item.unit_price
               : null
+            const isFineGrading = item.name.toLowerCase().includes('fine grading')
 
             return (
               <div key={item.id} className={`grid gap-3 px-4 py-3 border-b border-border-subtle items-center ${colClass}`}>
@@ -558,7 +561,7 @@ export default function LotQuantities({
                     step="any"
                     value={values[item.id] ?? ''}
                     onChange={(e) => setVal(item.id, e.target.value)}
-                    disabled={disabled}
+                    disabled={isFineGrading ? fineGradingDisabled : disabled}
                     placeholder="0"
                     className="w-16 rounded-lg border border-border bg-surface px-2 py-2 text-sm text-fg text-right tabular-nums focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 disabled:bg-surface-raised disabled:text-fg-muted"
                   />

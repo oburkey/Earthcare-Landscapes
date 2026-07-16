@@ -10,7 +10,7 @@ import { CHECKLIST_SECTIONS, GATING_ITEM_KEYS } from '@/lib/checklist'
 import type { ActionState } from '@/types/actions'
 
 const SUPERVISOR_FLAGS = ['build_complete', 'quant_done'] as const
-const ADMIN_FLAGS      = ['invoiced', 'has_client_extras'] as const
+const ADMIN_FLAGS      = ['invoiced', 'has_client_extras', 'pending_review', 'approved_for_invoicing'] as const
 type LotFlag = typeof SUPERVISOR_FLAGS[number] | typeof ADMIN_FLAGS[number]
 
 export async function toggleLotFlag(
@@ -29,7 +29,7 @@ export async function toggleLotFlag(
   if (!allFlags.includes(flag)) return { error: 'Invalid flag.' }
 
   if ((ADMIN_FLAGS as readonly string[]).includes(flag)) {
-    if (profile.role !== 'admin') return { error: 'Only admins can toggle Invoiced.' }
+    if (profile.role !== 'admin') return { error: 'Only admins can toggle this flag.' }
   } else {
     if (profile.role !== 'supervisor' && profile.role !== 'admin') {
       return { error: 'Only supervisors and admins can toggle this.' }
@@ -40,6 +40,9 @@ export async function toggleLotFlag(
   const update: Record<string, unknown> = { [flag as LotFlag]: value }
   if (flag === 'build_complete') {
     update.build_completed_at = value ? new Date().toISOString() : null
+  }
+  if (flag === 'approved_for_invoicing' && value === true) {
+    update.pending_review = false
   }
   const { error } = await supabase
     .from('lots')

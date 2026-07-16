@@ -96,6 +96,47 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
     if (insertError) return { error: insertError.message }
   }
 
+  // When saving an estimate, auto-copy fine grading values to the final quote
+  // if the final quote doesn't already have that item entered.
+  if (isEstimated) {
+    const fineGradingItems = items.filter(
+      (i) => i.quantity != null && i.item_name.toLowerCase().includes('fine grading')
+    )
+    if (fineGradingItems.length > 0) {
+      const { data: finalQuote } = await supabase
+        .from('lot_quotes')
+        .select('id, lot_quote_items(template_item_id, quantity)')
+        .eq('lot_id', lotId)
+        .eq('is_estimated', false)
+        .maybeSingle()
+
+      if (finalQuote) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const existingIds = new Set(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ((finalQuote.lot_quote_items as any[]) ?? [])
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .filter((qi: any) => qi.quantity != null)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .map((qi: any) => qi.template_item_id)
+        )
+        const toCarry = fineGradingItems.filter((i) => !existingIds.has(i.template_item_id))
+        if (toCarry.length > 0) {
+          await supabase.from('lot_quote_items').insert(
+            toCarry.map((i) => ({
+              quote_id:            finalQuote.id,
+              template_item_id:    i.template_item_id,
+              item_name:           i.item_name,
+              unit:                i.unit,
+              quantity:            i.quantity,
+              unit_price_snapshot: i.unit_price_snapshot,
+            }))
+          )
+        }
+      }
+    }
+  }
+
   revalidatePath(`/sites/${siteId}/stages/${stageId}/lots/${lotId}`)
   revalidatePath(`/sites/${siteId}/stages/${stageId}`)
   revalidateTag('stages')

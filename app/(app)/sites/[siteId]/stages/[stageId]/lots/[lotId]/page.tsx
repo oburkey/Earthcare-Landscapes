@@ -61,6 +61,7 @@ export default async function LotPage({ params }: Props) {
       .select(`
         id, lot_number, status, due_date, scheduled_date, completion_date, notes,
         build_complete, quant_done, invoiced, has_client_extras, extras_notes, contract_price,
+        pending_review, approved_for_invoicing,
         stages!inner(id, name, is_contract_pricing, default_contract_price, sites!inner(id, name, has_client_extras))
       `)
       .eq('id', lotId)
@@ -130,12 +131,14 @@ export default async function LotPage({ params }: Props) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const lotAny          = lot as any
-  const buildComplete   = lotAny?.build_complete   ?? false
-  const quantDone       = lotAny?.quant_done       ?? false
-  const invoiced        = lotAny?.invoiced          ?? false
-  const lotClientExtras = lotAny?.has_client_extras ?? true
-  const extrasNotes     = lotAny?.extras_notes      ?? null
-  const contractPrice   = lotAny?.contract_price != null ? Number(lotAny.contract_price) : null
+  const buildComplete          = lotAny?.build_complete          ?? false
+  const quantDone              = lotAny?.quant_done              ?? false
+  const invoiced               = lotAny?.invoiced                ?? false
+  const lotClientExtras        = lotAny?.has_client_extras       ?? true
+  const extrasNotes            = lotAny?.extras_notes            ?? null
+  const contractPrice          = lotAny?.contract_price != null ? Number(lotAny.contract_price) : null
+  const pendingReview          = lotAny?.pending_review          ?? false
+  const approvedForInvoicing   = lotAny?.approved_for_invoicing  ?? false
 
   const stage = Array.isArray(lot.stages) ? lot.stages[0] : lot.stages as { id: string; name: string; sites: unknown }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -293,6 +296,8 @@ export default async function LotPage({ params }: Props) {
             invoiced={invoiced}
             hasClientExtras={lotClientExtras}
             siteHasClientExtras={siteClientExtras}
+            pendingReview={pendingReview}
+            approvedForInvoicing={approvedForInvoicing}
             canSupervise={canSupervise}
             isAdmin={isAdmin}
           />
@@ -352,6 +357,7 @@ export default async function LotPage({ params }: Props) {
               stageId={stageId}
               isAdmin={isAdmin}
               canManage={canManage}
+              canSupervise={canSupervise}
               sections={sections}
               estimatedQuote={shapeQuote(estimatedQuote)}
               finalQuote={shapeQuote(finalQuote)}
