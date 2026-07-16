@@ -71,26 +71,6 @@ function hazardTable(rows: Array<[string, string, string, string]>): string {
   </table>`
 }
 
-function signOnTable(n = 10): string {
-  const blank = Array(n).fill(
-    `<tr>
-      <td style="${TD};height:34px;width:25%;"></td>
-      <td style="${TD};width:20%;"></td>
-      <td style="${TD};width:35%;"></td>
-      <td style="${TD};width:20%;"></td>
-    </tr>`
-  ).join('')
-  return `<table style="${TAB}">
-    <thead><tr>
-      <th style="${TH};width:25%;">Name (print)</th>
-      <th style="${TH};width:20%;">Company</th>
-      <th style="${TH};width:35%;">Signature</th>
-      <th style="${TH};width:20%;">Date</th>
-    </tr></thead>
-    <tbody>${blank}</tbody>
-  </table>`
-}
-
 // ── High risk construction work categories (WA WHS Regs Schedule 5) ───────────
 
 const HRWL_CATEGORIES = [

@@ -33,7 +33,7 @@ export default async function InvoicesPage() {
       .order('name')
 
     if (!error && data) {
-      activeSites = data.filter((s: any) => !s.completed_at)
+      activeSites = data.filter((s) => !s.completed_at)
     } else {
       // Fallback: query without new columns
       const fallback = await supabase
@@ -46,7 +46,7 @@ export default async function InvoicesPage() {
           )
         `)
         .order('name')
-      activeSites = (fallback.data ?? []).filter((s: any) => !s.completed_at)
+      activeSites = (fallback.data ?? []).filter((s) => !s.completed_at)
     }
   }
 
@@ -313,12 +313,12 @@ export default async function InvoicesPage() {
   // Build lookup maps for resolving IDs in history
   const lotById = new Map<string, { lotNumber: string; siteName: string; stageName: string }>()
   const extraJobById = new Map<string, { title: string; siteName: string }>()
-  for (const site of activeSites as any[]) {
-    for (const stage of (site.stages ?? []) as any[]) {
-      for (const lot of (stage.lots ?? []) as any[]) {
+  for (const site of activeSites) {
+    for (const stage of (site.stages ?? [])) {
+      for (const lot of (stage.lots ?? [])) {
         lotById.set(lot.id, { lotNumber: lot.lot_number, siteName: site.name, stageName: stage.name })
       }
-      for (const job of (stage.extra_jobs ?? []) as any[]) {
+      for (const job of (stage.extra_jobs ?? [])) {
         extraJobById.set(job.id, { title: job.title, siteName: site.name })
       }
     }

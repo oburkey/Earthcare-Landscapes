@@ -111,7 +111,6 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
         .maybeSingle()
 
       if (finalQuote) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const existingIds = new Set(
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ((finalQuote.lot_quote_items as any[]) ?? [])
