@@ -709,7 +709,7 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
               )}
               <span className="text-xs text-fg-muted shrink-0 flex items-center gap-2">
                 <span>{site.stages.length} stage{site.stages.length !== 1 ? 's' : ''} · {totalLots} lot{totalLots !== 1 ? 's' : ''}</span>
-                {sitePendingCount > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">{sitePendingCount} pending</span>}
+                {sitePendingCount > 0 && <span className="rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-400">{sitePendingCount} pending</span>}
                 {siteApprovedCount > 0 && <span className="rounded-full bg-accent-dim px-2 py-0.5 text-xs text-accent-fg">{siteApprovedCount} approved</span>}
               </span>
             </button>
@@ -757,7 +757,7 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                               {stage.extraJobs.length > 0 && ` · ${stage.extraJobs.length} extra job${stage.extraJobs.length !== 1 ? 's' : ''}`}
                               {totAmt > 0 && ` · ${fmt(totAmt)}`}
                             </span>
-                            {stagePendingCount > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">{stagePendingCount} pending</span>}
+                            {stagePendingCount > 0 && <span className="rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-400">{stagePendingCount} pending</span>}
                             {stageApprovedCount > 0 && <span className="rounded-full bg-accent-dim px-2 py-0.5 text-xs text-accent-fg">{stageApprovedCount} approved</span>}
                           </span>
                         </button>
@@ -818,7 +818,7 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                                   <td className="py-2.5 pr-6 font-medium text-fg whitespace-nowrap">
                                     Lot {lot.lotNumber}
                                     {lot.contractPrice != null && (
-                                      <span className="ml-1.5 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">Contract</span>
+                                      <span className="ml-1.5 rounded-full bg-purple-100 dark:bg-purple-900/30 px-2 py-0.5 text-xs font-medium text-purple-700 dark:text-purple-400">Contract</span>
                                     )}
                                   </td>
                                   <td className="py-2.5 px-3 text-center">
@@ -834,7 +834,7 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                                       onClick={() => handleTogglePendingReview(lot.id, pendingReviewMap[lot.id] ?? lot.pendingReview)}
                                       className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors whitespace-nowrap ${
                                         (pendingReviewMap[lot.id] ?? lot.pendingReview)
-                                          ? 'bg-amber-100 text-amber-700'
+                                          ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
                                           : 'text-fg-muted hover:bg-surface-raised'
                                       } disabled:opacity-40`}
                                     >
@@ -915,7 +915,7 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                               <div
                                 key={job.id}
                                 onClick={() => router.push(`/sites/${site.id}/stages/${stage.id}/extra-jobs/${job.id}`)}
-                                className={`flex items-center gap-3 px-4 py-2.5 transition-colors cursor-pointer ${selectedExtraJobs.has(job.id) ? 'bg-amber-50' : 'hover:bg-surface-raised'}`}
+                                className={`flex items-center gap-3 px-4 py-2.5 transition-colors cursor-pointer ${selectedExtraJobs.has(job.id) ? 'bg-amber-50 dark:bg-amber-900/20' : 'hover:bg-surface-raised'}`}
                               >
                                 <input
                                   type="checkbox"
@@ -945,7 +945,7 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
       })}
 
       {actionError && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{actionError}</p>
+        <p className="rounded-lg bg-red-50 dark:bg-red-900/20 px-3 py-2 text-sm text-red-700 dark:text-red-400">{actionError}</p>
       )}
     </div>
   )

@@ -117,7 +117,7 @@ export default function LotStatusToggles({
               disabled={isPending}
               onClick={() => toggle('pending_review', pendingReview, setPendingReview)}
               className={`rounded-full px-3 py-1 text-xs font-medium transition-colors disabled:opacity-60 ${
-                pendingReview ? 'bg-amber-100 text-amber-700' : 'bg-surface-raised text-fg-muted hover:bg-surface-raised'
+                pendingReview ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : 'bg-surface-raised text-fg-muted hover:bg-surface-raised'
               }`}
             >
               Pending Review
@@ -133,7 +133,7 @@ export default function LotStatusToggles({
           </>
         )}
       </div>
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
     </div>
   )
 }

@@ -232,13 +232,13 @@ export default function ApprovedPanel({
   if (total === 0) return null
 
   return (
-    <div className="rounded-xl border border-green-200 bg-accent-dim overflow-hidden">
+    <div className="rounded-xl border border-green-200 dark:border-green-800 bg-accent-dim overflow-hidden">
 
       {/* Header — always visible */}
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-green-50 transition-colors"
+        className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
       >
         <svg className={`h-4 w-4 text-accent-fg shrink-0 transition-transform ${open ? '' : '-rotate-90'}`}
           fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -255,20 +255,20 @@ export default function ApprovedPanel({
       </button>
 
       {open && (
-        <div className="border-t border-green-200 px-5 pb-5 space-y-4">
+        <div className="border-t border-green-200 dark:border-green-800 px-5 pb-5 space-y-4">
 
           {/* Lots */}
           {lots.length > 0 && (
             <div>
               <p className="text-xs font-semibold text-accent-fg uppercase tracking-wide pt-4 mb-2">Lots</p>
-              <div className="rounded-xl border border-green-200 overflow-hidden divide-y divide-green-100">
+              <div className="rounded-xl border border-green-200 dark:border-green-800 overflow-hidden divide-y divide-green-100 dark:divide-green-900">
                 {lots.map((lot) => {
                   const amount  = lot.contractPrice ?? (lot.standardAmount + lot.clientExtrasAmount)
                   const checked = selectedLotIds.has(lot.id)
                   return (
                     <label
                       key={lot.id}
-                      className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${checked ? 'bg-green-50' : 'bg-white hover:bg-green-50'}`}
+                      className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${checked ? 'bg-green-50 dark:bg-green-900/20' : 'bg-surface hover:bg-green-50 dark:hover:bg-green-900/20'}`}
                     >
                       <input
                         type="checkbox"
@@ -296,13 +296,13 @@ export default function ApprovedPanel({
           {extraJobs.length > 0 && (
             <div>
               <p className="text-xs font-semibold text-accent-fg uppercase tracking-wide mb-2">Extra Jobs</p>
-              <div className="rounded-xl border border-green-200 overflow-hidden divide-y divide-green-100">
+              <div className="rounded-xl border border-green-200 dark:border-green-800 overflow-hidden divide-y divide-green-100 dark:divide-green-900">
                 {extraJobs.map((job) => {
                   const checked = selectedJobIds.has(job.id)
                   return (
                     <label
                       key={job.id}
-                      className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${checked ? 'bg-green-50' : 'bg-white hover:bg-green-50'}`}
+                      className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${checked ? 'bg-green-50 dark:bg-green-900/20' : 'bg-surface hover:bg-green-50 dark:hover:bg-green-900/20'}`}
                     >
                       <input
                         type="checkbox"
@@ -327,7 +327,7 @@ export default function ApprovedPanel({
           )}
 
           {/* Running total + actions */}
-          <div className="rounded-xl border border-green-200 bg-white px-4 py-3 space-y-3">
+          <div className="rounded-xl border border-green-200 dark:border-green-800 bg-surface px-4 py-3 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-fg-secondary">
                 Selected total ({selectedLotIds.size + selectedJobIds.size} item{selectedLotIds.size + selectedJobIds.size !== 1 ? 's' : ''})
@@ -376,7 +376,7 @@ export default function ApprovedPanel({
                     setError(null)
                     downloadCombinedPDF(selectedLots, setError, () => setGenerating(false))
                   }}
-                  className="flex items-center gap-1.5 rounded-lg border border-green-300 px-4 py-2 text-sm font-medium text-accent-fg hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="flex items-center gap-1.5 rounded-lg border border-green-300 dark:border-green-700 px-4 py-2 text-sm font-medium text-accent-fg hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {generating ? (
                     <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" /></svg>
@@ -388,7 +388,7 @@ export default function ApprovedPanel({
               )}
             </div>
 
-            {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+            {error && <p className="rounded-lg bg-red-50 dark:bg-red-900/20 px-3 py-2 text-sm text-red-700 dark:text-red-400">{error}</p>}
           </div>
 
         </div>

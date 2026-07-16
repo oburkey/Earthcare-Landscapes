@@ -336,15 +336,15 @@ export default async function DashboardPage() {
             <h2 className="text-base font-semibold text-fg-secondary mb-3">Needs attention</h2>
             <div className="grid grid-cols-2 gap-3">
               {showVehicleAlert && (
-                <Link href="/vehicles" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 hover:bg-amber-100 transition-colors">
-                  <p className="text-xl font-bold text-amber-700">{vehicleAlertCount}</p>
-                  <p className="text-xs text-amber-600">Rego / service due in 7 days</p>
+                <Link href="/vehicles" className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors">
+                  <p className="text-xl font-bold text-amber-700 dark:text-amber-400">{vehicleAlertCount}</p>
+                  <p className="text-xs text-amber-600 dark:text-amber-400">Rego / service due in 7 days</p>
                 </Link>
               )}
               {showIncidents && (
-                <Link href="/safety" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 hover:bg-red-100 transition-colors">
-                  <p className="text-xl font-bold text-red-700">{incidentCount}</p>
-                  <p className="text-xs text-red-600">Incident{incidentCount !== 1 ? 's' : ''} in last 7 days</p>
+                <Link href="/safety" className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-4 py-3 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors">
+                  <p className="text-xl font-bold text-red-700 dark:text-red-400">{incidentCount}</p>
+                  <p className="text-xs text-red-600 dark:text-red-400">Incident{incidentCount !== 1 ? 's' : ''} in last 7 days</p>
                 </Link>
               )}
             </div>
@@ -367,9 +367,9 @@ function MetricCard({
   href?: string
 }) {
   const colors = {
-    blue:  'text-blue-700',
-    amber: 'text-amber-700',
-    red:   'text-red-700',
+    blue:  'text-blue-700 dark:text-blue-400',
+    amber: 'text-amber-700 dark:text-amber-400',
+    red:   'text-red-700 dark:text-red-400',
     green: 'text-accent-fg',
   }
 
