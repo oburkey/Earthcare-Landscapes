@@ -183,22 +183,6 @@ function LotCard({ item, today }: { item: LotItem; today: string }) {
   )
 }
 
-function JobPill({ item }: { item: JobItem }) {
-  const cfg = EXTRA_JOB_STATUS_CONFIG[item.status] ?? EXTRA_JOB_STATUS_CONFIG.not_started
-  return (
-    <Link
-      href={`/sites/${item.siteId}/stages/${item.stageId}/extra-jobs/${item.id}`}
-      className="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface px-3 py-2 hover:bg-surface-raised transition-colors"
-    >
-      <div className="flex items-center gap-2 min-w-0">
-        <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 shrink-0">Extra job</span>
-        <span className="text-sm text-fg-secondary truncate">{item.title}</span>
-      </div>
-      <span className={`rounded-full px-2 py-0.5 text-xs font-medium shrink-0 ${cfg.badge}`}>{cfg.label}</span>
-    </Link>
-  )
-}
-
 function EmptyState({ text }: { text: string }) {
   return (
     <div className="rounded-xl border border-border bg-surface px-4 py-10 text-center">
@@ -395,10 +379,9 @@ function TwoWeekView({
 // ── Month view ────────────────────────────────────────────────────────────────
 
 function MonthView({
-  lots, jobs, events, today, monthCursor, onMonthCursorChange, selectedDay, onDayClick,
+  lots, events, today, monthCursor, onMonthCursorChange, selectedDay, onDayClick,
 }: {
   lots: LotItem[]
-  jobs: JobItem[]
   events: CalendarEvent[]
   today: string
   monthCursor: { year: number; month: number }
@@ -769,7 +752,7 @@ export default function ScheduleView({ lotItems, jobItems, events, sites, today,
           />
         ) : view === 'month' ? (
           <MonthView
-            lots={lots} jobs={jobs} events={events} today={today}
+            lots={lots} events={events} today={today}
             monthCursor={monthCursor} onMonthCursorChange={setMonthCursor}
             selectedDay={selectedDay} onDayClick={setSelectedDay}
           />

@@ -64,23 +64,33 @@ export default async function SchedulePage() {
     .map(([id, name]) => ({ id, name }))
     .sort((a, b) => a.name.localeCompare(b.name))
 
+  type RawCalendarEvent = {
+    id: string
+    title: string
+    description: string | null
+    event_date: string
+    end_date: string | null
+    start_time: string | null
+    end_time: string | null
+    created_by: string | null
+    profiles: { first_name: string; last_name: string } | null
+  }
+
   // Calendar events — graceful fallback if table doesn't exist yet
   let calendarEvents: CalendarEvent[] = []
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const raw: any[] = await getCachedCalendarEvents()
+    const raw = (await getCachedCalendarEvents()) as unknown as RawCalendarEvent[]
     calendarEvents = raw.map((ev) => ({
       id: ev.id,
       title: ev.title,
-      description: ev.description ?? null,
+      description: ev.description,
       eventDate: ev.event_date,
-      endDate: ev.end_date ?? null,
-      startTime: ev.start_time ?? null,
-      endTime: ev.end_time ?? null,
-      createdBy: ev.created_by ?? null,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      endDate: ev.end_date,
+      startTime: ev.start_time,
+      endTime: ev.end_time,
+      createdBy: ev.created_by,
       createdByName: ev.profiles
-        ? `${(ev.profiles as any).first_name ?? ''} ${(ev.profiles as any).last_name ?? ''}`.trim() || null
+        ? `${ev.profiles.first_name ?? ''} ${ev.profiles.last_name ?? ''}`.trim() || null
         : null,
     }))
   } catch {
