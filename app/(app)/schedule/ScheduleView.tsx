@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import {
   STATUS_CONFIG,
   EXTRA_JOB_STATUS_CONFIG,
   TRADE_OPTIONS,
   formatDate,
+  siteColour,
 } from '@/lib/lotStatus'
 import type { LotStatus, ExtraJobStatus } from '@/types/database'
 
@@ -39,7 +40,9 @@ export type JobItem = {
 
 export type SiteOption = { id: string; name: string }
 
-type View = 'week' | 'month' | 'list'
+type View = '2weeks' | 'month' | 'list'
+
+const VALID_VIEWS: View[] = ['2weeks', 'month', 'list']
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
@@ -63,7 +66,7 @@ function getWeekStart(dateStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number)
   const date = new Date(y, m - 1, d)
   const day = date.getDay()
-  const diff = day === 0 ? -6 : 1 - day // Monday as week start
+  const diff = day === 0 ? -6 : 1 - day
   date.setDate(date.getDate() + diff)
   return ymd(date.getFullYear(), date.getMonth(), date.getDate())
 }
@@ -77,22 +80,24 @@ function formatWeekLabel(weekStart: string): string {
   return `${start.toLocaleDateString('en-AU', opts)} – ${end.toLocaleDateString('en-AU', endOpts)}`
 }
 
-function formatDayLabel(dateStr: string): string {
-  const [y, m, d] = dateStr.split('-').map(Number)
-  return new Date(y, m - 1, d).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })
+function format2WeekLabel(weekStart: string): string {
+  const [y, m, d] = weekStart.split('-').map(Number)
+  const start = new Date(y, m - 1, d)
+  const end = new Date(y, m - 1, d + 11) // Mon + 11 = second Friday
+  const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }
+  const endOpts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' }
+  return `${start.toLocaleDateString('en-AU', opts)} – ${end.toLocaleDateString('en-AU', endOpts)}`
 }
 
 function monthLabel(year: number, month: number): string {
   return new Date(year, month, 1).toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
 }
 
-// Returns an array of date strings (full weeks, Mon-Sun) covering the given month
 function getMonthGrid(year: number, month: number): string[] {
   const firstOfMonth = ymd(year, month, 1)
   const lastOfMonth = ymd(year, month + 1, 0)
   const gridStart = getWeekStart(firstOfMonth)
   const gridEnd = addDays(getWeekStart(lastOfMonth), 6)
-
   const days: string[] = []
   let cur = gridStart
   while (cur <= gridEnd) {
@@ -102,7 +107,7 @@ function getMonthGrid(year: number, month: number): string[] {
   return days
 }
 
-// ── Small components ─────────────────────────────────────────────────────────
+// ── Shared small components ───────────────────────────────────────────────────
 
 function TradeChips({ tradesCompleted }: { tradesCompleted: string[] }) {
   return (
@@ -127,7 +132,6 @@ function TradeChips({ tradesCompleted }: { tradesCompleted: string[] }) {
 function LotCard({ item, today }: { item: LotItem; today: string }) {
   const overdueBlocked = item.dueDate < today && !item.readyForLandscaping
   const cfg = STATUS_CONFIG[item.status] ?? STATUS_CONFIG.not_started
-
   return (
     <Link
       href={`/sites/${item.siteId}/stages/${item.stageId}/lots/${item.lotId}`}
@@ -139,11 +143,9 @@ function LotCard({ item, today }: { item: LotItem; today: string }) {
         <span className="text-sm font-semibold text-fg">Lot {item.lotNumber}</span>
         <div className="flex items-center gap-1.5">
           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cfg.badge}`}>{cfg.label}</span>
-          <span
-            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-              item.readyForLandscaping ? 'bg-accent-dim text-accent-fg' : 'bg-amber-100 text-amber-700'
-            }`}
-          >
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+            item.readyForLandscaping ? 'bg-accent-dim text-accent-fg' : 'bg-amber-100 text-amber-700'
+          }`}>
             {item.readyForLandscaping ? 'Ready' : 'Blocked'}
           </span>
         </div>
@@ -181,74 +183,162 @@ function EmptyState({ text }: { text: string }) {
   )
 }
 
-// ── Week view ─────────────────────────────────────────────────────────────────
+// ── 2-week view ───────────────────────────────────────────────────────────────
 
-function WeekView({
-  lots, jobs, today, weekOffset, onWeekOffsetChange,
-}: {
+function TwoWeekLotChip({ item, today }: { item: LotItem; today: string }) {
+  const sc = siteColour(item.siteName)
+  const cfg = STATUS_CONFIG[item.status] ?? STATUS_CONFIG.not_started
+  const overdueBlocked = item.dueDate < today && !item.readyForLandscaping
+  return (
+    <Link
+      href={`/sites/${item.siteId}/stages/${item.stageId}/lots/${item.lotId}`}
+      className={`block rounded-lg border p-1.5 hover:bg-surface-raised transition-colors ${
+        overdueBlocked
+          ? 'border-red-200 bg-red-50 dark:bg-red-900/10 dark:border-red-800'
+          : 'border-border bg-surface'
+      }`}
+    >
+      <div className="flex items-center gap-1 flex-wrap mb-0.5">
+        <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold shrink-0 ${sc.badge}`}>{sc.abbr}</span>
+        <span className="text-xs font-semibold text-fg leading-tight">Lot {item.lotNumber}</span>
+      </div>
+      <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${cfg.badge}`}>{cfg.label}</span>
+    </Link>
+  )
+}
+
+function TwoWeekJobChip({ item }: { item: JobItem }) {
+  const cfg = EXTRA_JOB_STATUS_CONFIG[item.status] ?? EXTRA_JOB_STATUS_CONFIG.not_started
+  return (
+    <Link
+      href={`/sites/${item.siteId}/stages/${item.stageId}/extra-jobs/${item.id}`}
+      className="block rounded-lg border border-border bg-surface p-1.5 hover:bg-surface-raised transition-colors"
+    >
+      <div className="flex items-center gap-1 mb-0.5">
+        <span className="rounded px-1.5 py-0.5 text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 shrink-0">XJ</span>
+        <span className="text-[10px] font-medium text-fg-secondary truncate leading-tight">{item.title}</span>
+      </div>
+      <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${cfg.badge}`}>{cfg.label}</span>
+    </Link>
+  )
+}
+
+function WeekGrid({ days, lots, jobs, today }: {
+  days: string[]
   lots: LotItem[]
   jobs: JobItem[]
   today: string
-  weekOffset: number
-  onWeekOffsetChange: (next: number) => void
 }) {
-  const weekStart = addDays(getWeekStart(today), weekOffset * 7)
-  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
-
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <button type="button" onClick={() => onWeekOffsetChange(weekOffset - 1)}
-          className="rounded-lg border border-border px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-raised transition-colors">
-          ‹ Prev
-        </button>
-        <div className="text-center">
-          <h2 className="text-sm font-semibold text-fg-secondary">{formatWeekLabel(weekStart)}</h2>
-          {weekOffset !== 0 && (
-            <button type="button" onClick={() => onWeekOffsetChange(0)}
-              className="text-xs text-fg-muted hover:text-fg-secondary transition-colors">
-              Back to this week
-            </button>
-          )}
-        </div>
-        <button type="button" onClick={() => onWeekOffsetChange(weekOffset + 1)}
-          className="rounded-lg border border-border px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-raised transition-colors">
-          Next ›
-        </button>
-      </div>
-
-      <div className="space-y-3">
+    <div className="rounded-xl border border-border bg-surface overflow-hidden">
+      {/* Day headers */}
+      <div className="grid grid-cols-5 border-b border-border-subtle bg-surface-raised">
         {days.map((day) => {
-          const dayLots = lots.filter((l) => l.dueDate === day)
-          const dayJobs = jobs.filter((j) => j.dueDate === day)
+          const [y, m, d] = day.split('-').map(Number)
+          const date = new Date(y, m - 1, d)
+          const weekday = date.toLocaleDateString('en-AU', { weekday: 'short' })
           const isToday = day === today
-          const isOverdue = day < today
-
           return (
-            <div key={day}>
-              <div className="flex items-center gap-2 mb-2">
-                <h3 className={`text-sm font-semibold ${isToday ? 'text-accent-fg' : 'text-fg-muted'}`}>
-                  {formatDayLabel(day)}
-                </h3>
-                {isToday && (
-                  <span className="rounded-full bg-accent-dim px-2 py-0.5 text-xs font-medium text-accent-fg">Today</span>
-                )}
-                {isOverdue && (dayLots.length > 0 || dayJobs.length > 0) && (
-                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Overdue</span>
-                )}
+            <div
+              key={day}
+              className={`px-2 py-2 text-center border-r last:border-r-0 border-border-subtle ${
+                isToday ? 'bg-accent-dim' : ''
+              }`}
+            >
+              <div className={`text-[11px] font-medium uppercase tracking-wide ${isToday ? 'text-accent-fg' : 'text-fg-muted'}`}>
+                {weekday}
               </div>
-              {dayLots.length === 0 && dayJobs.length === 0 ? (
-                <p className="text-xs text-fg-muted px-1">Nothing due</p>
-              ) : (
-                <div className="space-y-2">
-                  {dayLots.map((item) => <LotCard key={item.id} item={item} today={today} />)}
-                  {dayJobs.map((item) => <JobPill key={item.id} item={item} />)}
-                </div>
-              )}
+              <div className={`text-base font-semibold mt-0.5 ${isToday ? 'text-accent-fg' : 'text-fg-secondary'}`}>
+                {d}
+              </div>
             </div>
           )
         })}
       </div>
+
+      {/* Content columns with 12pm reference line */}
+      <div className="relative grid grid-cols-5 min-h-56">
+        {/* 12pm line */}
+        <div
+          className="absolute inset-x-0 top-1/2 border-t border-dashed border-border pointer-events-none z-10"
+          aria-hidden="true"
+        >
+          <span className="absolute left-2 -top-3 text-[9px] font-medium text-fg-muted select-none">12pm</span>
+        </div>
+
+        {days.map((day) => {
+          const dayLots = lots.filter((l) => l.dueDate === day)
+          const dayJobs = jobs.filter((j) => j.dueDate === day)
+          const isToday = day === today
+          return (
+            <div
+              key={day}
+              className={`p-1.5 border-r last:border-r-0 border-border-subtle space-y-1.5 ${
+                isToday ? 'bg-green-50/40 dark:bg-green-900/5' : ''
+              }`}
+            >
+              {dayLots.map((item) => (
+                <TwoWeekLotChip key={item.id} item={item} today={today} />
+              ))}
+              {dayJobs.map((item) => (
+                <TwoWeekJobChip key={item.id} item={item} />
+              ))}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function TwoWeekView({
+  lots, jobs, today, offset, onOffsetChange,
+}: {
+  lots: LotItem[]
+  jobs: JobItem[]
+  today: string
+  offset: number
+  onOffsetChange: (next: number) => void
+}) {
+  const weekStart  = addDays(getWeekStart(today), offset * 14)
+  const week2Start = addDays(weekStart, 7)
+  const week1Days  = Array.from({ length: 5 }, (_, i) => addDays(weekStart, i))
+  const week2Days  = Array.from({ length: 5 }, (_, i) => addDays(week2Start, i))
+
+  return (
+    <div className="space-y-3">
+      {/* Navigation */}
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => onOffsetChange(offset - 1)}
+          className="rounded-lg border border-border px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-raised transition-colors"
+        >
+          ‹ Prev
+        </button>
+        <div className="text-center">
+          <h2 className="text-sm font-semibold text-fg-secondary">{format2WeekLabel(weekStart)}</h2>
+          {offset !== 0 && (
+            <button
+              type="button"
+              onClick={() => onOffsetChange(0)}
+              className="text-xs text-fg-muted hover:text-fg-secondary transition-colors"
+            >
+              Today
+            </button>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => onOffsetChange(offset + 1)}
+          className="rounded-lg border border-border px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-raised transition-colors"
+        >
+          Next ›
+        </button>
+      </div>
+
+      <WeekGrid days={week1Days} lots={lots} jobs={jobs} today={today} />
+      <WeekGrid days={week2Days} lots={lots} jobs={jobs} today={today} />
     </div>
   )
 }
@@ -285,7 +375,6 @@ function MonthView({
   }
 
   const isCurrentMonth = year === new Date().getFullYear() && month === new Date().getMonth()
-
   const selectedLots = selectedDay ? lots.filter((l) => l.dueDate === selectedDay) : []
   const selectedJobs = selectedDay ? jobs.filter((j) => j.dueDate === selectedDay) : []
 
@@ -320,16 +409,13 @@ function MonthView({
         <div className="grid grid-cols-7">
           {days.map((day) => {
             const [, m] = day.split('-').map(Number)
-            const inMonth = (m - 1) === month
-            const dayLots = lots.filter((l) => l.dueDate === day)
-            const isToday = day === today
+            const inMonth   = (m - 1) === month
+            const dayLots   = lots.filter((l) => l.dueDate === day)
+            const isToday   = day === today
             const isSelected = day === selectedDay
-            const dotColor = dayLots.length === 0
-              ? null
-              : dayLots.every((l) => l.readyForLandscaping) ? 'bg-accent-dim0' : 'bg-amber-500'
-            const dayNum = Number(day.split('-')[2])
+            const dayNum    = Number(day.split('-')[2])
             const visibleLots = dayLots.slice(0, 3)
-            const extraCount = dayLots.length - visibleLots.length
+            const extraCount  = dayLots.length - visibleLots.length
 
             return (
               <button
@@ -340,25 +426,23 @@ function MonthView({
                   isSelected ? 'bg-accent-dim' : inMonth ? '' : 'bg-surface-raised/60'
                 }`}
               >
-                <div className="flex items-center justify-between">
-                  <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${
-                    isToday ? 'bg-green-700 text-white font-semibold' : inMonth ? 'text-fg-secondary' : 'text-fg-muted'
-                  }`}>
-                    {dayNum}
-                  </span>
-                  {dotColor && <span className={`h-3 w-3 rounded-full ${dotColor}`} />}
-                </div>
+                <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${
+                  isToday ? 'bg-green-700 text-white font-semibold' : inMonth ? 'text-fg-secondary' : 'text-fg-muted'
+                }`}>
+                  {dayNum}
+                </span>
                 <div className="flex flex-col gap-1">
-                  {visibleLots.map((item) => (
-                    <span
-                      key={item.id}
-                      className={`truncate rounded px-1.5 py-0.5 text-[11px] font-medium ${
-                        item.readyForLandscaping ? 'bg-accent-dim text-accent-fg' : 'bg-amber-100 text-amber-700'
-                      }`}
-                    >
-                      Lot {item.lotNumber}
-                    </span>
-                  ))}
+                  {visibleLots.map((item) => {
+                    const sc = siteColour(item.siteName)
+                    return (
+                      <span
+                        key={item.id}
+                        className={`truncate rounded px-1.5 py-0.5 text-[11px] font-medium ${sc.badge}`}
+                      >
+                        {sc.abbr} {item.lotNumber}
+                      </span>
+                    )
+                  })}
                   {extraCount > 0 && (
                     <span className="text-[11px] text-fg-muted">+{extraCount} more</span>
                   )}
@@ -386,7 +470,7 @@ function MonthView({
   )
 }
 
-// ── List view (original behaviour) ───────────────────────────────────────────
+// ── List view ─────────────────────────────────────────────────────────────────
 
 type FlatItem =
   | { kind: 'lot'; id: string; siteId: string; stageId: string; lotId: string; label: string; site: string; stage: string; status: LotStatus; due_date: string; tradesCompleted: string[]; readyForLandscaping: boolean }
@@ -474,7 +558,7 @@ function ListView({ lots, jobs, today }: { lots: LotItem[]; jobs: JobItem[]; tod
   )
 }
 
-// ── Blocked lots (triage) view ───────────────────────────────────────────────
+// ── Blocked lots view ─────────────────────────────────────────────────────────
 
 function BlockedView({ lots, today }: { lots: LotItem[]; today: string }) {
   const blocked = [...lots]
@@ -509,23 +593,37 @@ interface Props {
 }
 
 export default function ScheduleView({ lotItems, jobItems, sites, today }: Props) {
-  const [view, setView] = useState<View>('week')
+  const [view, setView]           = useState<View>('2weeks')
   const [siteFilter, setSiteFilter] = useState('')
   const [showBlocked, setShowBlocked] = useState(false)
-  const [weekOffset, setWeekOffset] = useState(0)
+  const [twoWeekOffset, setTwoWeekOffset] = useState(0)
   const [monthCursor, setMonthCursor] = useState(() => {
     const [y, m] = today.split('-').map(Number)
     return { year: y, month: m - 1 }
   })
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
 
+  // Restore saved view preference after hydration (localStorage unavailable on server)
+  useEffect(() => {
+    const saved = localStorage.getItem('schedule-view-preference')
+    if (saved && VALID_VIEWS.includes(saved as View)) {
+      setView(saved as View)
+    }
+  }, [])
+
+  function changeView(v: View) {
+    setView(v)
+    setShowBlocked(false)
+    localStorage.setItem('schedule-view-preference', v)
+  }
+
   const lots = siteFilter ? lotItems.filter((l) => l.siteId === siteFilter) : lotItems
   const jobs = siteFilter ? jobItems.filter((j) => j.siteId === siteFilter) : jobItems
 
   const views: Array<{ id: View; label: string }> = [
-    { id: 'week', label: 'Week' },
-    { id: 'month', label: 'Month' },
-    { id: 'list', label: 'List' },
+    { id: '2weeks', label: '2 Weeks' },
+    { id: 'month',  label: 'Month'   },
+    { id: 'list',   label: 'List'    },
   ]
 
   return (
@@ -536,10 +634,10 @@ export default function ScheduleView({ lotItems, jobItems, sites, today }: Props
             <button
               key={v.id}
               type="button"
-              onClick={() => { setView(v.id); setShowBlocked(false) }}
+              onClick={() => changeView(v.id)}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                 !showBlocked && view === v.id
-                  ? 'bg-stone-900 text-white'
+                  ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900'
                   : 'text-fg-muted hover:bg-surface-raised'
               }`}
             >
@@ -550,17 +648,18 @@ export default function ScheduleView({ lotItems, jobItems, sites, today }: Props
             type="button"
             onClick={() => setShowBlocked((b) => !b)}
             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-              showBlocked
-                ? 'bg-amber-600 text-white'
-                : 'text-fg-muted hover:bg-surface-raised'
+              showBlocked ? 'bg-amber-600 text-white' : 'text-fg-muted hover:bg-surface-raised'
             }`}
           >
             Blocked lots
           </button>
         </div>
 
-        <select value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)}
-          className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-fg focus:border-border focus:outline-none">
+        <select
+          value={siteFilter}
+          onChange={(e) => setSiteFilter(e.target.value)}
+          className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-fg focus:border-border focus:outline-none"
+        >
           <option value="">All sites</option>
           {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
@@ -568,8 +667,11 @@ export default function ScheduleView({ lotItems, jobItems, sites, today }: Props
 
       {showBlocked ? (
         <BlockedView lots={lots} today={today} />
-      ) : view === 'week' ? (
-        <WeekView lots={lots} jobs={jobs} today={today} weekOffset={weekOffset} onWeekOffsetChange={setWeekOffset} />
+      ) : view === '2weeks' ? (
+        <TwoWeekView
+          lots={lots} jobs={jobs} today={today}
+          offset={twoWeekOffset} onOffsetChange={setTwoWeekOffset}
+        />
       ) : view === 'month' ? (
         <MonthView
           lots={lots} jobs={jobs} today={today}
