@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useActionState, useTransition } from 'react'
+import { useState, useActionState, useTransition, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   createProgressClaim,
@@ -147,11 +147,10 @@ export default function ProgressClaimsSection({
   const [actionError, setError]   = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  // Keep in sync when server refreshes page
-  // (initialClaims prop changes on router.refresh())
-  const [prevInitial, setPrevInitial] = useState(initialClaims)
-  if (initialClaims !== prevInitial) {
-    setPrevInitial(initialClaims)
+  // Keep in sync when server refreshes page (initialClaims prop changes on router.refresh())
+  const prevInitialRef = useRef(initialClaims)
+  if (initialClaims !== prevInitialRef.current) {
+    prevInitialRef.current = initialClaims
     setClaims(initialClaims)
   }
 

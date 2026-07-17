@@ -8,6 +8,9 @@ import { LOGO_DATA_URL } from '@/lib/pdfAssets'
 import ProgressClaimsSection from './ProgressClaimsSection'
 import type { ProgressClaimRow } from './ProgressClaimsSection'
 
+// Re-export so page.tsx can import from a single place
+export type { ProgressClaimRow }
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type LotLineItem = {
