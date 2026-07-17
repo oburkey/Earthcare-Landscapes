@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toggleInvoiced, togglePendingReview, toggleApprovedForInvoicing } from './actions'
 import { getExtraJobsPricing } from '@/app/(app)/sites/[siteId]/stages/[stageId]/extra-jobs/[extraJobId]/pricing-actions'
@@ -450,7 +450,6 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
   const [selectedExtraJobs, setSelectedExtraJobs] = useState<Set<string>>(new Set())
   const [generating, setGenerating]               = useState<Set<string>>(new Set())
   const [actionError, setActionError]             = useState<string | null>(null)
-  const [isPending, startTransition]              = useTransition()
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -498,11 +497,10 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
     const next = !current
     setInvoicedMap((prev) => ({ ...prev, [lotId]: next }))
     setActionError(null)
-    startTransition(async () => {
-      const fd = new FormData()
-      fd.set('lot_id', lotId)
-      fd.set('value', String(next))
-      const result = await toggleInvoiced(null, fd)
+    const fd = new FormData()
+    fd.set('lot_id', lotId)
+    fd.set('value', String(next))
+    toggleInvoiced(null, fd).then((result) => {
       if (result?.error) {
         setInvoicedMap((prev) => ({ ...prev, [lotId]: current }))
         setActionError(result.error)
@@ -514,11 +512,10 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
     const next = !current
     setPendingReviewMap((prev) => ({ ...prev, [lotId]: next }))
     setActionError(null)
-    startTransition(async () => {
-      const fd = new FormData()
-      fd.set('lot_id', lotId)
-      fd.set('value', String(next))
-      const result = await togglePendingReview(null, fd)
+    const fd = new FormData()
+    fd.set('lot_id', lotId)
+    fd.set('value', String(next))
+    togglePendingReview(null, fd).then((result) => {
       if (result?.error) {
         setPendingReviewMap((prev) => ({ ...prev, [lotId]: current }))
         setActionError(result.error)
@@ -531,11 +528,10 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
     setApprovedMap((prev) => ({ ...prev, [lotId]: next }))
     if (next) setPendingReviewMap((prev) => ({ ...prev, [lotId]: false }))
     setActionError(null)
-    startTransition(async () => {
-      const fd = new FormData()
-      fd.set('lot_id', lotId)
-      fd.set('value', String(next))
-      const result = await toggleApprovedForInvoicing(null, fd)
+    const fd = new FormData()
+    fd.set('lot_id', lotId)
+    fd.set('value', String(next))
+    toggleApprovedForInvoicing(null, fd).then((result) => {
       if (result?.error) {
         setApprovedMap((prev) => ({ ...prev, [lotId]: current }))
         setActionError(result.error)
@@ -791,13 +787,13 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                               <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 pr-6 whitespace-nowrap">Lot</th>
                               <th className="text-center text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Build Complete</th>
                               <th className="text-center text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Quant Done</th>
-                              <th className="text-center text-xs font-semibold text-amber-600 uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Pending</th>
-                              <th className="text-center text-xs font-semibold text-accent-fg uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Approved</th>
                               <th className="text-right text-xs font-semibold text-fg-muted uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Estimate</th>
                               <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Standard Amount</th>
                               <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Client Extras</th>
                               <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Total</th>
-                              <th className="text-center text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Invoiced</th>
+                              <th className="text-center text-xs font-semibold text-amber-600 uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Pending</th>
+                              <th className="text-center text-xs font-semibold text-accent-fg uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Approved</th>
+                              <th className="text-center text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Invoiced</th>
                               <th className="pb-2 pl-2 w-7"></th>
                             </tr>
                           </thead>
@@ -835,34 +831,6 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                                   <td className="py-2.5 px-3 text-center">
                                     {lot.quantDone ? <span className="text-green-600 font-semibold">✓</span> : <span className="text-fg-muted">—</span>}
                                   </td>
-                                  <td className="py-2.5 px-3 text-center" onClick={e => e.stopPropagation()}>
-                                    <button
-                                      type="button"
-                                      disabled={!isAdmin || isPending}
-                                      onClick={() => handleTogglePendingReview(lot.id, pendingReviewMap[lot.id] ?? lot.pendingReview)}
-                                      className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors whitespace-nowrap ${
-                                        (pendingReviewMap[lot.id] ?? lot.pendingReview)
-                                          ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
-                                          : 'text-fg-muted hover:bg-surface-raised'
-                                      } disabled:opacity-40`}
-                                    >
-                                      {(pendingReviewMap[lot.id] ?? lot.pendingReview) ? 'Pending' : '—'}
-                                    </button>
-                                  </td>
-                                  <td className="py-2.5 px-3 text-center" onClick={e => e.stopPropagation()}>
-                                    <button
-                                      type="button"
-                                      disabled={!isAdmin || isPending}
-                                      onClick={() => handleToggleApprovedForInvoicing(lot.id, approvedMap[lot.id] ?? lot.approvedForInvoicing)}
-                                      className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors whitespace-nowrap ${
-                                        (approvedMap[lot.id] ?? lot.approvedForInvoicing)
-                                          ? 'bg-accent-dim text-accent-fg'
-                                          : 'text-fg-muted hover:bg-surface-raised'
-                                      } disabled:opacity-40`}
-                                    >
-                                      {(approvedMap[lot.id] ?? lot.approvedForInvoicing) ? 'Approved' : '—'}
-                                    </button>
-                                  </td>
                                   <td className="py-2.5 px-3 text-right tabular-nums text-fg-muted">
                                     {lot.estimateTotal != null ? fmt(lot.estimateTotal) : <span className="text-fg-muted">—</span>}
                                   </td>
@@ -876,9 +844,40 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                                   <td className="py-2.5 px-3 text-center" onClick={e => e.stopPropagation()}>
                                     <button
                                       type="button"
-                                      disabled={isPending}
+                                      disabled={!isAdmin}
+                                      onClick={() => handleTogglePendingReview(lot.id, pendingReviewMap[lot.id] ?? lot.pendingReview)}
+                                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors whitespace-nowrap disabled:opacity-40 ${
+                                        (pendingReviewMap[lot.id] ?? lot.pendingReview)
+                                          ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                                          : 'bg-surface-raised text-fg-muted hover:bg-border'
+                                      }`}
+                                    >
+                                      Pending
+                                    </button>
+                                  </td>
+                                  <td className="py-2.5 px-3 text-center" onClick={e => e.stopPropagation()}>
+                                    <button
+                                      type="button"
+                                      disabled={!isAdmin}
+                                      onClick={() => handleToggleApprovedForInvoicing(lot.id, approvedMap[lot.id] ?? lot.approvedForInvoicing)}
+                                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors whitespace-nowrap disabled:opacity-40 ${
+                                        (approvedMap[lot.id] ?? lot.approvedForInvoicing)
+                                          ? 'bg-accent-dim text-accent-fg'
+                                          : 'bg-surface-raised text-fg-muted hover:bg-border'
+                                      }`}
+                                    >
+                                      Approved
+                                    </button>
+                                  </td>
+                                  <td className="py-2.5 px-3 text-center" onClick={e => e.stopPropagation()}>
+                                    <button
+                                      type="button"
                                       onClick={() => handleToggleInvoiced(lot.id, invoiced)}
-                                      className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60 whitespace-nowrap ${invoiced ? 'bg-accent-dim text-accent-fg' : 'bg-surface-raised text-fg-muted hover:bg-border'}`}
+                                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors whitespace-nowrap ${
+                                        invoiced
+                                          ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+                                          : 'bg-surface-raised text-fg-muted hover:bg-border'
+                                      }`}
                                     >
                                       {invoiced ? 'Invoiced' : 'Invoice'}
                                     </button>
@@ -899,14 +898,14 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                             })}
 
                             <tr className="border-t-2 border-border bg-surface-raised">
-                              <td colSpan={6} className="py-2.5 pr-6 font-semibold text-fg-secondary">Stage Total</td>
+                              <td colSpan={4} className="py-2.5 pr-6 font-semibold text-fg-secondary">Stage Total</td>
                               <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg-muted">{totEstimate > 0 ? fmt(totEstimate) : <span className="text-fg-muted">—</span>}</td>
                               <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg-secondary">{fmt(totStd)}</td>
                               <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg-secondary">
                                 {totExtra > 0 ? fmt(totExtra) : <span className="text-fg-muted">—</span>}
                               </td>
                               <td className="py-2.5 px-3 text-right tabular-nums font-bold text-fg">{fmt(totAmt)}</td>
-                              <td colSpan={2} />
+                              <td colSpan={4} />
                             </tr>
                           </tbody>
                         </table>

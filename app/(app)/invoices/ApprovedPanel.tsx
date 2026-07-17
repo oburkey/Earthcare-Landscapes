@@ -134,32 +134,48 @@ function lotClaimHtml(lot: ApprovedLot): string {
 </div>`
 }
 
-async function downloadCombinedPDF(
+function pdfFilename(lot: ApprovedLot): string {
+  const clean = (s: string) => s.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '')
+  return `Lot-${clean(lot.lotNumber)}-${clean(lot.siteName)}-${clean(lot.stageName)}.pdf`
+}
+
+async function downloadZip(
   lots: ApprovedLot[],
   onError: (msg: string) => void,
   onDone: () => void
 ) {
-  const el = document.createElement('div')
-  const bodies = lots.map((lot, i) =>
-    `<div${i > 0 ? ' class="page-break"' : ''}>${lotClaimHtml(lot)}</div>`
-  )
-  el.innerHTML = CLAIM_STYLES + bodies.join('')
   try {
-    const { default: html2pdf } = await import('html2pdf.js')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (html2pdf() as any)
-      .set({
-        margin: 0,
-        filename: `Approved-Lots-${new Date().toISOString().slice(0, 10)}.pdf`,
-        image:       { type: 'jpeg', quality: 0.97 },
-        html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' },
-        jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak:   { mode: ['css', 'legacy'] },
-      })
-      .from(el)
-      .save()
+    const [{ default: html2pdf }, { default: JSZip }] = await Promise.all([
+      import('html2pdf.js'),
+      import('jszip'),
+    ])
+    const zip = new JSZip()
+    for (const lot of lots) {
+      const el = document.createElement('div')
+      el.innerHTML = CLAIM_STYLES + lotClaimHtml(lot)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const blob: Blob = await (html2pdf() as any)
+        .set({
+          margin: 0,
+          image:       { type: 'jpeg', quality: 0.97 },
+          html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' },
+          jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        })
+        .from(el)
+        .output('blob')
+      zip.file(pdfFilename(lot), blob)
+    }
+    const zipBlob = await zip.generateAsync({ type: 'blob' })
+    const url = URL.createObjectURL(zipBlob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `Claim-Sheets-${new Date().toISOString().slice(0, 10)}.zip`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   } catch {
-    onError('Failed to generate PDF. Please try again.')
+    onError('Failed to generate ZIP. Please try again.')
   } finally {
     onDone()
   }
@@ -427,7 +443,7 @@ export default function ApprovedPanel({
                   onClick={() => {
                     setGenerating(true)
                     setError(null)
-                    downloadCombinedPDF(selectedLots, setError, () => setGenerating(false))
+                    downloadZip(selectedLots, setError, () => setGenerating(false))
                   }}
                   className="flex items-center gap-1.5 rounded-lg border border-green-300 dark:border-green-700 px-4 py-2 text-sm font-medium text-accent-fg hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
@@ -436,7 +452,7 @@ export default function ApprovedPanel({
                   ) : (
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
                   )}
-                  {generating ? 'Generating…' : 'Download claim sheets'}
+                  {generating ? 'Creating ZIP…' : 'Download ZIP'}
                 </button>
               )}
             </div>
