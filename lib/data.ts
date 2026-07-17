@@ -309,3 +309,18 @@ export const getCachedMaterialsPlanningData = withCache(
   ['materials-planning-data'],
   { tags: ['schedule', 'quotes'], revalidate: 300 }
 )
+
+async function _calendarEvents(db: Db) {
+  const { data } = await db
+    .from('calendar_events')
+    .select('id, title, description, event_date, end_date, start_time, end_time, created_by, profiles!created_by(first_name, last_name)')
+    .order('event_date', { ascending: true })
+  return data ?? []
+}
+
+export const getCachedCalendarEvents = withCache(
+  () => _calendarEvents(createServiceClient()),
+  async () => _calendarEvents(await createClient() as Db),
+  ['calendar-events'],
+  { tags: ['calendar-events'], revalidate: 300 }
+)

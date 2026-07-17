@@ -3,7 +3,7 @@ import { requireAuth } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { getCachedDashboardData, getCachedTradeStatusByLotIds } from '@/lib/data'
 import Greeting from './Greeting'
-import FortnightCalendar, { type CalendarItem } from './FortnightCalendar'
+import FortnightCalendar, { type CalendarItem, type DashboardCalendarEvent } from './FortnightCalendar'
 import ExtraJobsList, { type ExtraJobItem } from './ExtraJobsList'
 import PreStartsWeek, { type PreStartDay } from './PreStartsWeek'
 import QuickAddExtraJobModal from './QuickAddExtraJobModal'
@@ -48,6 +48,7 @@ export default async function DashboardPage() {
   let pendingReviewCount = 0
   let approvedForInvoicingCount = 0
   let sitesForModal: Array<{ id: string; name: string; stages: Array<{ id: string; name: string }> }> = []
+  let calendarEventItems: DashboardCalendarEvent[] = []
 
   // All roles: fortnight lots + trade status
   try {
@@ -129,6 +130,26 @@ export default async function DashboardPage() {
     }))
   } catch {
     // graceful fallback — modal button won't show
+  }
+
+  // All roles: calendar events for fortnight window
+  try {
+    const supabase = await createClient()
+    const { data: evRaw } = await supabase
+      .from('calendar_events')
+      .select('id, title, event_date, end_date, start_time')
+      .lte('event_date', fortnightStr)
+      .order('event_date', { ascending: true })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    calendarEventItems = (evRaw ?? []).map((e: any) => ({
+      id: e.id,
+      title: e.title,
+      eventDate: e.event_date,
+      endDate: e.end_date ?? null,
+      startTime: e.start_time ?? null,
+    }))
+  } catch {
+    // table not yet created
   }
 
   // Supervisor+: pre-starts this week + vehicle alerts
@@ -320,7 +341,7 @@ export default async function DashboardPage() {
         {/* Section 2 — Fortnight calendar (all roles) */}
         <section>
           <h2 className="text-base font-semibold text-fg-secondary mb-3">Next 2 weeks</h2>
-          <FortnightCalendar items={calendarItems} />
+          <FortnightCalendar items={calendarItems} events={calendarEventItems} />
         </section>
 
         {/* Section 3 — Extra jobs to complete (all roles, hidden if empty) */}

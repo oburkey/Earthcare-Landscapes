@@ -10,6 +10,7 @@ import {
   siteColour,
 } from '@/lib/lotStatus'
 import type { LotStatus, ExtraJobStatus } from '@/types/database'
+import EventDayPanel from './EventDayPanel'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -36,6 +37,18 @@ export type JobItem = {
   title: string
   status: ExtraJobStatus
   dueDate: string
+}
+
+export type CalendarEvent = {
+  id: string
+  title: string
+  description: string | null
+  eventDate: string
+  endDate: string | null
+  startTime: string | null
+  endTime: string | null
+  createdBy: string | null
+  createdByName: string | null
 }
 
 export type SiteOption = { id: string; name: string }
@@ -74,7 +87,7 @@ function getWeekStart(dateStr: string): string {
 function formatWeekLabel(weekStart: string): string {
   const [y, m, d] = weekStart.split('-').map(Number)
   const start = new Date(y, m - 1, d)
-  const end = new Date(y, m - 1, d + 6)
+  const end   = new Date(y, m - 1, d + 6)
   const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }
   const endOpts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' }
   return `${start.toLocaleDateString('en-AU', opts)} – ${end.toLocaleDateString('en-AU', endOpts)}`
@@ -83,7 +96,7 @@ function formatWeekLabel(weekStart: string): string {
 function format2WeekLabel(weekStart: string): string {
   const [y, m, d] = weekStart.split('-').map(Number)
   const start = new Date(y, m - 1, d)
-  const end = new Date(y, m - 1, d + 11) // Mon + 11 = second Friday
+  const end   = new Date(y, m - 1, d + 11) // second Friday
   const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }
   const endOpts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' }
   return `${start.toLocaleDateString('en-AU', opts)} – ${end.toLocaleDateString('en-AU', endOpts)}`
@@ -95,9 +108,9 @@ function monthLabel(year: number, month: number): string {
 
 function getMonthGrid(year: number, month: number): string[] {
   const firstOfMonth = ymd(year, month, 1)
-  const lastOfMonth = ymd(year, month + 1, 0)
-  const gridStart = getWeekStart(firstOfMonth)
-  const gridEnd = addDays(getWeekStart(lastOfMonth), 6)
+  const lastOfMonth  = ymd(year, month + 1, 0)
+  const gridStart    = getWeekStart(firstOfMonth)
+  const gridEnd      = addDays(getWeekStart(lastOfMonth), 6)
   const days: string[] = []
   let cur = gridStart
   while (cur <= gridEnd) {
@@ -105,6 +118,17 @@ function getMonthGrid(year: number, month: number): string[] {
     cur = addDays(cur, 1)
   }
   return days
+}
+
+// ── Event helpers ─────────────────────────────────────────────────────────────
+
+function getEventsForDay(events: CalendarEvent[], day: string): CalendarEvent[] {
+  return events.filter((e) => e.eventDate <= day && (e.endDate === null || e.endDate >= day))
+}
+
+function formatTime(t: string): string {
+  const [h, m] = t.split(':').map(Number)
+  return `${h % 12 || 12}:${String(m).padStart(2, '0')}${h >= 12 ? 'pm' : 'am'}`
 }
 
 // ── Shared small components ───────────────────────────────────────────────────
@@ -186,7 +210,7 @@ function EmptyState({ text }: { text: string }) {
 // ── 2-week view ───────────────────────────────────────────────────────────────
 
 function TwoWeekLotChip({ item, today }: { item: LotItem; today: string }) {
-  const sc = siteColour(item.siteName)
+  const sc  = siteColour(item.siteName)
   const cfg = STATUS_CONFIG[item.status] ?? STATUS_CONFIG.not_started
   const overdueBlocked = item.dueDate < today && !item.readyForLandscaping
   return (
@@ -223,25 +247,46 @@ function TwoWeekJobChip({ item }: { item: JobItem }) {
   )
 }
 
-function WeekGrid({ days, lots, jobs, today }: {
+function TwoWeekEventChip({ event, onOpen }: { event: CalendarEvent; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onOpen() }}
+      className="block w-full rounded-lg border border-green-500/70 bg-surface p-1.5 text-left hover:bg-green-50 dark:hover:bg-green-900/10 transition-colors"
+    >
+      {event.startTime && (
+        <span className="text-[9px] text-fg-muted">{formatTime(event.startTime)} </span>
+      )}
+      <span className="text-[10px] font-medium text-green-700 dark:text-green-400 truncate block leading-tight">
+        {event.title}
+      </span>
+    </button>
+  )
+}
+
+function WeekGrid({ days, lots, jobs, events, today, onDayClick }: {
   days: string[]
   lots: LotItem[]
   jobs: JobItem[]
+  events: CalendarEvent[]
   today: string
+  onDayClick: (day: string) => void
 }) {
   return (
     <div className="rounded-xl border border-border bg-surface overflow-hidden">
-      {/* Day headers */}
+      {/* Clickable day headers */}
       <div className="grid grid-cols-5 border-b border-border-subtle bg-surface-raised">
         {days.map((day) => {
           const [y, m, d] = day.split('-').map(Number)
-          const date = new Date(y, m - 1, d)
+          const date    = new Date(y, m - 1, d)
           const weekday = date.toLocaleDateString('en-AU', { weekday: 'short' })
           const isToday = day === today
           return (
-            <div
+            <button
               key={day}
-              className={`px-2 py-2 text-center border-r last:border-r-0 border-border-subtle ${
+              type="button"
+              onClick={() => onDayClick(day)}
+              className={`px-2 py-2 text-center border-r last:border-r-0 border-border-subtle hover:bg-surface transition-colors ${
                 isToday ? 'bg-accent-dim' : ''
               }`}
             >
@@ -251,14 +296,13 @@ function WeekGrid({ days, lots, jobs, today }: {
               <div className={`text-base font-semibold mt-0.5 ${isToday ? 'text-accent-fg' : 'text-fg-secondary'}`}>
                 {d}
               </div>
-            </div>
+            </button>
           )
         })}
       </div>
 
       {/* Content columns with 12pm reference line */}
       <div className="relative grid grid-cols-5 min-h-56">
-        {/* 12pm line */}
         <div
           className="absolute inset-x-0 top-1/2 border-t border-dashed border-border pointer-events-none z-10"
           aria-hidden="true"
@@ -267,9 +311,10 @@ function WeekGrid({ days, lots, jobs, today }: {
         </div>
 
         {days.map((day) => {
-          const dayLots = lots.filter((l) => l.dueDate === day)
-          const dayJobs = jobs.filter((j) => j.dueDate === day)
-          const isToday = day === today
+          const dayLots   = lots.filter((l) => l.dueDate === day)
+          const dayJobs   = jobs.filter((j) => j.dueDate === day)
+          const dayEvents = getEventsForDay(events, day)
+          const isToday   = day === today
           return (
             <div
               key={day}
@@ -283,6 +328,9 @@ function WeekGrid({ days, lots, jobs, today }: {
               {dayJobs.map((item) => (
                 <TwoWeekJobChip key={item.id} item={item} />
               ))}
+              {dayEvents.map((ev) => (
+                <TwoWeekEventChip key={ev.id} event={ev} onOpen={() => onDayClick(day)} />
+              ))}
             </div>
           )
         })}
@@ -292,13 +340,15 @@ function WeekGrid({ days, lots, jobs, today }: {
 }
 
 function TwoWeekView({
-  lots, jobs, today, offset, onOffsetChange,
+  lots, jobs, events, today, offset, onOffsetChange, onDayClick,
 }: {
   lots: LotItem[]
   jobs: JobItem[]
+  events: CalendarEvent[]
   today: string
   offset: number
   onOffsetChange: (next: number) => void
+  onDayClick: (day: string) => void
 }) {
   const weekStart  = addDays(getWeekStart(today), offset * 14)
   const week2Start = addDays(weekStart, 7)
@@ -307,7 +357,6 @@ function TwoWeekView({
 
   return (
     <div className="space-y-3">
-      {/* Navigation */}
       <div className="flex items-center justify-between gap-2">
         <button
           type="button"
@@ -337,8 +386,8 @@ function TwoWeekView({
         </button>
       </div>
 
-      <WeekGrid days={week1Days} lots={lots} jobs={jobs} today={today} />
-      <WeekGrid days={week2Days} lots={lots} jobs={jobs} today={today} />
+      <WeekGrid days={week1Days} lots={lots} jobs={jobs} events={events} today={today} onDayClick={onDayClick} />
+      <WeekGrid days={week2Days} lots={lots} jobs={jobs} events={events} today={today} onDayClick={onDayClick} />
     </div>
   )
 }
@@ -346,15 +395,16 @@ function TwoWeekView({
 // ── Month view ────────────────────────────────────────────────────────────────
 
 function MonthView({
-  lots, jobs, today, monthCursor, onMonthCursorChange, selectedDay, onSelectedDayChange,
+  lots, jobs, events, today, monthCursor, onMonthCursorChange, selectedDay, onDayClick,
 }: {
   lots: LotItem[]
   jobs: JobItem[]
+  events: CalendarEvent[]
   today: string
   monthCursor: { year: number; month: number }
   onMonthCursorChange: (next: { year: number; month: number }) => void
   selectedDay: string | null
-  onSelectedDayChange: (day: string | null) => void
+  onDayClick: (day: string) => void
 }) {
   const { year, month } = monthCursor
   const days = getMonthGrid(year, month)
@@ -362,21 +412,17 @@ function MonthView({
   function changeMonth(delta: number) {
     let m = month + delta
     let y = year
-    if (m < 0) { m = 11; y -= 1 }
-    if (m > 11) { m = 0; y += 1 }
+    if (m < 0)  { m = 11; y -= 1 }
+    if (m > 11) { m = 0;  y += 1 }
     onMonthCursorChange({ year: y, month: m })
-    onSelectedDayChange(null)
   }
 
   function backToThisMonth() {
     const now = new Date()
     onMonthCursorChange({ year: now.getFullYear(), month: now.getMonth() })
-    onSelectedDayChange(null)
   }
 
   const isCurrentMonth = year === new Date().getFullYear() && month === new Date().getMonth()
-  const selectedLots = selectedDay ? lots.filter((l) => l.dueDate === selectedDay) : []
-  const selectedJobs = selectedDay ? jobs.filter((j) => j.dueDate === selectedDay) : []
 
   return (
     <div className="space-y-4">
@@ -409,19 +455,21 @@ function MonthView({
         <div className="grid grid-cols-7">
           {days.map((day) => {
             const [, m] = day.split('-').map(Number)
-            const inMonth   = (m - 1) === month
-            const dayLots   = lots.filter((l) => l.dueDate === day)
-            const isToday   = day === today
+            const inMonth    = (m - 1) === month
+            const dayLots    = lots.filter((l) => l.dueDate === day)
+            const dayEvents  = getEventsForDay(events, day)
+            const isToday    = day === today
             const isSelected = day === selectedDay
-            const dayNum    = Number(day.split('-')[2])
-            const visibleLots = dayLots.slice(0, 3)
-            const extraCount  = dayLots.length - visibleLots.length
+            const dayNum     = Number(day.split('-')[2])
+            const visibleLots   = dayLots.slice(0, 2)
+            const visibleEvents = dayEvents.slice(0, 2)
+            const extraCount = (dayLots.length - visibleLots.length) + (dayEvents.length - visibleEvents.length)
 
             return (
               <button
                 key={day}
                 type="button"
-                onClick={() => onSelectedDayChange(isSelected ? null : day)}
+                onClick={() => onDayClick(day)}
                 className={`flex min-h-28 flex-col items-stretch gap-1 border-b border-r border-border-subtle p-1.5 text-left transition-colors hover:bg-surface-raised ${
                   isSelected ? 'bg-accent-dim' : inMonth ? '' : 'bg-surface-raised/60'
                 }`}
@@ -435,14 +483,16 @@ function MonthView({
                   {visibleLots.map((item) => {
                     const sc = siteColour(item.siteName)
                     return (
-                      <span
-                        key={item.id}
-                        className={`truncate rounded px-1.5 py-0.5 text-[11px] font-medium ${sc.badge}`}
-                      >
+                      <span key={item.id} className={`truncate rounded px-1.5 py-0.5 text-[11px] font-medium ${sc.badge}`}>
                         {sc.abbr} {item.lotNumber}
                       </span>
                     )
                   })}
+                  {visibleEvents.map((ev) => (
+                    <span key={ev.id} className="truncate rounded border border-green-500/60 px-1.5 py-0.5 text-[11px] font-medium text-green-700 dark:text-green-400 bg-surface">
+                      {ev.title}
+                    </span>
+                  ))}
                   {extraCount > 0 && (
                     <span className="text-[11px] text-fg-muted">+{extraCount} more</span>
                   )}
@@ -452,20 +502,6 @@ function MonthView({
           })}
         </div>
       </div>
-
-      {selectedDay && (
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-fg-secondary">{formatDate(selectedDay)}</h3>
-          {selectedLots.length === 0 && selectedJobs.length === 0 ? (
-            <p className="text-xs text-fg-muted px-1">Nothing due</p>
-          ) : (
-            <div className="space-y-2">
-              {selectedLots.map((item) => <LotCard key={item.id} item={item} today={today} />)}
-              {selectedJobs.map((item) => <JobPill key={item.id} item={item} />)}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   )
 }
@@ -473,19 +509,31 @@ function MonthView({
 // ── List view ─────────────────────────────────────────────────────────────────
 
 type FlatItem =
-  | { kind: 'lot'; id: string; siteId: string; stageId: string; lotId: string; label: string; site: string; stage: string; status: LotStatus; due_date: string; tradesCompleted: string[]; readyForLandscaping: boolean }
-  | { kind: 'job'; id: string; siteId: string; stageId: string; label: string; site: string; stage: string; status: ExtraJobStatus; due_date: string }
+  | { kind: 'lot';   id: string; siteId: string; stageId: string; lotId: string;  label: string; site: string; stage: string; status: LotStatus;      due_date: string; tradesCompleted: string[]; readyForLandscaping: boolean }
+  | { kind: 'job';   id: string; siteId: string; stageId: string;                 label: string; site: string; stage: string; status: ExtraJobStatus; due_date: string }
+  | { kind: 'event'; id: string; title: string; description: string | null; startTime: string | null; endDate: string | null; due_date: string }
 
-function ListView({ lots, jobs, today }: { lots: LotItem[]; jobs: JobItem[]; today: string }) {
+function ListView({ lots, jobs, events, today, onDayClick }: {
+  lots: LotItem[]
+  jobs: JobItem[]
+  events: CalendarEvent[]
+  today: string
+  onDayClick: (day: string) => void
+}) {
   const items: FlatItem[] = [
     ...lots.map((l): FlatItem => ({
       kind: 'lot', id: l.id, siteId: l.siteId, stageId: l.stageId, lotId: l.lotId,
-      label: `Lot ${l.lotNumber}`, site: l.siteName, stage: l.stageName, status: l.status, due_date: l.dueDate,
-      tradesCompleted: l.tradesCompleted, readyForLandscaping: l.readyForLandscaping,
+      label: `Lot ${l.lotNumber}`, site: l.siteName, stage: l.stageName, status: l.status,
+      due_date: l.dueDate, tradesCompleted: l.tradesCompleted, readyForLandscaping: l.readyForLandscaping,
     })),
     ...jobs.map((j): FlatItem => ({
       kind: 'job', id: j.id, siteId: j.siteId, stageId: j.stageId,
       label: j.title, site: j.siteName, stage: j.stageName, status: j.status, due_date: j.dueDate,
+    })),
+    // Events appear on their start date only (multi-day events not repeated)
+    ...events.map((e): FlatItem => ({
+      kind: 'event', id: e.id, title: e.title, description: e.description,
+      startTime: e.startTime, endDate: e.endDate, due_date: e.eventDate,
     })),
   ]
   items.sort((a, b) => a.due_date.localeCompare(b.due_date))
@@ -498,13 +546,13 @@ function ListView({ lots, jobs, today }: { lots: LotItem[]; jobs: JobItem[]; tod
   }
 
   if (items.length === 0) {
-    return <EmptyState text="No upcoming work with due dates." />
+    return <EmptyState text="No upcoming work or events with dates." />
   }
 
   return (
     <div className="space-y-5">
       {[...weeks.entries()].map(([weekStart, weekItems]) => {
-        const isOverdue = weekStart < today
+        const isOverdue = weekStart < getWeekStart(today)
         return (
           <div key={weekStart}>
             <div className="flex items-center gap-2 mb-2">
@@ -516,6 +564,34 @@ function ListView({ lots, jobs, today }: { lots: LotItem[]; jobs: JobItem[]; tod
 
             <div className="rounded-xl border border-border bg-surface overflow-hidden divide-y divide-border-subtle">
               {weekItems.map((item) => {
+                if (item.kind === 'event') {
+                  return (
+                    <button
+                      key={`event-${item.id}`}
+                      type="button"
+                      onClick={() => onDayClick(item.due_date)}
+                      className="flex items-start gap-3 w-full px-4 py-3.5 hover:bg-surface-raised transition-colors text-left"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-semibold text-fg">{item.title}</span>
+                          <span className="rounded border border-green-500/60 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">Event</span>
+                          {item.endDate && (
+                            <span className="text-xs text-fg-muted">Until {formatDate(item.endDate)}</span>
+                          )}
+                        </div>
+                        {item.description && (
+                          <p className="mt-0.5 text-xs text-fg-muted truncate">{item.description}</p>
+                        )}
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-xs text-fg-muted">{formatDate(item.due_date)}</p>
+                        {item.startTime && <p className="text-xs text-fg-muted">{formatTime(item.startTime)}</p>}
+                      </div>
+                    </button>
+                  )
+                }
+
                 const href = item.kind === 'lot'
                   ? `/sites/${item.siteId}/stages/${item.stageId}/lots/${item.lotId}`
                   : `/sites/${item.siteId}/stages/${item.stageId}/extra-jobs/${item.id}`
@@ -526,7 +602,7 @@ function ListView({ lots, jobs, today }: { lots: LotItem[]; jobs: JobItem[]; tod
 
                 return (
                   <Link key={item.id} href={href}
-                    className="flex items-start gap-3 px-4 py-3.5 hover:bg-surface-raised active:bg-surface-raised transition-colors">
+                    className="flex items-start gap-3 px-4 py-3.5 hover:bg-surface-raised transition-colors">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-semibold text-fg">{item.label}</span>
@@ -588,17 +664,21 @@ function BlockedView({ lots, today }: { lots: LotItem[]; today: string }) {
 interface Props {
   lotItems: LotItem[]
   jobItems: JobItem[]
+  events: CalendarEvent[]
   sites: SiteOption[]
   today: string
+  userId: string
+  isAdmin: boolean
+  canCreateEvents: boolean
 }
 
-export default function ScheduleView({ lotItems, jobItems, sites, today }: Props) {
+export default function ScheduleView({ lotItems, jobItems, events, sites, today, userId, isAdmin, canCreateEvents }: Props) {
   const [view, setView] = useState<View>(() => {
     if (typeof window === 'undefined') return '2weeks'
     const saved = localStorage.getItem('schedule-view-preference')
     return (saved && VALID_VIEWS.includes(saved as View)) ? saved as View : '2weeks'
   })
-  const [siteFilter, setSiteFilter] = useState('')
+  const [siteFilter, setSiteFilter]   = useState('')
   const [showBlocked, setShowBlocked] = useState(false)
   const [twoWeekOffset, setTwoWeekOffset] = useState(0)
   const [monthCursor, setMonthCursor] = useState(() => {
@@ -616,6 +696,10 @@ export default function ScheduleView({ lotItems, jobItems, sites, today }: Props
   const lots = siteFilter ? lotItems.filter((l) => l.siteId === siteFilter) : lotItems
   const jobs = siteFilter ? jobItems.filter((j) => j.siteId === siteFilter) : jobItems
 
+  const selectedDayLots   = selectedDay ? lots.filter((l) => l.dueDate === selectedDay) : []
+  const selectedDayJobs   = selectedDay ? jobs.filter((j) => j.dueDate === selectedDay) : []
+  const selectedDayEvents = selectedDay ? getEventsForDay(events, selectedDay) : []
+
   const views: Array<{ id: View; label: string }> = [
     { id: '2weeks', label: '2 Weeks' },
     { id: 'month',  label: 'Month'   },
@@ -623,60 +707,76 @@ export default function ScheduleView({ lotItems, jobItems, sites, today }: Props
   ]
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex gap-1">
-          {views.map((v) => (
+    <>
+      {selectedDay && (
+        <EventDayPanel
+          day={selectedDay}
+          lots={selectedDayLots}
+          jobs={selectedDayJobs}
+          events={selectedDayEvents}
+          canCreate={canCreateEvents}
+          userId={userId}
+          isAdmin={isAdmin}
+          onClose={() => setSelectedDay(null)}
+        />
+      )}
+
+      <div className="space-y-5">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex gap-1">
+            {views.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => changeView(v.id)}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  !showBlocked && view === v.id
+                    ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900'
+                    : 'text-fg-muted hover:bg-surface-raised'
+                }`}
+              >
+                {v.label}
+              </button>
+            ))}
             <button
-              key={v.id}
               type="button"
-              onClick={() => changeView(v.id)}
+              onClick={() => setShowBlocked((b) => !b)}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                !showBlocked && view === v.id
-                  ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900'
-                  : 'text-fg-muted hover:bg-surface-raised'
+                showBlocked ? 'bg-amber-600 text-white' : 'text-fg-muted hover:bg-surface-raised'
               }`}
             >
-              {v.label}
+              Blocked lots
             </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => setShowBlocked((b) => !b)}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-              showBlocked ? 'bg-amber-600 text-white' : 'text-fg-muted hover:bg-surface-raised'
-            }`}
+          </div>
+
+          <select
+            value={siteFilter}
+            onChange={(e) => setSiteFilter(e.target.value)}
+            className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-fg focus:border-border focus:outline-none"
           >
-            Blocked lots
-          </button>
+            <option value="">All sites</option>
+            {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
         </div>
 
-        <select
-          value={siteFilter}
-          onChange={(e) => setSiteFilter(e.target.value)}
-          className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-fg focus:border-border focus:outline-none"
-        >
-          <option value="">All sites</option>
-          {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
+        {showBlocked ? (
+          <BlockedView lots={lots} today={today} />
+        ) : view === '2weeks' ? (
+          <TwoWeekView
+            lots={lots} jobs={jobs} events={events} today={today}
+            offset={twoWeekOffset} onOffsetChange={setTwoWeekOffset}
+            onDayClick={setSelectedDay}
+          />
+        ) : view === 'month' ? (
+          <MonthView
+            lots={lots} jobs={jobs} events={events} today={today}
+            monthCursor={monthCursor} onMonthCursorChange={setMonthCursor}
+            selectedDay={selectedDay} onDayClick={setSelectedDay}
+          />
+        ) : (
+          <ListView lots={lots} jobs={jobs} events={events} today={today} onDayClick={setSelectedDay} />
+        )}
       </div>
-
-      {showBlocked ? (
-        <BlockedView lots={lots} today={today} />
-      ) : view === '2weeks' ? (
-        <TwoWeekView
-          lots={lots} jobs={jobs} today={today}
-          offset={twoWeekOffset} onOffsetChange={setTwoWeekOffset}
-        />
-      ) : view === 'month' ? (
-        <MonthView
-          lots={lots} jobs={jobs} today={today}
-          monthCursor={monthCursor} onMonthCursorChange={setMonthCursor}
-          selectedDay={selectedDay} onSelectedDayChange={setSelectedDay}
-        />
-      ) : (
-        <ListView lots={lots} jobs={jobs} today={today} />
-      )}
-    </div>
+    </>
   )
 }
