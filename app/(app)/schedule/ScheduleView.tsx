@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import {
   STATUS_CONFIG,
@@ -593,7 +593,11 @@ interface Props {
 }
 
 export default function ScheduleView({ lotItems, jobItems, sites, today }: Props) {
-  const [view, setView]           = useState<View>('2weeks')
+  const [view, setView] = useState<View>(() => {
+    if (typeof window === 'undefined') return '2weeks'
+    const saved = localStorage.getItem('schedule-view-preference')
+    return (saved && VALID_VIEWS.includes(saved as View)) ? saved as View : '2weeks'
+  })
   const [siteFilter, setSiteFilter] = useState('')
   const [showBlocked, setShowBlocked] = useState(false)
   const [twoWeekOffset, setTwoWeekOffset] = useState(0)
@@ -602,14 +606,6 @@ export default function ScheduleView({ lotItems, jobItems, sites, today }: Props
     return { year: y, month: m - 1 }
   })
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
-
-  // Restore saved view preference after hydration (localStorage unavailable on server)
-  useEffect(() => {
-    const saved = localStorage.getItem('schedule-view-preference')
-    if (saved && VALID_VIEWS.includes(saved as View)) {
-      setView(saved as View)
-    }
-  }, [])
 
   function changeView(v: View) {
     setView(v)
