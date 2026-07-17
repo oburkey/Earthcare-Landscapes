@@ -12,7 +12,7 @@ export async function createExtraJob(
 ): Promise<ActionState> {
   const profile = await requireAuth()
 
-  if (profile.role !== 'leading_hand' && profile.role !== 'supervisor' && profile.role !== 'admin') {
+  if (profile.role === 'client') {
     return { error: 'You do not have permission to add extra jobs.' }
   }
 

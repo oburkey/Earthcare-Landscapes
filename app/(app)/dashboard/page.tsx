@@ -110,28 +110,30 @@ export default async function DashboardPage() {
     }
   }
 
-  // Supervisor+: sites+stages for quick-add modal + pre-starts this week + vehicle alerts
+  // All roles: sites+stages for quick-add extra job modal
+  try {
+    const supabase = await createClient()
+    const { data: sitesRaw } = await supabase
+      .from('sites')
+      .select('id, name, stages(id, name, order)')
+      .is('completed_at', null)
+      .order('name', { ascending: true })
+    sitesForModal = (sitesRaw ?? []).map((s) => ({
+      id: s.id,
+      name: s.name,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      stages: [...((s.stages as any[]) ?? [])]
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
+        .map((st: { id: string; name: string }) => ({ id: st.id, name: st.name })),
+    }))
+  } catch {
+    // graceful fallback — modal button won't show
+  }
+
+  // Supervisor+: pre-starts this week + vehicle alerts
   if (isSupervisor) {
     const supabase = await createClient()
-
-    try {
-      const { data: sitesRaw } = await supabase
-        .from('sites')
-        .select('id, name, stages(id, name, order)')
-        .is('completed_at', null)
-        .order('name', { ascending: true })
-      sitesForModal = (sitesRaw ?? []).map((s) => ({
-        id: s.id,
-        name: s.name,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        stages: [...((s.stages as any[]) ?? [])]
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
-          .map((st: { id: string; name: string }) => ({ id: st.id, name: st.name })),
-      }))
-    } catch {
-      // graceful fallback — modal button won't show
-    }
 
     const dayOfWeek = today.getDay()
     const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
@@ -268,7 +270,7 @@ export default async function DashboardPage() {
 
         <div className="flex items-start justify-between gap-3">
           <Greeting name={profile.first_name} />
-          {isSupervisor && sitesForModal.length > 0 && (
+          {sitesForModal.length > 0 && (
             <div className="hidden sm:block shrink-0 pt-1">
               <QuickAddExtraJobModal sites={sitesForModal} />
             </div>

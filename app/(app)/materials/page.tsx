@@ -8,7 +8,7 @@ export const metadata = { title: 'Materials — Earthcare Landscapes' }
 
 export default async function MaterialsPage() {
   const profile = await requireAuth()
-  requireRole(profile, 'admin')
+  requireRole(profile, 'supervisor')
 
   const { startDate, endDate, months } = getMaterialsDateRange()
 

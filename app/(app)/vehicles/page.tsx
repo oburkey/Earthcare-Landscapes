@@ -7,7 +7,7 @@ export const metadata = { title: 'Vehicles — Earthcare Landscapes' }
 
 export default async function VehiclesPage() {
   const profile = await requireAuth()
-  requireRole(profile, 'supervisor')
+  requireRole(profile, 'leading_hand')
 
   const data = await getCachedVehicles()
 
