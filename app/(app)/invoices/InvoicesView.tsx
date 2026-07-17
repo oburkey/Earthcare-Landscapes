@@ -80,9 +80,6 @@ function fmtQty(n: number): string {
   return parseFloat(n.toFixed(3)).toString()
 }
 
-function stageTotal(lots: LotRow[], key: keyof LotRow): number {
-  return lots.reduce((sum, l) => sum + (l[key] as number), 0)
-}
 
 function slug(...parts: (string | number | null | undefined)[]): string {
   return parts

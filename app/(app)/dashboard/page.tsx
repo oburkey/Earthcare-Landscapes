@@ -241,7 +241,6 @@ export default async function DashboardPage() {
       const dateStr = toYmd(d)
       const dayLabel = d.toLocaleDateString('en-AU', { weekday: 'short' })
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const daySites = preStarts
         .filter((ps: { date: string }) => ps.date === dateStr)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

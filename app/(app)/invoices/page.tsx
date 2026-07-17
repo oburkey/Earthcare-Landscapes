@@ -230,7 +230,7 @@ export default async function InvoicesPage() {
 
   // ── Query 4: Progress claims (graceful fallback) ───────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let progressClaimsByStage = new Map<string, any[]>()
+  const progressClaimsByStage = new Map<string, any[]>()
   try {
     const stageIds = activeSites.flatMap((s) =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
