@@ -42,3 +42,6 @@ next-env.d.ts
 
 # vscode — machine-specific settings
 .vscode/settings.json
+
+# claude code — machine-specific local settings
+.claude/settings.local.json

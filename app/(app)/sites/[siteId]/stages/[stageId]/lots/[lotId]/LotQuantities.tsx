@@ -133,16 +133,11 @@ export default function LotQuantities({
   isAdmin, canManage, canSupervise,
   sections, estimatedQuote, finalQuote,
   showClientExtras = true,
-  contractPrice,
   plantRatios,
 }: Props) {
   const [open, setOpen] = useState(false)
-  // Default to Final when final data exists, or when a contract price is set.
-  // Checking finalQuote (not estimatedQuote) is the correct condition — we want
-  // to show Final only when Final data has actually been entered.
   const hasFinalData = !!finalQuote && finalQuote.items.some((i) => i.quantity !== null)
-  const hasContractPrice = contractPrice != null && contractPrice > 0
-  const [isEstimated, setIsEstimated] = useState(hasContractPrice ? false : !hasFinalData)
+  const [isEstimated, setIsEstimated] = useState(false)
   const activeQuote = isEstimated ? estimatedQuote : finalQuote
   // The quote matching the initial active mode above — used to seed initial
   // state below (must NOT always be estimatedQuote, or "Final" mode would
