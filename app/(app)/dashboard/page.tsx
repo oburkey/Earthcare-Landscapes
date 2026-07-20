@@ -162,8 +162,8 @@ async function fetchSupervisorData(isSupervisor: boolean, today: Date, todayStr:
     try {
       const { data } = await supabase
         .from('vehicles')
-        .select('id, rego_expiry_date, next_service_due_date')
-        .or(`rego_expiry_date.lte.${weekAheadStr},next_service_due_date.lte.${weekAheadStr}`)
+        .select('id, rego_expiry_date, insurance_expiry_date, next_service_due_date')
+        .or(`rego_expiry_date.lte.${weekAheadStr},insurance_expiry_date.lte.${weekAheadStr},next_service_due_date.lte.${weekAheadStr}`)
       return (data ?? []).length
     } catch {
       return 0

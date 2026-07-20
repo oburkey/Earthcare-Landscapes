@@ -21,12 +21,14 @@ function parseFields(formData: FormData) {
     return isNaN(n) ? null : n
   }
 
-  const make  = (formData.get('make') as string)?.trim()
-  const model = (formData.get('model') as string)?.trim()
+  const make  = (formData.get('make') as string)?.trim() || null
+  const model = (formData.get('model') as string)?.trim() || null
+  const name  = (formData.get('name') as string)?.trim() || null
 
   return {
     make,
     model,
+    name,
     year:                   int('year'),
     registration:           str('registration'),
     assigned_to:            str('assigned_to'),
@@ -44,8 +46,12 @@ function parseFields(formData: FormData) {
 }
 
 function validate(fields: ReturnType<typeof parseFields>): string | null {
-  if (!fields.make) return 'Make is required.'
-  if (!fields.model) return 'Model is required.'
+  if (fields.vehicle_type === 'Trailer') {
+    if (!fields.name) return 'Name is required.'
+  } else {
+    if (!fields.make) return 'Make is required.'
+    if (!fields.model) return 'Model is required.'
+  }
   if (fields.year !== null && (fields.year < 1900 || fields.year > 2100)) return 'Enter a valid year.'
   return null
 }

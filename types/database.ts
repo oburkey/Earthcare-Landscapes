@@ -150,8 +150,9 @@ export interface ExtraJob {
 // ── Vehicles ──────────────────────────────────────────────────────────────────
 export interface Vehicle {
   id: string
-  make: string
-  model: string
+  make: string | null
+  model: string | null
+  name: string | null // trailers only, e.g. "Plant trailer 1" — used instead of make/model
   year: number | null
   registration: string | null
   assigned_to: string | null

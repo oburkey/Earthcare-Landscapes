@@ -6,67 +6,14 @@ import { compressImage } from '@/lib/compressImage'
 import { LOGO_DATA_URL } from '@/lib/pdfAssets'
 import type { Role } from '@/types/database'
 import type { PreStartRow, SiteOption, StaffOption, VehicleOption } from './SafetyView'
-
-// ── Checklist definitions ─────────────────────────────────────────────────────
-
-type ChecklistItem = {
-  readonly key:              string
-  readonly label:            string
-  readonly inverted?:        boolean  // "yes" is the bad answer
-  readonly blocksSubmission?: boolean // bad answer prevents submit (truck Q1)
-}
-
-const MACHINERY_CHECKLIST: readonly ChecklistItem[] = [
-  { key: 'air_filters',       label: 'Have air filters been cleaned today?' },
-  { key: 'pre_cleaner_bowl',  label: 'Has the air filter been checked and bowl emptied?' },
-  { key: 'engine_fluids',     label: 'Have engine oil, coolant and hydraulic fluid levels been checked, no leaks?' },
-  { key: 'battery_water',     label: 'Have battery, leads and water level been checked?' },
-  { key: 'belts_hoses',       label: 'Have belts, hoses and battery condition/connections been checked?' },
-  { key: 'greased_today',     label: 'Has the machine been greased today?' },
-  { key: 'attachments_secure',label: 'Are buckets, forks, attachment pins and bolts secure?' },
-  { key: 'lights_working',    label: 'Are work lights, beacon, taillights and reverse lights working?' },
-  { key: 'seatbelt_controls', label: 'Is the seatbelt working, and are controls, horn and reverse beeper operational?' },
-  { key: 'fire_extinguisher', label: 'Is a fire extinguisher present and not expired?' },
-  { key: 'door_seals',        label: 'Does the door open and close correctly with seals undamaged?' },
-  { key: 'tyre_pressure',     label: 'Have tyre pressures been checked and wheel nuts are secure?' },
-  { key: 'machine_washed',    label: 'Has the machine been washed in the last week?' },
-  { key: 'faults_concerns',   label: 'Are there any faults or concerns to report?', inverted: true },
-]
-
-const TRUCK_CHECKLIST: readonly ChecklistItem[] = [
-  { key: 'fitness_to_drive',  label: 'Are you fit, drug and alcohol free to drive this vehicle?', blocksSubmission: true },
-  { key: 'fluid_levels',      label: 'Have fluid levels been checked (oil, coolant, brake/clutch fluid)?' },
-  { key: 'battery_water',     label: 'Have battery, leads and water level been checked?' },
-  { key: 'wheels_tyres',      label: 'Have wheels, tyres and hubs been checked (tread, pressure, wheel nuts)?' },
-  { key: 'lights_reflectors', label: 'Are all lights and reflectors working?' },
-  { key: 'windscreen_wipers', label: 'Are windscreen, wipers and mirrors clean and undamaged?' },
-  { key: 'fluid_leaks',       label: 'Any fluid leaks visible (oil, fuel, water, hydraulic)?', inverted: true },
-  { key: 'warning_lights',    label: 'After starting — any warning lights remain on?', inverted: true },
-  { key: 'truck_washed',      label: 'Has the truck been washed in the last week?' },
-  { key: 'faults_concerns',   label: 'Are there any faults or concerns to report?', inverted: true },
-]
-
-const TRAILER_CHECKLIST: readonly ChecklistItem[] = [
-  { key: 'tyres_checked',     label: 'Have all tyres been checked (tread, damage, inflation, including spares)?' },
-  { key: 'mudguards',         label: 'Are mudguards and mudflaps securely fitted?' },
-  { key: 'lights_indicators', label: 'Are all lights, indicators and reflectors working?' },
-  { key: 'chassis_suspension',label: 'Visual check of chassis, body and suspension complete?' },
-  { key: 'tow_hitch',         label: 'Are tow hitch, safety chains and tie down straps secure (chains crossed left-right)?' },
-  { key: 'brakes_tested',     label: 'Have brakes been tested at low speed (apply and release)?' },
-  { key: 'faults_concerns',   label: 'Are there any faults or concerns to report?', inverted: true },
-]
-
-// Kept only for rendering legacy pre-start records in the detail view
-const OLD_MACHINERY_CHECKLIST: readonly ChecklistItem[] = [
-  { key: 'no_new_damage',   label: 'Is the machine free of new damage since last use?' },
-  { key: 'fluid_levels',    label: 'Are all fluid levels checked (fuel, oil, hydraulic)?' },
-  { key: 'brakes_steering', label: 'Are brakes and steering operating correctly?' },
-  { key: 'guards_safety',   label: 'Are all guards and safety devices in place?' },
-  { key: 'seatbelt',        label: 'Is the seatbelt working and in good condition?' },
-  { key: 'tyres_tracks',    label: 'Are tyres/tracks in good condition?' },
-  { key: 'greased_today',   label: 'Has the machine been greased today?' },
-  { key: 'faults_concerns', label: 'Are there any faults or concerns to report?', inverted: true },
-]
+import {
+  type ChecklistItem,
+  MACHINERY_CHECKLIST,
+  TRUCK_CHECKLIST,
+  TRAILER_CHECKLIST,
+  OLD_MACHINERY_CHECKLIST,
+  isBadAnswer as isBadAnswerShared,
+} from '@/lib/preStartChecklists'
 
 const WEATHER_OPTIONS = ['Fine', 'Hot', 'Wet', 'Windy', 'Extreme heat'] as const
 
@@ -81,8 +28,7 @@ function defaultChecksFor(items: readonly ChecklistItem[]): Record<string, Check
 }
 
 function isBadAnswer(item: ChecklistItem, val: CheckVal): boolean {
-  if (!val) return false
-  return item.inverted ? val === 'yes' : val === 'no'
+  return isBadAnswerShared(item, val)
 }
 
 // Validate a checklist; returns first error string or null
@@ -264,7 +210,13 @@ async function downloadPreStartsPdf(
 
     // Trailer detail
     if (ps.usingTrailer && ps.trailerChecks) {
-      detailRows += pdfEquipmentDetailRow('Trailer', '#f0fdf4', '#bbf7d0', '#166534', '<div style="font-size:8.5px;font-weight:bold;color:#111;">Trailer</div>', TRAILER_CHECKLIST, ps.trailerChecks, '')
+      const trailer = ps.trailerId ? vehicles.find(v => v.id === ps.trailerId) : null
+      const infoHtml = [
+        `<div style="font-size:8.5px;font-weight:bold;color:#111;">${trailer?.name ?? 'Trailer'}</div>`,
+        trailer?.registration ? `<div style="font-size:7.5px;color:#555;margin-top:1px;">${trailer.registration}</div>` : '',
+        trailer?.assigned_to  ? `<div style="font-size:7.5px;color:#555;">Location: ${trailer.assigned_to}</div>` : '',
+      ].filter(Boolean).join('')
+      detailRows += pdfEquipmentDetailRow('Trailer', '#f0fdf4', '#bbf7d0', '#166534', infoHtml, TRAILER_CHECKLIST, ps.trailerChecks, '')
     }
 
     return summaryRow + detailRows
@@ -470,6 +422,7 @@ export default function PreStartsTab({
 
   const machineryVehicles = vehicles.filter(v => v.vehicle_type === 'Machinery')
   const truckVehicles     = vehicles.filter(v => v.vehicle_type === 'Truck')
+  const trailerVehicles   = vehicles.filter(v => v.vehicle_type === 'Trailer')
 
   // ── List / nav state ───────────────────────────────────────────────────────
   const [view, setView] = useState<'list' | 'new' | 'detail'>('list')
@@ -524,6 +477,7 @@ export default function PreStartsTab({
 
   // Trailer
   const [usingTrailer, setUsingTrailer]       = useState(false)
+  const [trailerId, setTrailerId]             = useState('')
   const [trailerChecks, setTrailerChecks]     = useState<Record<string, CheckVal>>(defaultChecksFor(TRAILER_CHECKLIST))
   const [trailerNotes, setTrailerNotes]       = useState<Record<string, string>>({})
 
@@ -571,6 +525,7 @@ export default function PreStartsTab({
   const selectedPreStart = detailId ? preStarts.find(ps => ps.id === detailId) : null
   const selectedMachine  = machineryVehicles.find(v => v.id === machineId)
   const selectedTruck    = truckVehicles.find(v => v.id === truckId)
+  const selectedTrailer  = trailerVehicles.find(v => v.id === trailerId)
 
   // ── Handlers ───────────────────────────────────────────────────────────────
 
@@ -582,7 +537,7 @@ export default function PreStartsTab({
     setMachineChecks(defaultChecksFor(MACHINERY_CHECKLIST)); setMachineNotes({})
     setUsingTruck(false); setTruckId('')
     setTruckChecks(defaultChecksFor(TRUCK_CHECKLIST)); setTruckNotes({})
-    setUsingTrailer(false)
+    setUsingTrailer(false); setTrailerId('')
     setTrailerChecks(defaultChecksFor(TRAILER_CHECKLIST)); setTrailerNotes({})
     setNotes(''); setFormError(null)
     setPendingPhotos([]); setPhotoPreviews([])
@@ -639,6 +594,22 @@ export default function PreStartsTab({
     if (!siteId) { setFormError('Please select a site'); return }
     if (!date)   { setFormError('Date is required'); return }
 
+    if (usingMachinery && !machineId) {
+      setFormError('Please select which machine you used'); return
+    }
+    if (usingMachinery && (!machineHours.trim() || isNaN(Number(machineHours)))) {
+      setFormError('Please enter the current hours for the machine'); return
+    }
+    if (usingTruck && !truckId) {
+      setFormError('Please select which truck you used'); return
+    }
+    if (usingTrailer && !trailerId) {
+      setFormError('Please select which trailer you used'); return
+    }
+    if (usingTrailer && !TRAILER_CHECKLIST.every(item => !!trailerChecks[item.key])) {
+      setFormError('Please complete all trailer checklist items'); return
+    }
+
     if (usingMachinery) {
       const err = validateSection(MACHINERY_CHECKLIST, machineChecks, machineNotes, 'Machinery')
       if (err) { setFormError(err); return }
@@ -676,6 +647,7 @@ export default function PreStartsTab({
       fd.set('truck_checks', JSON.stringify(buildChecksJson(TRUCK_CHECKLIST, truckChecks, truckNotes)))
     }
     fd.set('using_trailer', String(usingTrailer))
+    fd.set('trailer_id',    trailerId)
     if (usingTrailer) {
       fd.set('trailer_checks', JSON.stringify(buildChecksJson(TRAILER_CHECKLIST, trailerChecks, trailerNotes)))
     }
@@ -711,6 +683,7 @@ export default function PreStartsTab({
       truckId:        usingTruck ? truckId : null,
       truckChecks:    usingTruck ? buildChecksJson(TRUCK_CHECKLIST, truckChecks, truckNotes) : null,
       usingTrailer,
+      trailerId:      usingTrailer ? trailerId : null,
       trailerChecks:  usingTrailer ? buildChecksJson(TRAILER_CHECKLIST, trailerChecks, trailerNotes) : null,
       notes:          notes || null,
       photoPaths:     ('photoPaths' in result && Array.isArray(result.photoPaths)) ? result.photoPaths : [],
@@ -924,6 +897,17 @@ export default function PreStartsTab({
           {ps.usingTrailer && ps.trailerChecks && (
             <div className="space-y-3">
               <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Trailer Pre-Start</p>
+              {(() => {
+                const trailer = ps.trailerId ? vehicles.find(v => v.id === ps.trailerId) : null
+                if (!trailer) return null
+                return (
+                  <div className="rounded-lg bg-surface-raised border border-border px-3 py-2 space-y-0.5">
+                    <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-1">Trailer</p>
+                    <p className="text-sm font-medium text-fg">{trailer.name}</p>
+                    {trailer.registration && <p className="text-xs text-fg-muted">{trailer.registration}</p>}
+                  </div>
+                )
+              })()}
               <DetailChecklist items={TRAILER_CHECKLIST} checks={ps.trailerChecks} />
             </div>
           )}
@@ -1201,7 +1185,7 @@ export default function PreStartsTab({
               <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 uppercase tracking-wide">Machinery Pre-Start Check</p>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Select Machine</label>
+                <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Select Machine *</label>
                 {machineryVehicles.length === 0 ? (
                   <p className="text-sm text-fg-muted italic">No machinery in fleet. Add vehicles with type &quot;Machinery&quot; in the Vehicles page.</p>
                 ) : (
@@ -1225,7 +1209,7 @@ export default function PreStartsTab({
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Current meter reading (hrs)</label>
+                <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Current meter reading (hrs) *</label>
                 <input type="number" value={machineHours} onChange={e => setMachineHours(e.target.value)}
                   placeholder="e.g. 1234.5" min="0" step="0.5"
                   className="w-36 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-border focus:outline-none" />
@@ -1250,7 +1234,7 @@ export default function PreStartsTab({
               <p className="text-xs font-semibold text-blue-800 dark:text-blue-300 uppercase tracking-wide">Truck Pre-Start Check</p>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Select Truck</label>
+                <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Select Truck *</label>
                 {truckVehicles.length === 0 ? (
                   <p className="text-sm text-fg-muted italic">No trucks in fleet. Add vehicles with type &quot;Truck&quot; in the Vehicles page.</p>
                 ) : (
@@ -1288,8 +1272,31 @@ export default function PreStartsTab({
           {usingTrailer && (
             <div className="space-y-4 rounded-xl border border-green-200 bg-green-50 p-4 dark:border-green-800/60 dark:bg-green-900/20">
               <p className="text-xs font-semibold text-green-800 dark:text-green-300 uppercase tracking-wide">Trailer Pre-Start Check</p>
+
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Checklist</label>
+                <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Select Trailer *</label>
+                {trailerVehicles.length === 0 ? (
+                  <p className="text-sm text-fg-muted italic">No trailers in fleet. Add vehicles with type &quot;Trailer&quot; in the Vehicles page.</p>
+                ) : (
+                  <>
+                    <select value={trailerId} onChange={e => setTrailerId(e.target.value)}
+                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-border focus:outline-none">
+                      <option value="">— Select trailer —</option>
+                      {trailerVehicles.map(v => (
+                        <option key={v.id} value={v.id}>
+                          {v.name}{v.registration ? ` (${v.registration})` : ''}{v.assigned_to ? ` — ${v.assigned_to}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedTrailer && (
+                      <p className="text-xs text-fg-muted">{selectedTrailer.name} selected</p>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Checklist * (all items required)</label>
                 <ChecklistSection
                   items={TRAILER_CHECKLIST}
                   checks={trailerChecks}

@@ -5,10 +5,19 @@ import { createVehicle, updateVehicle, deleteVehicle } from './actions'
 
 type ActionState = { error?: string; success?: string } | null
 
+export type VehicleFaultEntry = {
+  id: string
+  date: string
+  submitterName: string
+  failedItems: { label: string; note: string | null }[]
+  notes: string | null
+}
+
 interface Vehicle {
   id: string
-  make: string
-  model: string
+  make: string | null
+  model: string | null
+  name: string | null // trailers only, e.g. "Plant trailer 1" — used instead of make/model
   year: number | null
   registration: string | null
   assigned_to: string | null
@@ -26,18 +35,20 @@ interface Vehicle {
   current_hours_updated_at: string | null
 }
 
-const VEHICLE_TYPES = ['Truck', 'Machinery', 'Ute'] as const
+const VEHICLE_TYPES = ['Truck', 'Machinery', 'Ute', 'Trailer'] as const
 type VehicleType = typeof VEHICLE_TYPES[number]
 
 const TYPE_BADGE: Record<VehicleType, string> = {
   Truck:    'bg-blue-100 text-blue-700',
   Machinery:'bg-amber-100 text-amber-700',
   Ute:      'bg-purple-100 text-purple-700',
+  Trailer:  'bg-green-100 text-green-700',
 }
 
 interface Props {
   vehicles: Vehicle[]
   today: string // ISO date string passed from server to avoid hydration mismatch
+  faultHistory: Record<string, VehicleFaultEntry[]>
 }
 
 // ── Status logic ──────────────────────────────────────────────────────────────
@@ -83,9 +94,67 @@ function dateClass(dateStr: string | null | undefined, today: string): string {
   return 'text-fg-secondary'
 }
 
+// ── Fault history ─────────────────────────────────────────────────────────────
+
+function FaultHistorySection({ entries }: { entries: VehicleFaultEntry[] }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className="px-4 py-3">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between gap-2 text-left"
+      >
+        <span className="text-xs font-medium text-fg-muted">
+          Pre-start history
+          {entries.length > 0 && (
+            <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+              {entries.length} issue{entries.length !== 1 ? 's' : ''}
+            </span>
+          )}
+        </span>
+        <span className="text-xs text-fg-muted">{open ? 'Hide' : 'Show'}</span>
+      </button>
+
+      {open && (
+        <div className="mt-3 space-y-2.5">
+          {entries.length === 0 ? (
+            <p className="text-sm text-fg-muted italic">No issues reported in pre-starts for this vehicle.</p>
+          ) : (
+            entries.map((e) => (
+              <div
+                key={e.id}
+                className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800/60 dark:bg-amber-900/20"
+              >
+                <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-semibold text-fg">{fmt(e.date)}</span>
+                  <span className="text-xs text-fg-muted">Submitted by {e.submitterName}</span>
+                </div>
+                {e.failedItems.length > 0 && (
+                  <ul className="mb-1 space-y-0.5">
+                    {e.failedItems.map((f, i) => (
+                      <li key={i} className="text-xs text-red-700 dark:text-red-400">
+                        • {f.label}{f.note ? ` — ${f.note}` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {e.notes && (
+                  <p className="text-xs text-fg-secondary whitespace-pre-wrap">Notes: {e.notes}</p>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function VehicleManagement({ vehicles, today }: Props) {
+export default function VehicleManagement({ vehicles, today, faultHistory }: Props) {
   const [showAdd, setShowAdd] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [filterType, setFilterType] = useState<VehicleType | ''>('')
@@ -93,6 +162,15 @@ export default function VehicleManagement({ vehicles, today }: Props) {
   const filtered = filterType
     ? vehicles.filter((v) => v.vehicle_type === filterType)
     : vehicles
+
+  const vehicleList = [...filtered.filter((v) => v.vehicle_type !== 'Trailer')]
+    .sort((a, b) => (a.make ?? '').localeCompare(b.make ?? ''))
+  const trailerList = [...filtered.filter((v) => v.vehicle_type === 'Trailer')]
+    .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
+
+  const showVehiclesSection = filterType !== 'Trailer'
+  const showTrailersSection = filterType === '' || filterType === 'Trailer'
+  const showBothSections    = filterType === ''
 
   return (
     <div className="space-y-5">
@@ -139,138 +217,281 @@ export default function VehicleManagement({ vehicles, today }: Props) {
             Add the first vehicle →
           </button>
         </div>
-      ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-border bg-surface px-4 py-8 text-center">
-          <p className="text-sm text-fg-muted">No {filterType} vehicles.</p>
-        </div>
       ) : (
-        <div className="space-y-3">
-          {filtered.map((vehicle) => {
-            const status = getVehicleStatus(vehicle, today)
-            const { dot, label } = STATUS_DOT[status]
-            return (
-              <div key={vehicle.id} className="rounded-xl border border-border bg-surface overflow-hidden">
+        <>
+          {showVehiclesSection && (
+            <div className="space-y-3">
+              {showBothSections && vehicleList.length > 0 && (
+                <h2 className="text-sm font-semibold text-fg-secondary">Vehicles</h2>
+              )}
+              {vehicleList.length === 0 ? (
+                <EmptyBox text={`No ${filterType || ''} vehicles.`} />
+              ) : (
+                vehicleList.map((vehicle) => (
+                  <VehicleCard
+                    key={vehicle.id}
+                    vehicle={vehicle}
+                    today={today}
+                    faultHistory={faultHistory[vehicle.id] ?? []}
+                    editing={editingId === vehicle.id}
+                    onToggleEdit={() => setEditingId(editingId === vehicle.id ? null : vehicle.id)}
+                    onEditSuccess={() => setEditingId(null)}
+                  />
+                ))
+              )}
+            </div>
+          )}
 
-                {/* Card header */}
-                <div className="flex items-start justify-between gap-3 px-4 py-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2.5 flex-wrap">
-                      {/* Status dot */}
-                      <span title={label} className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${dot}`} />
-                      <span className="text-sm font-semibold text-fg">
-                        {vehicle.year ? `${vehicle.year} ` : ''}{vehicle.make} {vehicle.model}
-                      </span>
-                      {vehicle.registration && (
-                        <span className="rounded-md bg-surface-raised px-2 py-0.5 text-xs font-mono font-medium text-fg-secondary">
-                          {vehicle.registration}
-                        </span>
-                      )}
-                      {vehicle.vehicle_type && VEHICLE_TYPES.includes(vehicle.vehicle_type as VehicleType) && (
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TYPE_BADGE[vehicle.vehicle_type as VehicleType]}`}>
-                          {vehicle.vehicle_type}
-                        </span>
-                      )}
-                    </div>
-                    {vehicle.assigned_to && (
-                      <p className="mt-1 text-xs text-fg-muted">
-                        Assigned to <span className="font-medium text-fg-secondary">{vehicle.assigned_to}</span>
-                      </p>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => setEditingId(editingId === vehicle.id ? null : vehicle.id)}
-                    className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-muted hover:bg-surface-raised"
-                  >
-                    {editingId === vehicle.id ? 'Close' : 'Edit'}
-                  </button>
-                </div>
+          {showTrailersSection && (
+            <div className="space-y-3">
+              {showBothSections && <h2 className="text-sm font-semibold text-fg-secondary">Trailers</h2>}
+              {trailerList.length === 0 ? (
+                <EmptyBox text="No trailers." />
+              ) : (
+                trailerList.map((trailer) => (
+                  <TrailerCard
+                    key={trailer.id}
+                    vehicle={trailer}
+                    today={today}
+                    editing={editingId === trailer.id}
+                    onToggleEdit={() => setEditingId(editingId === trailer.id ? null : trailer.id)}
+                    onEditSuccess={() => setEditingId(null)}
+                  />
+                ))
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
 
-                {/* Detail rows */}
-                <div className="border-t border-border-subtle divide-y divide-border-subtle">
+function EmptyBox({ text }: { text: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-surface px-4 py-8 text-center">
+      <p className="text-sm text-fg-muted">{text}</p>
+    </div>
+  )
+}
 
-                  {/* Service info */}
-                  <div className="grid grid-cols-2 divide-x divide-border-subtle">
-                    <div className="px-4 py-3">
-                      <p className="text-xs font-medium text-fg-muted mb-0.5">Last service</p>
-                      <p className="text-sm text-fg-secondary">{fmt(vehicle.last_service_date)}</p>
-                      {(vehicle.last_service_hours !== null || vehicle.last_service_odometer !== null) && (
-                        <p className="text-xs text-fg-muted mt-0.5">
-                          {[
-                            vehicle.last_service_hours !== null ? `${vehicle.last_service_hours.toLocaleString()} hrs` : null,
-                            vehicle.last_service_odometer !== null ? `${vehicle.last_service_odometer.toLocaleString()} km` : null,
-                          ].filter(Boolean).join(' · ')}
-                        </p>
-                      )}
-                    </div>
-                    <div className="px-4 py-3">
-                      <p className="text-xs font-medium text-fg-muted mb-0.5">Next service</p>
-                      <p className={`text-sm ${dateClass(vehicle.next_service_due_date, today)}`}>
-                        {fmt(vehicle.next_service_due_date)}
-                      </p>
-                      {(vehicle.next_service_km !== null || vehicle.next_service_hours !== null) && (
-                        <p className="text-xs text-fg-muted mt-0.5">
-                          {[
-                            vehicle.next_service_hours !== null ? `${vehicle.next_service_hours.toLocaleString()} hrs` : null,
-                            vehicle.next_service_km !== null ? `${vehicle.next_service_km.toLocaleString()} km` : null,
-                          ].filter(Boolean).join(' · ')}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+// ── Vehicle card (Truck / Machinery / Ute) ────────────────────────────────────
 
-                  {/* Current hours — machinery only */}
-                  {vehicle.vehicle_type === 'Machinery' && (
-                    <div className="px-4 py-3">
-                      <p className="text-xs font-medium text-fg-muted mb-0.5">Current hours</p>
-                      {vehicle.current_hours !== null ? (
-                        <>
-                          <p className="text-sm text-fg-secondary">{vehicle.current_hours.toLocaleString()} hrs</p>
-                          {vehicle.current_hours_updated_at && (
-                            <p className="text-xs text-fg-muted mt-0.5">
-                              Last updated {new Date(vehicle.current_hours_updated_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
-                            </p>
-                          )}
-                        </>
-                      ) : (
-                        <p className="text-sm text-fg-muted italic">No hours recorded</p>
-                      )}
-                    </div>
-                  )}
+function VehicleCard({
+  vehicle, today, faultHistory, editing, onToggleEdit, onEditSuccess,
+}: {
+  vehicle: Vehicle
+  today: string
+  faultHistory: VehicleFaultEntry[]
+  editing: boolean
+  onToggleEdit: () => void
+  onEditSuccess: () => void
+}) {
+  const status = getVehicleStatus(vehicle, today)
+  const { dot, label } = STATUS_DOT[status]
 
-                  {/* Rego + insurance */}
-                  <div className="grid grid-cols-2 divide-x divide-border-subtle">
-                    <div className="px-4 py-3">
-                      <p className="text-xs font-medium text-fg-muted mb-0.5">Rego expiry</p>
-                      <p className={`text-sm ${dateClass(vehicle.rego_expiry_date, today)}`}>
-                        {fmt(vehicle.rego_expiry_date)}
-                      </p>
-                    </div>
-                    <div className="px-4 py-3">
-                      <p className="text-xs font-medium text-fg-muted mb-0.5">Insurance expiry</p>
-                      <p className={`text-sm ${dateClass(vehicle.insurance_expiry_date, today)}`}>
-                        {fmt(vehicle.insurance_expiry_date)}
-                      </p>
-                    </div>
-                  </div>
+  return (
+    <div className="rounded-xl border border-border bg-surface overflow-hidden">
 
-                  {/* Notes */}
-                  {vehicle.notes && (
-                    <div className="px-4 py-3">
-                      <p className="text-xs font-medium text-fg-muted mb-0.5">Notes</p>
-                      <p className="text-sm text-fg-secondary whitespace-pre-wrap">{vehicle.notes}</p>
-                    </div>
-                  )}
-                </div>
+      {/* Card header */}
+      <div className="flex items-start justify-between gap-3 px-4 py-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Status dot */}
+            <span title={label} className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${dot}`} />
+            <span className="text-sm font-semibold text-fg">
+              {vehicle.year ? `${vehicle.year} ` : ''}{vehicle.make} {vehicle.model}
+            </span>
+            {vehicle.registration && (
+              <span className="rounded-md bg-surface-raised px-2 py-0.5 text-xs font-mono font-medium text-fg-secondary">
+                {vehicle.registration}
+              </span>
+            )}
+            {vehicle.vehicle_type && VEHICLE_TYPES.includes(vehicle.vehicle_type as VehicleType) && (
+              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TYPE_BADGE[vehicle.vehicle_type as VehicleType]}`}>
+                {vehicle.vehicle_type}
+              </span>
+            )}
+          </div>
+          {vehicle.assigned_to && (
+            <p className="mt-1 text-xs text-fg-muted">
+              Assigned to <span className="font-medium text-fg-secondary">{vehicle.assigned_to}</span>
+            </p>
+          )}
+        </div>
+        <button
+          onClick={onToggleEdit}
+          className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-muted hover:bg-surface-raised"
+        >
+          {editing ? 'Close' : 'Edit'}
+        </button>
+      </div>
 
-                {/* Edit form */}
-                {editingId === vehicle.id && (
-                  <div className="border-t border-border bg-surface-raised px-4 py-4">
-                    <EditForm vehicle={vehicle} onSuccess={() => setEditingId(null)} />
-                  </div>
+      {/* Detail rows */}
+      <div className="border-t border-border-subtle divide-y divide-border-subtle">
+
+        {/* Service info */}
+        <div className="grid grid-cols-2 divide-x divide-border-subtle">
+          <div className="px-4 py-3">
+            <p className="text-xs font-medium text-fg-muted mb-0.5">Last service</p>
+            <p className="text-sm text-fg-secondary">{fmt(vehicle.last_service_date)}</p>
+            {(vehicle.last_service_hours !== null || vehicle.last_service_odometer !== null) && (
+              <p className="text-xs text-fg-muted mt-0.5">
+                {[
+                  vehicle.last_service_hours !== null ? `${vehicle.last_service_hours.toLocaleString()} hrs` : null,
+                  vehicle.last_service_odometer !== null ? `${vehicle.last_service_odometer.toLocaleString()} km` : null,
+                ].filter(Boolean).join(' · ')}
+              </p>
+            )}
+          </div>
+          <div className="px-4 py-3">
+            <p className="text-xs font-medium text-fg-muted mb-0.5">Next service</p>
+            <p className={`text-sm ${dateClass(vehicle.next_service_due_date, today)}`}>
+              {fmt(vehicle.next_service_due_date)}
+            </p>
+            {(vehicle.next_service_km !== null || vehicle.next_service_hours !== null) && (
+              <p className="text-xs text-fg-muted mt-0.5">
+                {[
+                  vehicle.next_service_hours !== null ? `${vehicle.next_service_hours.toLocaleString()} hrs` : null,
+                  vehicle.next_service_km !== null ? `${vehicle.next_service_km.toLocaleString()} km` : null,
+                ].filter(Boolean).join(' · ')}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Current hours — machinery only */}
+        {vehicle.vehicle_type === 'Machinery' && (
+          <div className="px-4 py-3">
+            <p className="text-xs font-medium text-fg-muted mb-0.5">Current hours</p>
+            {vehicle.current_hours !== null ? (
+              <>
+                <p className="text-sm text-fg-secondary">{vehicle.current_hours.toLocaleString()} hrs</p>
+                {vehicle.current_hours_updated_at && (
+                  <p className="text-xs text-fg-muted mt-0.5">
+                    Last updated {new Date(vehicle.current_hours_updated_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </p>
                 )}
-              </div>
-            )
-          })}
+              </>
+            ) : (
+              <p className="text-sm text-fg-muted italic">No hours recorded</p>
+            )}
+          </div>
+        )}
+
+        {/* Rego + insurance */}
+        <div className="grid grid-cols-2 divide-x divide-border-subtle">
+          <div className="px-4 py-3">
+            <p className="text-xs font-medium text-fg-muted mb-0.5">Rego expiry</p>
+            <p className={`text-sm ${dateClass(vehicle.rego_expiry_date, today)}`}>
+              {fmt(vehicle.rego_expiry_date)}
+            </p>
+          </div>
+          <div className="px-4 py-3">
+            <p className="text-xs font-medium text-fg-muted mb-0.5">Insurance expiry</p>
+            <p className={`text-sm ${dateClass(vehicle.insurance_expiry_date, today)}`}>
+              {fmt(vehicle.insurance_expiry_date)}
+            </p>
+          </div>
+        </div>
+
+        {/* Notes */}
+        {vehicle.notes && (
+          <div className="px-4 py-3">
+            <p className="text-xs font-medium text-fg-muted mb-0.5">Notes</p>
+            <p className="text-sm text-fg-secondary whitespace-pre-wrap">{vehicle.notes}</p>
+          </div>
+        )}
+
+        {/* Pre-start fault history */}
+        {(vehicle.vehicle_type === 'Machinery' || vehicle.vehicle_type === 'Truck') && (
+          <FaultHistorySection entries={faultHistory} />
+        )}
+      </div>
+
+      {/* Edit form */}
+      {editing && (
+        <div className="border-t border-border bg-surface-raised px-4 py-4">
+          <EditForm vehicle={vehicle} onSuccess={onEditSuccess} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Trailer card ───────────────────────────────────────────────────────────────
+
+function TrailerCard({
+  vehicle, today, editing, onToggleEdit, onEditSuccess,
+}: {
+  vehicle: Vehicle
+  today: string
+  editing: boolean
+  onToggleEdit: () => void
+  onEditSuccess: () => void
+}) {
+  const status = getVehicleStatus(vehicle, today)
+  const { dot, label } = STATUS_DOT[status]
+
+  return (
+    <div className="rounded-xl border border-border bg-surface overflow-hidden">
+
+      {/* Card header */}
+      <div className="flex items-start justify-between gap-3 px-4 py-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span title={label} className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${dot}`} />
+            <span className="text-sm font-semibold text-fg">{vehicle.name || 'Unnamed trailer'}</span>
+            {vehicle.registration && (
+              <span className="rounded-md bg-surface-raised px-2 py-0.5 text-xs font-mono font-medium text-fg-secondary">
+                {vehicle.registration}
+              </span>
+            )}
+            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TYPE_BADGE.Trailer}`}>Trailer</span>
+          </div>
+          {vehicle.assigned_to && (
+            <p className="mt-1 text-xs text-fg-muted">
+              Assigned to <span className="font-medium text-fg-secondary">{vehicle.assigned_to}</span>
+            </p>
+          )}
+        </div>
+        <button
+          onClick={onToggleEdit}
+          className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-muted hover:bg-surface-raised"
+        >
+          {editing ? 'Close' : 'Edit'}
+        </button>
+      </div>
+
+      {/* Detail rows */}
+      <div className="border-t border-border-subtle divide-y divide-border-subtle">
+        <div className="grid grid-cols-2 divide-x divide-border-subtle">
+          <div className="px-4 py-3">
+            <p className="text-xs font-medium text-fg-muted mb-0.5">Rego expiry</p>
+            <p className={`text-sm ${dateClass(vehicle.rego_expiry_date, today)}`}>
+              {fmt(vehicle.rego_expiry_date)}
+            </p>
+          </div>
+          <div className="px-4 py-3">
+            <p className="text-xs font-medium text-fg-muted mb-0.5">Insurance expiry</p>
+            <p className={`text-sm ${dateClass(vehicle.insurance_expiry_date, today)}`}>
+              {fmt(vehicle.insurance_expiry_date)}
+            </p>
+          </div>
+        </div>
+
+        {vehicle.notes && (
+          <div className="px-4 py-3">
+            <p className="text-xs font-medium text-fg-muted mb-0.5">Notes</p>
+            <p className="text-sm text-fg-secondary whitespace-pre-wrap">{vehicle.notes}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Edit form */}
+      {editing && (
+        <div className="border-t border-border bg-surface-raised px-4 py-4">
+          <EditForm vehicle={vehicle} onSuccess={onEditSuccess} />
         </div>
       )}
     </div>
@@ -293,32 +514,52 @@ function Field({ label, required, children }: { label: string; required?: boolea
 const INPUT = 'block w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 bg-surface text-fg'
 
 function VehicleFields({ v }: { v?: Vehicle }) {
+  const [vehicleType, setVehicleType] = useState<VehicleType | ''>((v?.vehicle_type as VehicleType) ?? '')
+  const isTrailer = vehicleType === 'Trailer'
+
   return (
     <div className="space-y-5">
 
       {/* Identity */}
       <div>
-        <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-3">Vehicle</p>
+        <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-3">
+          {isTrailer ? 'Trailer' : 'Vehicle'}
+        </p>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Make" required>
-            <input name="make" type="text" required defaultValue={v?.make ?? ''} placeholder="Toyota" className={INPUT} />
-          </Field>
-          <Field label="Model" required>
-            <input name="model" type="text" required defaultValue={v?.model ?? ''} placeholder="HiLux" className={INPUT} />
-          </Field>
-          <Field label="Year">
-            <input name="year" type="number" min={1900} max={2100} defaultValue={v?.year ?? ''} placeholder="2022" className={INPUT} />
-          </Field>
-          <Field label="Registration">
-            <input name="registration" type="text" defaultValue={v?.registration ?? ''} placeholder="1ABC 234" className={INPUT} />
-          </Field>
           <Field label="Type">
-            <select name="vehicle_type" defaultValue={v?.vehicle_type ?? ''} className={INPUT}>
+            <select
+              name="vehicle_type"
+              value={vehicleType}
+              onChange={(e) => setVehicleType(e.target.value as VehicleType | '')}
+              className={INPUT}
+            >
               <option value="">— Select type —</option>
               {VEHICLE_TYPES.map((t) => (
                 <option key={t} value={t}>{t}</option>
               ))}
             </select>
+          </Field>
+
+          {isTrailer ? (
+            <Field label="Name" required>
+              <input name="name" type="text" required defaultValue={v?.name ?? ''} placeholder="e.g. Plant trailer 1" className={INPUT} />
+            </Field>
+          ) : (
+            <>
+              <Field label="Make" required>
+                <input name="make" type="text" required defaultValue={v?.make ?? ''} placeholder="Toyota" className={INPUT} />
+              </Field>
+              <Field label="Model" required>
+                <input name="model" type="text" required defaultValue={v?.model ?? ''} placeholder="HiLux" className={INPUT} />
+              </Field>
+              <Field label="Year">
+                <input name="year" type="number" min={1900} max={2100} defaultValue={v?.year ?? ''} placeholder="2022" className={INPUT} />
+              </Field>
+            </>
+          )}
+
+          <Field label={isTrailer ? 'Rego number' : 'Registration'}>
+            <input name="registration" type="text" defaultValue={v?.registration ?? ''} placeholder="1ABC 234" className={INPUT} />
           </Field>
         </div>
         <div className="mt-3">
@@ -341,37 +582,40 @@ function VehicleFields({ v }: { v?: Vehicle }) {
         </div>
       </div>
 
-      {/* Last service */}
-      <div>
-        <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-3">Last service</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <Field label="Date">
-            <input name="last_service_date" type="date" defaultValue={v?.last_service_date ?? ''} className={INPUT} />
-          </Field>
-          <Field label="Hours (optional)">
-            <input name="last_service_hours" type="number" min={0} step={0.1} defaultValue={v?.last_service_hours ?? ''} placeholder="e.g. 320" className={INPUT} />
-          </Field>
-          <Field label="Odometer km (optional)">
-            <input name="last_service_odometer" type="number" min={0} defaultValue={v?.last_service_odometer ?? ''} placeholder="e.g. 45000" className={INPUT} />
-          </Field>
-        </div>
-      </div>
+      {/* Last / next service — trailers aren't serviced the same way, skip */}
+      {!isTrailer && (
+        <>
+          <div>
+            <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-3">Last service</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Field label="Date">
+                <input name="last_service_date" type="date" defaultValue={v?.last_service_date ?? ''} className={INPUT} />
+              </Field>
+              <Field label="Hours (optional)">
+                <input name="last_service_hours" type="number" min={0} step={0.1} defaultValue={v?.last_service_hours ?? ''} placeholder="e.g. 320" className={INPUT} />
+              </Field>
+              <Field label="Odometer km (optional)">
+                <input name="last_service_odometer" type="number" min={0} defaultValue={v?.last_service_odometer ?? ''} placeholder="e.g. 45000" className={INPUT} />
+              </Field>
+            </div>
+          </div>
 
-      {/* Next service */}
-      <div>
-        <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-3">Next service due</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <Field label="Date">
-            <input name="next_service_due_date" type="date" defaultValue={v?.next_service_due_date ?? ''} className={INPUT} />
-          </Field>
-          <Field label="Hours target (optional)">
-            <input name="next_service_hours" type="number" min={0} step={0.1} defaultValue={v?.next_service_hours ?? ''} placeholder="e.g. 500" className={INPUT} />
-          </Field>
-          <Field label="Odometer target (optional)">
-            <input name="next_service_km" type="number" min={0} defaultValue={v?.next_service_km ?? ''} placeholder="e.g. 55000" className={INPUT} />
-          </Field>
-        </div>
-      </div>
+          <div>
+            <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-3">Next service due</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Field label="Date">
+                <input name="next_service_due_date" type="date" defaultValue={v?.next_service_due_date ?? ''} className={INPUT} />
+              </Field>
+              <Field label="Hours target (optional)">
+                <input name="next_service_hours" type="number" min={0} step={0.1} defaultValue={v?.next_service_hours ?? ''} placeholder="e.g. 500" className={INPUT} />
+              </Field>
+              <Field label="Odometer target (optional)">
+                <input name="next_service_km" type="number" min={0} defaultValue={v?.next_service_km ?? ''} placeholder="e.g. 55000" className={INPUT} />
+              </Field>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Notes */}
       <Field label="Notes">

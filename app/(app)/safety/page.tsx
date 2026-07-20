@@ -25,7 +25,7 @@ async function fetchSitesStaffVehicles(supabase: Db) {
   const [{ data: sitesRaw }, { data: staffRaw }, { data: vehiclesRaw }] = await Promise.all([
     supabase.from('sites').select('id, name').is('completed_at', null).order('name'),
     supabase.from('profiles').select('id, first_name, last_name').neq('role', 'client').order('last_name').order('first_name'),
-    supabase.from('vehicles').select('id, make, model, registration, vehicle_type, current_hours, assigned_to').order('make'),
+    supabase.from('vehicles').select('id, make, model, name, registration, vehicle_type, current_hours, assigned_to').order('make'),
   ])
   return {
     sites:    (sitesRaw ?? [])    as SiteOption[],

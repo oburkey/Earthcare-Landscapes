@@ -136,13 +136,13 @@ async function _vehicles(db: Db) {
   const { data } = await db
     .from('vehicles')
     .select(`
-      id, make, model, year, registration, assigned_to,
+      id, make, model, name, year, registration, assigned_to,
       rego_expiry_date, insurance_expiry_date,
       last_service_date, last_service_hours, last_service_odometer,
       next_service_due_date, next_service_km, next_service_hours,
       notes, vehicle_type, current_hours, current_hours_updated_at, created_at
     `)
-    .order('make', { ascending: true })
+    .order('make', { ascending: true, nullsFirst: false })
   return data ?? []
 }
 

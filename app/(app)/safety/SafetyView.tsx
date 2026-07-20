@@ -19,8 +19,9 @@ export type SiteOption    = { id: string; name: string }
 export type StaffOption   = { id: string; first_name: string; last_name: string }
 export type VehicleOption = {
   id:            string
-  make:          string
-  model:         string
+  make:          string | null
+  model:         string | null
+  name:          string | null // trailers only
   registration:  string | null
   vehicle_type:  string | null
   current_hours: number | null
@@ -46,6 +47,7 @@ export type PreStartRow = {
   truckId:         string | null
   truckChecks:     Record<string, string> | null
   usingTrailer:    boolean
+  trailerId:       string | null
   trailerChecks:   Record<string, string> | null
   notes:           string | null
   photoPaths:      string[]

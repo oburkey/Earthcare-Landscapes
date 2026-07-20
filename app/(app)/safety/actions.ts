@@ -18,7 +18,7 @@ const PRE_START_SELECT = `
   site_hazards, ppe_confirmed, fit_for_work, using_machinery,
   machinery_checks, machine_id,
   using_truck, truck_id, truck_checks,
-  using_trailer, trailer_checks,
+  using_trailer, trailer_id, trailer_checks,
   notes, created_at,
   sites(name), profiles(first_name, last_name)
 `
@@ -59,6 +59,7 @@ async function mapPreStartRows(supabase: Awaited<ReturnType<typeof createClient>
     truckId:         r.truck_id     ?? null,
     truckChecks:     r.truck_checks ?? null,
     usingTrailer:    r.using_trailer ?? false,
+    trailerId:       r.trailer_id    ?? null,
     trailerChecks:   r.trailer_checks ?? null,
     notes:           r.notes,
     photoPaths:      photosByPreStart[r.id] ?? [],
@@ -123,6 +124,7 @@ export async function submitPreStart(formData: FormData) {
     ? JSON.parse((formData.get('truck_checks') as string) || 'null')
     : null
   const usingTrailer   = formData.get('using_trailer') === 'true'
+  const trailerId      = (formData.get('trailer_id') as string) || null
   const trailerChecks  = usingTrailer
     ? JSON.parse((formData.get('trailer_checks') as string) || 'null')
     : null
@@ -149,6 +151,7 @@ export async function submitPreStart(formData: FormData) {
       truck_id:         usingTruck ? truckId : null,
       truck_checks:     truckChecks,
       using_trailer:    usingTrailer,
+      trailer_id:       usingTrailer ? trailerId : null,
       trailer_checks:   trailerChecks,
       notes,
     })
@@ -323,7 +326,7 @@ export async function updatePreStart(id: string, fields: {
 
   const supabase = await createClient()
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('pre_starts')
     .update({
       date:          fields.date,
@@ -336,8 +339,16 @@ export async function updatePreStart(id: string, fields: {
       notes:         fields.notes,
     })
     .eq('id', id)
+    .select('id')
 
   if (error) return { error: error.message }
+  // Without .select() above, PostgREST reports success even when the update
+  // matches zero rows (e.g. an RLS policy silently filtering it out) — check
+  // explicitly so a blocked save surfaces as an error instead of silently
+  // reverting the next time the page loads.
+  if (!data || data.length === 0) {
+    return { error: 'Update failed — the record could not be found or you do not have permission to edit it.' }
+  }
 
   revalidatePath('/safety')
   return { success: true }

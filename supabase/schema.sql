@@ -732,12 +732,13 @@ CREATE TABLE IF NOT EXISTS vehicles (
   id                     uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Identity
-  make                   text NOT NULL,
-  model                  text NOT NULL,
+  make                   text,           -- nullable: trailers use `name` instead
+  model                  text,           -- nullable: trailers use `name` instead
+  name                   text,           -- trailers only, e.g. "Plant trailer 1"
   year                   int,
   registration           text,
   assigned_to            text,           -- staff member name or site name
-  vehicle_type           text,           -- 'Truck' | 'Machinery' | 'Ute'
+  vehicle_type           text,           -- 'Truck' | 'Machinery' | 'Ute' | 'Trailer'
 
   -- Registration & insurance
   rego_expiry_date       date,
@@ -767,6 +768,11 @@ ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS current_hours numeric(10, 1);
 ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS current_hours_updated_at timestamptz;
 -- NOTE: current_hours / current_hours_updated_at were applied to the live database
 -- without a tracked migration file — included here so schema.sql stays accurate.
+
+-- Trailer support (from migration_trailers.sql)
+ALTER TABLE vehicles ALTER COLUMN make  DROP NOT NULL;
+ALTER TABLE vehicles ALTER COLUMN model DROP NOT NULL;
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS name text;
 
 ALTER TABLE vehicles ENABLE ROW LEVEL SECURITY;
 
@@ -1450,6 +1456,14 @@ CREATE POLICY "toolbox_meetings: staff read all"
 CREATE POLICY "toolbox_meetings: leading_hand+ write"
   ON toolbox_meetings FOR ALL
   USING (current_user_role() IN ('leading_hand', 'supervisor', 'admin'));
+
+
+-- ── Trailer support on pre_starts (from migration_trailers.sql) ───────────────
+-- NOTE: pre_starts itself is not defined in this file (created directly in the
+-- Supabase dashboard, columns inferred from application code). This mirrors
+-- the existing machine_id / truck_id columns.
+ALTER TABLE pre_starts
+  ADD COLUMN IF NOT EXISTS trailer_id uuid REFERENCES vehicles(id) ON DELETE SET NULL;
 
 
 -- =============================================================================
