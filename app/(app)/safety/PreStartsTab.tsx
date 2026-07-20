@@ -476,10 +476,21 @@ export default function PreStartsTab({
   const [detailId, setDetailId] = useState<string | null>(null)
   const [detailPhotoUrls, setDetailPhotoUrls] = useState<string[]>([])
 
-  // Filter state (supervisor+)
-  const [filterSite, setFilterSite] = useState('')
-  const [filterFrom, setFilterFrom] = useState(today)
-  const [filterTo, setFilterTo]     = useState(today)
+  // Filter state (supervisor+) — no date filter by default, so the list shows
+  // the most recently loaded pre-starts regardless of date. Date range is
+  // opt-in via the "Filter by date" toggle.
+  const [filterSite, setFilterSite]         = useState('')
+  const [filterFrom, setFilterFrom]         = useState('')
+  const [filterTo, setFilterTo]             = useState('')
+  const [showDateFilter, setShowDateFilter] = useState(false)
+
+  function toggleDateFilter() {
+    setShowDateFilter(prev => {
+      const next = !prev
+      if (!next) { setFilterFrom(''); setFilterTo('') }
+      return next
+    })
+  }
   const [pdfGenerating, setPdfGenerating] = useState(false)
   const [pdfError, setPdfError]           = useState<string | null>(null)
 
@@ -1377,18 +1388,30 @@ export default function PreStartsTab({
           </div>
 
           <div className="rounded-xl border border-border bg-surface p-4">
-            <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-3">Filter</p>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">
+                Filter {!showDateFilter && <span className="normal-case font-normal text-fg-muted">— showing most recent</span>}
+              </p>
+              <button type="button" onClick={toggleDateFilter}
+                className="text-xs text-fg-muted hover:text-fg-secondary transition-colors">
+                {showDateFilter ? 'Hide date filter' : 'Filter by date'}
+              </button>
+            </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
-              <div className="space-y-1">
-                <label className="text-xs text-fg-muted">From</label>
-                <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-fg focus:border-border focus:outline-none" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-fg-muted">To</label>
-                <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-fg focus:border-border focus:outline-none" />
-              </div>
+              {showDateFilter && (
+                <>
+                  <div className="space-y-1">
+                    <label className="text-xs text-fg-muted">From</label>
+                    <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
+                      className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-fg focus:border-border focus:outline-none" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-fg-muted">To</label>
+                    <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
+                      className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-fg focus:border-border focus:outline-none" />
+                  </div>
+                </>
+              )}
               <div className="space-y-1">
                 <label className="text-xs text-fg-muted">Site</label>
                 <select value={filterSite} onChange={e => setFilterSite(e.target.value)}
@@ -1398,8 +1421,10 @@ export default function PreStartsTab({
                 </select>
               </div>
               <div className="flex gap-2">
-                <button type="button" onClick={() => { setFilterFrom(''); setFilterTo(''); setFilterSite('') }}
-                  className="text-xs text-fg-muted hover:text-fg-secondary transition-colors">Clear</button>
+                {showDateFilter && (
+                  <button type="button" onClick={() => { setFilterFrom(''); setFilterTo(''); setFilterSite('') }}
+                    className="text-xs text-fg-muted hover:text-fg-secondary transition-colors">Clear</button>
+                )}
                 <button type="button" onClick={handleExportPdf}
                   disabled={pdfGenerating || filteredPreStarts.length === 0}
                   className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-secondary hover:bg-surface-raised disabled:opacity-50 transition-colors">
