@@ -19,9 +19,10 @@ export default async function InvoicesPage() {
 
   // ── Query 1: Sites → stages → lots ───────────────────────────────────────
   // Try with new columns; fall back if SQL migration hasn't run yet.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let activeSites: any[] = []
-  {
+  // Runs in parallel with invoice runs below — the two are independent.
+  async function fetchActiveSites() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let sitesResult: any[] = []
     const { data, error } = await supabase
       .from('sites')
       .select(`
@@ -34,7 +35,7 @@ export default async function InvoicesPage() {
       .order('name')
 
     if (!error && data) {
-      activeSites = data.filter((s) => !s.completed_at)
+      sitesResult = data.filter((s) => !s.completed_at)
     } else {
       // Fallback: query without new columns
       const fallback = await supabase
@@ -47,9 +48,32 @@ export default async function InvoicesPage() {
           )
         `)
         .order('name')
-      activeSites = (fallback.data ?? []).filter((s) => !s.completed_at)
+      sitesResult = (fallback.data ?? []).filter((s) => !s.completed_at)
     }
+    return sitesResult
   }
+
+  // ── Invoice runs (graceful fallback if table doesn't exist) ───────────────
+  async function fetchInvoiceRuns() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let invoiceRunsRaw: any[] = []
+    try {
+      const { data, error } = await supabase
+        .from('invoice_runs')
+        .select('id, invoiced_at, invoiced_by, total_amount, notes, lot_ids, extra_job_ids, profiles(first_name, last_name)')
+        .order('invoiced_at', { ascending: false })
+        .limit(50)
+      if (!error) invoiceRunsRaw = data ?? []
+    } catch {
+      // table doesn't exist yet — skip gracefully
+    }
+    return invoiceRunsRaw
+  }
+
+  const [activeSites, invoiceRunsRaw] = await Promise.all([
+    fetchActiveSites(),
+    fetchInvoiceRuns(),
+  ])
 
   // Collect all lot IDs (across all active, non-completed stages)
   const allLotIds: string[] = []
@@ -77,11 +101,12 @@ export default async function InvoicesPage() {
     }
   }
 
-  // Extra job pricing
-  const extraJobPricingData = allExtraJobIds.length > 0
-    ? await getExtraJobsPricing(allExtraJobIds)
-    : []
-  const extraJobTotalById = new Map(extraJobPricingData.map((d) => [d.id, d.total]))
+  // Stage IDs for contract-pricing progress claims (needed below, computed now
+  // so the progress-claims query can run alongside pricing + quotes)
+  const stageIds = activeSites.flatMap((s) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (s.stages ?? []).filter((st: any) => !st.completed_at && st.is_contract_pricing).map((st: any) => st.id)
+  )
 
   // ── Query 2: Quotes — separate estimate vs final per lot ──────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -164,8 +189,11 @@ export default async function InvoicesPage() {
     return { standard, extras, sections }
   }
 
-  if (allLotIds.length > 0) {
-    const quotesResult = await supabase
+  // extraJobPricingData, quotesData and progressClaimsData are all independent
+  // of each other (they depend only on the IDs derived above) — fetch together.
+  async function fetchQuotes() {
+    if (allLotIds.length === 0) return null
+    const { data } = await supabase
       .from('lot_quotes')
       .select(`
         lot_id, is_estimated, status,
@@ -178,49 +206,58 @@ export default async function InvoicesPage() {
         )
       `)
       .in('lot_id', allLotIds)
+    return data
+  }
 
-    if (quotesResult.data) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const byLot = new Map<string, { finals: any[]; estimates: any[] }>()
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for (const q of quotesResult.data as any[]) {
-        if (!byLot.has(q.lot_id)) byLot.set(q.lot_id, { finals: [], estimates: [] })
-        if (q.is_estimated) byLot.get(q.lot_id)!.estimates.push(q)
-        else byLot.get(q.lot_id)!.finals.push(q)
-      }
-
-      for (const [lotId, { finals, estimates }] of byLot) {
-        let estimateData: AmountData | null = null
-
-        if (estimates.length > 0) {
-          const best = [...estimates].sort((a, b) => bestQuoteScore(b) - bestQuoteScore(a))[0]
-          estimateData = buildSections(best.lot_quote_items ?? [])
-          estimateByLot.set(lotId, estimateData.standard + estimateData.extras)
-        }
-
-        if (finals.length > 0) {
-          const best = [...finals].sort((a, b) => bestQuoteScore(b) - bestQuoteScore(a))[0]
-          amountByLot.set(lotId, buildSections(best.lot_quote_items ?? []))
-        } else if (estimateData) {
-          // No final quote yet — use estimate sections as fallback for PDF
-          amountByLot.set(lotId, estimateData)
-        }
-      }
+  async function fetchProgressClaims() {
+    if (stageIds.length === 0) return null
+    try {
+      const { data, error } = await supabase
+        .from('progress_claims')
+        .select('id, stage_id, claim_number, percentage, claim_amount, notes, pending_review, approved_for_invoicing, invoiced')
+        .in('stage_id', stageIds)
+        .order('claim_number', { ascending: true })
+      return !error && data ? data : null
+    } catch {
+      // table doesn't exist yet — skip gracefully
+      return null
     }
   }
 
-  // ── Invoice runs (graceful fallback if table doesn't exist) ───────────────
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let invoiceRunsRaw: any[] = []
-  try {
-    const { data, error } = await supabase
-      .from('invoice_runs')
-      .select('id, invoiced_at, invoiced_by, total_amount, notes, lot_ids, extra_job_ids, profiles(first_name, last_name)')
-      .order('invoiced_at', { ascending: false })
-      .limit(50)
-    if (!error) invoiceRunsRaw = data ?? []
-  } catch {
-    // table doesn't exist yet — skip gracefully
+  const [extraJobPricingData, quotesData, progressClaimsData] = await Promise.all([
+    allExtraJobIds.length > 0 ? getExtraJobsPricing(allExtraJobIds) : Promise.resolve([]),
+    fetchQuotes(),
+    fetchProgressClaims(),
+  ])
+  const extraJobTotalById = new Map(extraJobPricingData.map((d) => [d.id, d.total]))
+
+  if (quotesData) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const byLot = new Map<string, { finals: any[]; estimates: any[] }>()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const q of quotesData as any[]) {
+      if (!byLot.has(q.lot_id)) byLot.set(q.lot_id, { finals: [], estimates: [] })
+      if (q.is_estimated) byLot.get(q.lot_id)!.estimates.push(q)
+      else byLot.get(q.lot_id)!.finals.push(q)
+    }
+
+    for (const [lotId, { finals, estimates }] of byLot) {
+      let estimateData: AmountData | null = null
+
+      if (estimates.length > 0) {
+        const best = [...estimates].sort((a, b) => bestQuoteScore(b) - bestQuoteScore(a))[0]
+        estimateData = buildSections(best.lot_quote_items ?? [])
+        estimateByLot.set(lotId, estimateData.standard + estimateData.extras)
+      }
+
+      if (finals.length > 0) {
+        const best = [...finals].sort((a, b) => bestQuoteScore(b) - bestQuoteScore(a))[0]
+        amountByLot.set(lotId, buildSections(best.lot_quote_items ?? []))
+      } else if (estimateData) {
+        // No final quote yet — use estimate sections as fallback for PDF
+        amountByLot.set(lotId, estimateData)
+      }
+    }
   }
 
   const invoicedExtraJobIds = new Set<string>(
@@ -228,31 +265,15 @@ export default async function InvoicesPage() {
     invoiceRunsRaw.flatMap((r: any) => r.extra_job_ids ?? [])
   )
 
-  // ── Query 4: Progress claims (graceful fallback) ───────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const progressClaimsByStage = new Map<string, any[]>()
-  try {
-    const stageIds = activeSites.flatMap((s) =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (s.stages ?? []).filter((st: any) => !st.completed_at && st.is_contract_pricing).map((st: any) => st.id)
-    )
-    if (stageIds.length > 0) {
-      const { data, error } = await supabase
-        .from('progress_claims')
-        .select('id, stage_id, claim_number, percentage, claim_amount, notes, pending_review, approved_for_invoicing, invoiced')
-        .in('stage_id', stageIds)
-        .order('claim_number', { ascending: true })
-      if (!error && data) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        for (const claim of data as any[]) {
-          const list = progressClaimsByStage.get(claim.stage_id) ?? []
-          list.push(claim)
-          progressClaimsByStage.set(claim.stage_id, list)
-        }
-      }
+  if (progressClaimsData) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const claim of progressClaimsData as any[]) {
+      const list = progressClaimsByStage.get(claim.stage_id) ?? []
+      list.push(claim)
+      progressClaimsByStage.set(claim.stage_id, list)
     }
-  } catch {
-    // table doesn't exist yet — skip gracefully
   }
 
   // ── Build view data ───────────────────────────────────────────────────────

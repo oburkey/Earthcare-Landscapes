@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { submitPreStart, getSafetyDocUrl, deletePreStart, updatePreStart } from './actions'
+import { submitPreStart, getSafetyDocUrl, deletePreStart, updatePreStart, getPreStartsPage } from './actions'
 import { compressImage } from '@/lib/compressImage'
 import { LOGO_DATA_URL } from '@/lib/pdfAssets'
 import type { Role } from '@/types/database'
@@ -439,7 +439,10 @@ interface Props {
   userName:          string
   today:             string
   tableExists:       boolean
+  hasMorePreStarts:  boolean
 }
+
+const PRE_STARTS_PAGE_SIZE = 15
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -454,6 +457,7 @@ export default function PreStartsTab({
   userName,
   today,
   tableExists,
+  hasMorePreStarts,
 }: Props) {
   const isSupervisorPlus = role === 'supervisor' || role === 'admin'
   const isAdmin          = role === 'admin'
@@ -478,6 +482,12 @@ export default function PreStartsTab({
   const [filterTo, setFilterTo]     = useState(today)
   const [pdfGenerating, setPdfGenerating] = useState(false)
   const [pdfError, setPdfError]           = useState<string | null>(null)
+
+  // Load more (pre-starts arrive paginated, 15 per page)
+  const [psOffset, setPsOffset]           = useState(preStarts.length)
+  const [psHasMore, setPsHasMore]         = useState(hasMorePreStarts)
+  const [loadingMore, setLoadingMore]     = useState(false)
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null)
 
   // ── Form state ─────────────────────────────────────────────────────────────
   const [siteId, setSiteId]             = useState('')
@@ -714,6 +724,20 @@ export default function PreStartsTab({
       (msg) => setPdfError(msg),
       () => setPdfGenerating(false),
     )
+  }
+
+  async function handleLoadMore() {
+    setLoadingMore(true); setLoadMoreError(null)
+    try {
+      const result = await getPreStartsPage(psOffset, PRE_STARTS_PAGE_SIZE)
+      onPreStartsChange(prev => [...prev, ...result.rows])
+      setPsOffset(prev => prev + result.rows.length)
+      setPsHasMore(result.hasMore)
+    } catch {
+      setLoadMoreError('Failed to load more pre-starts. Please try again.')
+    } finally {
+      setLoadingMore(false)
+    }
   }
 
   async function handleDelete(id: string) {
@@ -1470,6 +1494,16 @@ export default function PreStartsTab({
               </div>
             )
           })}
+        </div>
+      )}
+
+      {psHasMore && (
+        <div className="flex flex-col items-center gap-2 pt-1">
+          <button type="button" onClick={handleLoadMore} disabled={loadingMore}
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-fg-secondary hover:bg-surface-raised disabled:opacity-50 transition-colors">
+            {loadingMore ? 'Loading…' : 'Load more'}
+          </button>
+          {loadMoreError && <p className="text-sm text-red-600">{loadMoreError}</p>}
         </div>
       )}
     </div>

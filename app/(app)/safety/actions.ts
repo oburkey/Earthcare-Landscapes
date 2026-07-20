@@ -5,9 +5,94 @@ import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
 import { uploadToR2, deleteFromR2, getR2SignedUrlSafe } from '@/lib/r2'
 import type { Role } from '@/types/database'
+import type { PreStartRow } from './SafetyView'
 
 const ROLE_LEVEL: Record<Role, number> = {
   client: 0, worker: 1, leading_hand: 2, supervisor: 3, admin: 4,
+}
+
+// ── Pre-starts pagination ────────────────────────────────────────────────────
+
+const PRE_START_SELECT = `
+  id, site_id, submitted_by, date, crew_present, weather,
+  site_hazards, ppe_confirmed, fit_for_work, using_machinery,
+  machinery_checks, machine_id,
+  using_truck, truck_id, truck_checks,
+  using_trailer, trailer_checks,
+  notes, created_at,
+  sites(name), profiles(first_name, last_name)
+`
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function mapPreStartRows(supabase: Awaited<ReturnType<typeof createClient>>, rows: any[]): Promise<PreStartRow[]> {
+  const preStartIds = rows.map((r: { id: string }) => r.id)
+  const photosByPreStart: Record<string, string[]> = {}
+  if (preStartIds.length > 0) {
+    try {
+      const { data: photosRaw } = await supabase
+        .from('pre_start_photos')
+        .select('pre_start_id, storage_path')
+        .in('pre_start_id', preStartIds)
+      for (const p of (photosRaw ?? [])) {
+        if (!photosByPreStart[p.pre_start_id]) photosByPreStart[p.pre_start_id] = []
+        photosByPreStart[p.pre_start_id].push(p.storage_path)
+      }
+    } catch { /* table may not exist yet */ }
+  }
+
+  return rows.map((r): PreStartRow => ({
+    id:              r.id,
+    siteId:          r.site_id,
+    siteName:        r.sites?.name ?? 'Unknown',
+    submittedBy:     r.submitted_by,
+    submitterName:   r.profiles ? `${r.profiles.first_name} ${r.profiles.last_name}`.trim() : 'Unknown',
+    date:            r.date,
+    crewPresent:     r.crew_present ?? [],
+    weather:         r.weather ?? [],
+    siteHazards:     r.site_hazards,
+    ppeConfirmed:    r.ppe_confirmed,
+    fitForWork:      r.fit_for_work,
+    usingMachinery:  r.using_machinery,
+    machineryChecks: r.machinery_checks,
+    machineId:       r.machine_id,
+    usingTruck:      r.using_truck  ?? false,
+    truckId:         r.truck_id     ?? null,
+    truckChecks:     r.truck_checks ?? null,
+    usingTrailer:    r.using_trailer ?? false,
+    trailerChecks:   r.trailer_checks ?? null,
+    notes:           r.notes,
+    photoPaths:      photosByPreStart[r.id] ?? [],
+    createdAt:       r.created_at,
+  }))
+}
+
+// Fetches one page of pre-starts, most recent first. Used for both the
+// initial page load (offset 0) and the "Load more" button on the client.
+export async function getPreStartsPage(
+  offset: number,
+  limit = 15
+): Promise<{ rows: PreStartRow[]; tableMissing: boolean; hasMore: boolean }> {
+  await requireAuth()
+  const supabase = await createClient()
+
+  try {
+    const { data, error } = await supabase
+      .from('pre_starts')
+      .select(PRE_START_SELECT)
+      .order('date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1)
+
+    if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
+      return { rows: [], tableMissing: true, hasMore: false }
+    }
+    if (error || !data) return { rows: [], tableMissing: false, hasMore: false }
+
+    const rows = await mapPreStartRows(supabase, data)
+    return { rows, tableMissing: false, hasMore: rows.length === limit }
+  } catch {
+    return { rows: [], tableMissing: true, hasMore: false }
+  }
 }
 
 export async function submitPreStart(formData: FormData) {

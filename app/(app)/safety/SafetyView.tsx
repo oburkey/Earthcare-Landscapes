@@ -105,7 +105,7 @@ export type IncidentRow = {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-type Tab = 'my_forms' | 'prestarts' | 'documents' | 'signoffs' | 'toolbox_meetings' | 'incidents' | 'form_templates' | 'assign_forms'
+type Tab = 'prestarts' | 'my_forms' | 'team' | 'safety_admin'
 
 interface Props {
   profile:          Profile
@@ -123,6 +123,7 @@ interface Props {
   myAssignments:    MyAssignmentRow[]
   templates:        TemplateRow[]
   allAssignments:   AssignmentManagementRow[]
+  preStartsHasMore: boolean
   tablesExist:      {
     preStarts: boolean; safetyDocuments: boolean; toolboxMeetings: boolean; incidents: boolean
     safetyForms: boolean
@@ -144,6 +145,7 @@ export default function SafetyView({
   myAssignments,
   templates,
   allAssignments,
+  preStartsHasMore,
   tablesExist,
 }: Props) {
   const isLeadingHandPlus = ['leading_hand', 'supervisor', 'admin'].includes(profile.role)
@@ -154,27 +156,20 @@ export default function SafetyView({
   const [localToolboxMeetings, setLocalToolboxMeetings] = useState<ToolboxMeetingRow[]>(toolboxMeetings)
   const [localIncidents, setLocalIncidents] = useState<IncidentRow[]>(incidents)
 
-  const [activeTab, setActiveTab] = useState<Tab>('my_forms')
+  const [activeTab, setActiveTab] = useState<Tab>('prestarts')
 
   // Tab visibility per role:
-  // worker        → My Forms, Pre-starts
-  // leading_hand  → + Toolbox Meetings, Incidents
-  // supervisor    → + Documents, Sign-offs, Assign Forms
-  // admin         → + Form Templates
+  // worker+       → Pre-starts, My Forms
+  // leading_hand+ → + Team (Toolbox Meetings + Incidents)
+  // supervisor+   → + Safety Admin (Documents, Sign-offs, Assign Forms, Form Templates)
   const tabs: Array<{ id: Tab; label: string }> = [
-    { id: 'my_forms',   label: 'My Forms' },
-    { id: 'prestarts',  label: 'Pre-starts' },
-    ...(isLeadingHandPlus ? [
-      { id: 'toolbox_meetings' as Tab, label: 'Toolbox Meetings' },
-      { id: 'incidents'        as Tab, label: 'Incidents' },
-    ] : []),
-    ...(isSupervisorPlus ? [
-      { id: 'documents'    as Tab, label: 'Documents' },
-      { id: 'signoffs'     as Tab, label: 'Sign-offs' },
-      { id: 'assign_forms' as Tab, label: 'Assign Forms' },
-    ] : []),
-    ...(profile.role === 'admin' ? [{ id: 'form_templates' as Tab, label: 'Form Templates' }] : []),
+    { id: 'prestarts',    label: 'Pre-starts' },
+    { id: 'my_forms',     label: 'My Forms' },
+    ...(isLeadingHandPlus ? [{ id: 'team' as Tab,         label: 'Team' }] : []),
+    ...(isSupervisorPlus  ? [{ id: 'safety_admin' as Tab, label: 'Safety Admin' }] : []),
   ]
+
+  const userName = `${profile.first_name} ${profile.last_name}`.trim()
 
   return (
     <div className="space-y-5">
@@ -208,62 +203,10 @@ export default function SafetyView({
           vehicles={vehicles}
           role={profile.role}
           userId={profile.id}
-          userName={`${profile.first_name} ${profile.last_name}`.trim()}
+          userName={userName}
           today={today}
           tableExists={tablesExist.preStarts}
-        />
-      )}
-
-      {activeTab === 'documents' && isSupervisorPlus && (
-        <DocumentsTab
-          docs={safetyDocs}
-          mySignoffIds={mySignoffIds}
-          signoffs={signoffs}
-          role={profile.role}
-          userId={profile.id}
-          userName={`${profile.first_name} ${profile.last_name}`.trim()}
-          isSupervisorPlus={isSupervisorPlus}
-          tableExists={tablesExist.safetyDocuments}
-        />
-      )}
-
-      {activeTab === 'signoffs' && isSupervisorPlus && (
-        <SignoffsTab
-          signoffs={signoffs}
-          docs={safetyDocs}
-          mySignoffIds={mySignoffIds}
-          isSupervisorPlus={isSupervisorPlus}
-        />
-      )}
-
-      {activeTab === 'toolbox_meetings' && isLeadingHandPlus && (
-        <ToolboxMeetingsTab
-          meetings={localToolboxMeetings}
-          onMeetingsChange={setLocalToolboxMeetings}
-          sites={sites}
-          staff={staff}
-          role={profile.role}
-          userId={profile.id}
-          userName={`${profile.first_name} ${profile.last_name}`.trim()}
-          today={today}
-          tableExists={tablesExist.toolboxMeetings}
-          canManage={isLeadingHandPlus}
-          isAdmin={profile.role === 'admin'}
-        />
-      )}
-
-      {activeTab === 'incidents' && isLeadingHandPlus && (
-        <IncidentsTab
-          incidents={localIncidents}
-          onIncidentsChange={setLocalIncidents}
-          sites={sites}
-          role={profile.role}
-          userId={profile.id}
-          userName={`${profile.first_name} ${profile.last_name}`.trim()}
-          today={today}
-          tableExists={tablesExist.incidents}
-          canManage={isLeadingHandPlus}
-          isAdmin={profile.role === 'admin'}
+          hasMorePreStarts={preStartsHasMore}
         />
       )}
 
@@ -271,29 +214,76 @@ export default function SafetyView({
         <FormsTab
           assignments={myAssignments}
           tableExists={tablesExist.safetyForms}
-          workerName={`${profile.first_name} ${profile.last_name}`.trim()}
+          workerName={userName}
         />
       )}
 
-      {activeTab === 'form_templates' && profile.role === 'admin' && (
-        <FormTemplatesTab
-          templates={templates}
-          tableExists={tablesExist.safetyForms}
-        />
+      {activeTab === 'team' && isLeadingHandPlus && (
+        <div className="space-y-8">
+          <ToolboxMeetingsTab
+            meetings={localToolboxMeetings}
+            onMeetingsChange={setLocalToolboxMeetings}
+            sites={sites}
+            staff={staff}
+            role={profile.role}
+            userId={profile.id}
+            userName={userName}
+            today={today}
+            tableExists={tablesExist.toolboxMeetings}
+            canManage={isLeadingHandPlus}
+            isAdmin={profile.role === 'admin'}
+          />
+          <IncidentsTab
+            incidents={localIncidents}
+            onIncidentsChange={setLocalIncidents}
+            sites={sites}
+            role={profile.role}
+            userId={profile.id}
+            userName={userName}
+            today={today}
+            tableExists={tablesExist.incidents}
+            canManage={isLeadingHandPlus}
+            isAdmin={profile.role === 'admin'}
+          />
+        </div>
       )}
 
-      {activeTab === 'assign_forms' && isSupervisorPlus && (
-        <AssignFormsTab
-          assignments={allAssignments}
-          templates={templates.map((t): TemplateOption => ({
-            id: t.id, title: t.title, formType: t.formType, isSiteSpecific: t.isSiteSpecific,
-          }))}
-          workers={staff.map((s): WorkerOption => ({
-            id: s.id, name: `${s.first_name} ${s.last_name}`.trim(),
-          }))}
-          sites={sites}
-          tableExists={tablesExist.safetyForms}
-        />
+      {activeTab === 'safety_admin' && isSupervisorPlus && (
+        <div className="space-y-8">
+          <DocumentsTab
+            docs={safetyDocs}
+            mySignoffIds={mySignoffIds}
+            signoffs={signoffs}
+            role={profile.role}
+            userId={profile.id}
+            userName={userName}
+            isSupervisorPlus={isSupervisorPlus}
+            tableExists={tablesExist.safetyDocuments}
+          />
+          <SignoffsTab
+            signoffs={signoffs}
+            docs={safetyDocs}
+            mySignoffIds={mySignoffIds}
+            isSupervisorPlus={isSupervisorPlus}
+          />
+          <AssignFormsTab
+            assignments={allAssignments}
+            templates={templates.map((t): TemplateOption => ({
+              id: t.id, title: t.title, formType: t.formType, isSiteSpecific: t.isSiteSpecific,
+            }))}
+            workers={staff.map((s): WorkerOption => ({
+              id: s.id, name: `${s.first_name} ${s.last_name}`.trim(),
+            }))}
+            sites={sites}
+            tableExists={tablesExist.safetyForms}
+          />
+          {profile.role === 'admin' && (
+            <FormTemplatesTab
+              templates={templates}
+              tableExists={tablesExist.safetyForms}
+            />
+          )}
+        </div>
       )}
     </div>
   )

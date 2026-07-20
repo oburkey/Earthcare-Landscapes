@@ -19,6 +19,167 @@ function toYmd(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
+// ── Independent fetch groups (run together via Promise.all) ─────────────────
+
+async function fetchLotsAndTradeStatus(fortnightStr: string) {
+  try {
+    const { lotsData: ld } = await getCachedDashboardData(fortnightStr)
+    const tradeStatus = await getCachedTradeStatusByLotIds(ld.map((l: { id: string }) => l.id))
+    return { lotsData: ld, tradeStatus }
+  } catch {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return { lotsData: [] as any[], tradeStatus: {} as Record<string, { trades_completed: string[]; ready_for_landscaping: boolean }> }
+  }
+}
+
+async function fetchOverdueAndExtraJobs(todayStr: string) {
+  try {
+    const supabase = await createClient()
+    const [{ count }, { data: ejData }] = await Promise.all([
+      supabase
+        .from('lots')
+        .select('id', { count: 'exact', head: true })
+        .lt('due_date', todayStr)
+        .neq('status', 'complete'),
+      supabase
+        .from('extra_jobs')
+        .select('id, title, status, due_date, stages!inner(id, name, sites!inner(id, name))')
+        .neq('status', 'complete')
+        .order('due_date', { ascending: true, nullsFirst: false }),
+    ])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return { overdueLotCount: count ?? 0, extraJobs: (ejData ?? []) as any[] }
+  } catch {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return { overdueLotCount: 0, extraJobs: [] as any[] }
+  }
+}
+
+async function fetchAdminCounts(isAdmin: boolean) {
+  if (!isAdmin) return { pendingReviewCount: 0, approvedForInvoicingCount: 0 }
+  try {
+    const supabase = await createClient()
+    const [{ count: pCount }, { count: aCount }] = await Promise.all([
+      supabase.from('lots').select('id', { count: 'exact', head: true }).eq('pending_review', true),
+      supabase.from('lots').select('id', { count: 'exact', head: true }).eq('approved_for_invoicing', true),
+    ])
+    return { pendingReviewCount: pCount ?? 0, approvedForInvoicingCount: aCount ?? 0 }
+  } catch {
+    // columns may not exist yet
+    return { pendingReviewCount: 0, approvedForInvoicingCount: 0 }
+  }
+}
+
+async function fetchIncidentCount(isLeadingHand: boolean, today: Date) {
+  if (!isLeadingHand) return 0
+  try {
+    const supabase = await createClient()
+    const weekAgo = new Date(today)
+    weekAgo.setDate(weekAgo.getDate() - 7)
+    const { data } = await supabase
+      .from('incidents')
+      .select('id')
+      .gte('date', toYmd(weekAgo))
+    return (data ?? []).length
+  } catch {
+    // table may not exist
+    return 0
+  }
+}
+
+async function fetchSitesForModal() {
+  try {
+    const supabase = await createClient()
+    const { data: sitesRaw } = await supabase
+      .from('sites')
+      .select('id, name, stages(id, name, order)')
+      .is('completed_at', null)
+      .order('name', { ascending: true })
+    return (sitesRaw ?? []).map((s) => ({
+      id: s.id,
+      name: s.name,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      stages: [...((s.stages as any[]) ?? [])]
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
+        .map((st: { id: string; name: string }) => ({ id: st.id, name: st.name })),
+    }))
+  } catch {
+    // graceful fallback — modal button won't show
+    return [] as Array<{ id: string; name: string; stages: Array<{ id: string; name: string }> }>
+  }
+}
+
+async function fetchCalendarEvents(fortnightStr: string) {
+  try {
+    const supabase = await createClient()
+    const { data: evRaw } = await supabase
+      .from('calendar_events')
+      .select('id, title, event_date, end_date, start_time')
+      .lte('event_date', fortnightStr)
+      .order('event_date', { ascending: true })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (evRaw ?? []).map((e: any): DashboardCalendarEvent => ({
+      id: e.id,
+      title: e.title,
+      eventDate: e.event_date,
+      endDate: e.end_date ?? null,
+      startTime: e.start_time ?? null,
+    }))
+  } catch {
+    // table not yet created
+    return [] as DashboardCalendarEvent[]
+  }
+}
+
+async function fetchSupervisorData(isSupervisor: boolean, today: Date, todayStr: string) {
+  if (!isSupervisor) return { preStarts: [] as { date: string }[], vehicleAlertCount: 0 }
+  const supabase = await createClient()
+
+  const sevenDaysAgo = new Date(today)
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+
+  const weekAhead = new Date(today)
+  weekAhead.setDate(weekAhead.getDate() + 7)
+  const weekAheadStr = toYmd(weekAhead)
+
+  async function fetchPreStarts() {
+    try {
+      const { data } = await supabase
+        .from('pre_starts')
+        .select('id, site_id, date, sites(name)')
+        .gte('date', toYmd(sevenDaysAgo))
+        .lte('date', todayStr)
+        .order('date')
+      return data ?? []
+    } catch {
+      // table may not exist
+      return []
+    }
+  }
+
+  async function fetchVehicleAlertCount() {
+    try {
+      const { data } = await supabase
+        .from('vehicles')
+        .select('id, rego_expiry_date, next_service_due_date')
+        .or(`rego_expiry_date.lte.${weekAheadStr},next_service_due_date.lte.${weekAheadStr}`)
+      return (data ?? []).length
+    } catch {
+      return 0
+    }
+  }
+
+  const [preStarts, vehicleAlertCount] = await Promise.all([
+    fetchPreStarts(),
+    fetchVehicleAlertCount(),
+  ])
+
+  return { preStarts, vehicleAlertCount }
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export default async function DashboardPage() {
   const profile = await requireAuth()
   const isLeadingHand = ['leading_hand', 'supervisor', 'admin'].includes(profile.role)
@@ -33,162 +194,25 @@ export default async function DashboardPage() {
   fortnight.setDate(fortnight.getDate() + 14)
   const fortnightStr = toYmd(fortnight)
 
-  // ── Data fetching ──────────────────────────────────────────────────────────
+  // ── Data fetching — all independent queries run together ────────────────────
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let lotsData: any[] = []
-  let tradeStatus: Record<string, { trades_completed: string[]; ready_for_landscaping: boolean }> = {}
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let extraJobs: any[] = []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let preStarts: any[] = []
-  let vehicleAlertCount = 0
-  let incidentCount = 0
-  let overdueLotCount = 0
-  let pendingReviewCount = 0
-  let approvedForInvoicingCount = 0
-  let sitesForModal: Array<{ id: string; name: string; stages: Array<{ id: string; name: string }> }> = []
-  let calendarEventItems: DashboardCalendarEvent[] = []
-
-  // All roles: fortnight lots + trade status
-  try {
-    const { lotsData: ld } = await getCachedDashboardData(fortnightStr)
-    lotsData = ld
-    tradeStatus = await getCachedTradeStatusByLotIds(lotsData.map((l: { id: string }) => l.id))
-  } catch {
-    // graceful fallback
-  }
-
-  // All roles: overdue lots count + extra jobs
-  try {
-    const supabase = await createClient()
-
-    const { count } = await supabase
-      .from('lots')
-      .select('id', { count: 'exact', head: true })
-      .lt('due_date', todayStr)
-      .neq('status', 'complete')
-    overdueLotCount = count ?? 0
-
-    const { data: ejData } = await supabase
-      .from('extra_jobs')
-      .select('id, title, status, due_date, stages!inner(id, name, sites!inner(id, name))')
-      .neq('status', 'complete')
-      .order('due_date', { ascending: true, nullsFirst: false })
-    extraJobs = ejData ?? []
-  } catch {
-    // graceful fallback
-  }
-
-  // Admin: pending review + approved for invoicing counts
-  if (isAdmin) {
-    try {
-      const supabase = await createClient()
-      const [{ count: pCount }, { count: aCount }] = await Promise.all([
-        supabase.from('lots').select('id', { count: 'exact', head: true }).eq('pending_review', true),
-        supabase.from('lots').select('id', { count: 'exact', head: true }).eq('approved_for_invoicing', true),
-      ])
-      pendingReviewCount = pCount ?? 0
-      approvedForInvoicingCount = aCount ?? 0
-    } catch {
-      // columns may not exist yet
-    }
-  }
-
-  // Leading hand+: recent incidents
-  if (isLeadingHand) {
-    try {
-      const supabase = await createClient()
-      const weekAgo = new Date(today)
-      weekAgo.setDate(weekAgo.getDate() - 7)
-      const { data } = await supabase
-        .from('incidents')
-        .select('id')
-        .gte('date', toYmd(weekAgo))
-      incidentCount = (data ?? []).length
-    } catch {
-      // table may not exist
-    }
-  }
-
-  // All roles: sites+stages for quick-add extra job modal
-  try {
-    const supabase = await createClient()
-    const { data: sitesRaw } = await supabase
-      .from('sites')
-      .select('id, name, stages(id, name, order)')
-      .is('completed_at', null)
-      .order('name', { ascending: true })
-    sitesForModal = (sitesRaw ?? []).map((s) => ({
-      id: s.id,
-      name: s.name,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      stages: [...((s.stages as any[]) ?? [])]
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
-        .map((st: { id: string; name: string }) => ({ id: st.id, name: st.name })),
-    }))
-  } catch {
-    // graceful fallback — modal button won't show
-  }
-
-  // All roles: calendar events for fortnight window
-  try {
-    const supabase = await createClient()
-    const { data: evRaw } = await supabase
-      .from('calendar_events')
-      .select('id, title, event_date, end_date, start_time')
-      .lte('event_date', fortnightStr)
-      .order('event_date', { ascending: true })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    calendarEventItems = (evRaw ?? []).map((e: any) => ({
-      id: e.id,
-      title: e.title,
-      eventDate: e.event_date,
-      endDate: e.end_date ?? null,
-      startTime: e.start_time ?? null,
-    }))
-  } catch {
-    // table not yet created
-  }
-
-  // Supervisor+: pre-starts this week + vehicle alerts
-  if (isSupervisor) {
-    const supabase = await createClient()
-
-    const dayOfWeek = today.getDay()
-    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
-    const monday = new Date(today)
-    monday.setDate(monday.getDate() + mondayOffset)
-    const friday = new Date(monday)
-    friday.setDate(friday.getDate() + 4)
-
-    try {
-      const { data } = await supabase
-        .from('pre_starts')
-        .select('id, site_id, date, sites(name)')
-        .gte('date', toYmd(monday))
-        .lte('date', toYmd(friday))
-        .order('date')
-      preStarts = data ?? []
-    } catch {
-      // table may not exist
-    }
-
-    const weekAhead = new Date(today)
-    weekAhead.setDate(weekAhead.getDate() + 7)
-    const weekAheadStr = toYmd(weekAhead)
-
-    try {
-      const { data } = await supabase
-        .from('vehicles')
-        .select('id, rego_expiry_date, next_service_due_date')
-        .or(`rego_expiry_date.lte.${weekAheadStr},next_service_due_date.lte.${weekAheadStr}`)
-      vehicleAlertCount = (data ?? []).length
-    } catch {
-      // graceful fallback
-    }
-  }
+  const [
+    { lotsData, tradeStatus },
+    { overdueLotCount, extraJobs },
+    { pendingReviewCount, approvedForInvoicingCount },
+    incidentCount,
+    sitesForModal,
+    calendarEventItems,
+    { preStarts, vehicleAlertCount },
+  ] = await Promise.all([
+    fetchLotsAndTradeStatus(fortnightStr),
+    fetchOverdueAndExtraJobs(todayStr),
+    fetchAdminCounts(isAdmin),
+    fetchIncidentCount(isLeadingHand, today),
+    fetchSitesForModal(),
+    fetchCalendarEvents(fortnightStr),
+    fetchSupervisorData(isSupervisor, today, todayStr),
+  ])
 
   // ── Derive metrics ─────────────────────────────────────────────────────────
 
