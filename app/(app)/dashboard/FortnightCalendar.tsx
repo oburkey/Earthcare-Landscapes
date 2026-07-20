@@ -1,3 +1,6 @@
+'use client'
+
+import { useRouter } from 'next/navigation'
 import { siteColour } from '@/lib/lotStatus'
 
 export type CalendarItem = {
@@ -24,6 +27,16 @@ function toYmd(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
+// This can render server-side (e.g. Vercel, which runs in UTC) — deriving "today"
+// from the server's local clock would show the wrong calendar day for several
+// hours every Australian morning. Anchor explicitly to the business's timezone.
+function todayInSydney(): Date {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' })
+    .format(new Date())
+  const [y, m, d] = parts.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
 function formatTime(t: string): string {
   const [h, m] = t.split(':').map(Number)
   return `${h % 12 || 12}:${String(m).padStart(2, '0')}${h >= 12 ? 'pm' : 'am'}`
@@ -36,8 +49,8 @@ export default function FortnightCalendar({
   items: CalendarItem[]
   events?: DashboardCalendarEvent[]
 }) {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  const router = useRouter()
+  const today = todayInSydney()
   const todayStr = toYmd(today)
 
   // Build 14 days starting from this Monday
@@ -57,6 +70,10 @@ export default function FortnightCalendar({
       dayLabel: d.toLocaleDateString('en-AU', { weekday: 'short' }),
       isToday: dateStr === todayStr,
     })
+  }
+
+  function goToSchedule(date: string) {
+    router.push(`/schedule?view=2weeks&date=${date}`)
   }
 
   const itemsByDate = new Map<string, CalendarItem[]>()
@@ -98,6 +115,7 @@ export default function FortnightCalendar({
             day={day}
             items={itemsByDate.get(day.date) ?? []}
             events={eventsByDate.get(day.date) ?? []}
+            onOpen={() => goToSchedule(day.date)}
           />
         ))}
       </div>
@@ -110,6 +128,7 @@ export default function FortnightCalendar({
             day={day}
             items={itemsByDate.get(day.date) ?? []}
             events={eventsByDate.get(day.date) ?? []}
+            onOpen={() => goToSchedule(day.date)}
           />
         ))}
       </div>
@@ -121,10 +140,12 @@ function DayCell({
   day,
   items,
   events,
+  onOpen,
 }: {
   day: { date: string; dayNum: number; dayLabel: string; isToday: boolean }
   items: CalendarItem[]
   events: DashboardCalendarEvent[]
+  onOpen: () => void
 }) {
   const totalCount = items.length + events.length
   const visibleItems  = items.slice(0, 3)
@@ -133,7 +154,11 @@ function DayCell({
 
   return (
     <div
-      className={`min-h-[72px] border-r border-border-subtle last:border-r-0 p-1 ${
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen() } }}
+      className={`min-h-[72px] border-r border-border-subtle last:border-r-0 p-1 cursor-pointer hover:bg-surface-raised transition-colors ${
         day.isToday ? 'bg-accent-dim ring-1 ring-inset ring-green-200' : ''
       }`}
     >
@@ -147,6 +172,7 @@ function DayCell({
             <a
               key={i}
               href={item.href}
+              onClick={(e) => e.stopPropagation()}
               className="flex items-center gap-0.5 rounded px-1 py-0.5 hover:bg-surface-raised transition-colors"
             >
               <span className={`shrink-0 rounded px-1 text-[10px] font-bold leading-tight ${sc.badge}`}>

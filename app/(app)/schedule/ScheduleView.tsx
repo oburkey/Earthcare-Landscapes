@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import {
   STATUS_CONFIG,
   EXTRA_JOB_STATUS_CONFIG,
@@ -63,6 +64,15 @@ function pad(n: number): string {
   return String(n).padStart(2, '0')
 }
 
+// The `today` prop is computed server-side via toISOString(), which is always
+// UTC — on a UTC-hosted server that shows the wrong calendar day for several
+// hours every Australian morning. Recompute it anchored to the business's
+// timezone instead; this runs identically during SSR and client hydration
+// (both target the same named zone), so there's no hydration mismatch.
+function getSydneyTodayStr(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }).format(new Date())
+}
+
 function ymd(year: number, month: number, day: number): string {
   const date = new Date(year, month, day)
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
@@ -73,6 +83,14 @@ function addDays(dateStr: string, n: number): string {
   const date = new Date(y, m - 1, d)
   date.setDate(date.getDate() + n)
   return ymd(date.getFullYear(), date.getMonth(), date.getDate())
+}
+
+function daysBetween(fromStr: string, toStr: string): number {
+  const [fy, fm, fd] = fromStr.split('-').map(Number)
+  const [ty, tm, td] = toStr.split('-').map(Number)
+  const from = new Date(fy, fm - 1, fd)
+  const to   = new Date(ty, tm - 1, td)
+  return Math.round((to.getTime() - from.getTime()) / 86400000)
 }
 
 function getWeekStart(dateStr: string): string {
@@ -123,7 +141,10 @@ function getMonthGrid(year: number, month: number): string[] {
 // ── Event helpers ─────────────────────────────────────────────────────────────
 
 function getEventsForDay(events: CalendarEvent[], day: string): CalendarEvent[] {
-  return events.filter((e) => e.eventDate <= day && (e.endDate === null || e.endDate >= day))
+  return events.filter((e) => {
+    if (e.endDate === null) return e.eventDate === day
+    return e.eventDate <= day && e.endDate >= day
+  })
 }
 
 function formatTime(t: string): string {
@@ -656,19 +677,33 @@ interface Props {
 }
 
 export default function ScheduleView({ lotItems, jobItems, events, sites, today, userId, isAdmin, canCreateEvents }: Props) {
+  today = getSydneyTodayStr()
+
+  // Deep-link support (e.g. clicking a day on the dashboard's fortnight
+  // calendar): ?view=2weeks&date=YYYY-MM-DD opens straight to that date.
+  const searchParams = useSearchParams()
+  const viewParam = searchParams.get('view')
+  const dateParam = searchParams.get('date')
+  const validDateParam = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : null
+
   const [view, setView] = useState<View>(() => {
+    if (viewParam && VALID_VIEWS.includes(viewParam as View)) return viewParam as View
     if (typeof window === 'undefined') return '2weeks'
     const saved = localStorage.getItem('schedule-view-preference')
     return (saved && VALID_VIEWS.includes(saved as View)) ? saved as View : '2weeks'
   })
   const [siteFilter, setSiteFilter]   = useState('')
   const [showBlocked, setShowBlocked] = useState(false)
-  const [twoWeekOffset, setTwoWeekOffset] = useState(0)
+  const [twoWeekOffset, setTwoWeekOffset] = useState(() => {
+    if (!validDateParam) return 0
+    const diff = daysBetween(getWeekStart(today), getWeekStart(validDateParam))
+    return Math.floor(diff / 14)
+  })
   const [monthCursor, setMonthCursor] = useState(() => {
-    const [y, m] = today.split('-').map(Number)
+    const [y, m] = (validDateParam ?? today).split('-').map(Number)
     return { year: y, month: m - 1 }
   })
-  const [selectedDay, setSelectedDay] = useState<string | null>(null)
+  const [selectedDay, setSelectedDay] = useState<string | null>(validDateParam)
 
   function changeView(v: View) {
     setView(v)
