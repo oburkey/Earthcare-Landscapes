@@ -136,6 +136,15 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
     }
   }
 
+  // Saving a final quant sheet flags the lot for admin review.
+  if (!isEstimated) {
+    const { error: pendingReviewError } = await supabase
+      .from('lots')
+      .update({ pending_review: true })
+      .eq('id', lotId)
+    if (pendingReviewError) return { error: pendingReviewError.message }
+  }
+
   revalidatePath(`/sites/${siteId}/stages/${stageId}/lots/${lotId}`)
   revalidatePath(`/sites/${siteId}/stages/${stageId}`)
   revalidateTag('stages')
