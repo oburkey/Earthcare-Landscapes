@@ -781,6 +781,12 @@ CREATE POLICY "vehicles: supervisors and admins full access"
   ON vehicles FOR ALL
   USING (current_user_role() IN ('supervisor', 'admin'));
 
+-- Workers and leading_hand read access (applied directly in Supabase; documented here for schema accuracy)
+DROP POLICY IF EXISTS "vehicles: all staff can read" ON vehicles;
+CREATE POLICY "vehicles: all staff can read"
+  ON vehicles FOR SELECT
+  USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
+
 
 -- Quote template sections (from migration_phase2.sql)
 CREATE TABLE IF NOT EXISTS quote_template_sections (
@@ -1040,6 +1046,7 @@ DROP POLICY IF EXISTS "profiles: read own"                        ON profiles;
 DROP POLICY IF EXISTS "profiles: supervisors and admins read all" ON profiles;
 DROP POLICY IF EXISTS "profiles: update own"                      ON profiles;
 DROP POLICY IF EXISTS "profiles: admin update all"                ON profiles;
+DROP POLICY IF EXISTS "profiles: all staff read all"               ON profiles;
 
 CREATE POLICY "profiles: read own"
   ON profiles FOR SELECT USING (id = auth.uid());
@@ -1049,6 +1056,11 @@ CREATE POLICY "profiles: update own"
   ON profiles FOR UPDATE USING (id = auth.uid());
 CREATE POLICY "profiles: admin update all"
   ON profiles FOR UPDATE USING (current_user_role() = 'admin');
+-- Applied directly in Supabase this session; supersedes the supervisors/admins
+-- policy above but both are left in place (RLS policies are OR'd).
+CREATE POLICY "profiles: all staff read all"
+  ON profiles FOR SELECT
+  USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
 
 -- sites
 DROP POLICY IF EXISTS "sites: workers read all"                       ON sites;
@@ -1223,10 +1235,12 @@ CREATE POLICY "staff_members: supervisors and admins full access"
 
 -- contacts
 DROP POLICY IF EXISTS "contacts: leading_hands and above read"   ON contacts;
+DROP POLICY IF EXISTS "contacts: all staff read"                 ON contacts;
 DROP POLICY IF EXISTS "contacts: supervisors and admins write"   ON contacts;
 
-CREATE POLICY "contacts: leading_hands and above read"
-  ON contacts FOR SELECT USING (current_user_role() IN ('leading_hand', 'supervisor', 'admin'));
+-- Widened from leading_hand+ to worker+ so the Contacts nav item is usable by workers.
+CREATE POLICY "contacts: all staff read"
+  ON contacts FOR SELECT USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
 CREATE POLICY "contacts: supervisors and admins write"
   ON contacts FOR ALL USING (current_user_role() IN ('supervisor', 'admin'));
 
@@ -1464,6 +1478,30 @@ CREATE POLICY "toolbox_meetings: leading_hand+ write"
 -- the existing machine_id / truck_id columns.
 ALTER TABLE pre_starts
   ADD COLUMN IF NOT EXISTS trailer_id uuid REFERENCES vehicles(id) ON DELETE SET NULL;
+
+
+-- ── pre_starts: admin update policy (from migration_prestarts_admin_update.sql) ─
+-- No policy previously granted admins UPDATE access, so admin edits (e.g. to
+-- the date field) silently matched zero rows and never persisted.
+ALTER TABLE pre_starts ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "pre_starts: admin update all" ON pre_starts;
+CREATE POLICY "pre_starts: admin update all"
+  ON pre_starts FOR UPDATE
+  USING (current_user_role() = 'admin')
+  WITH CHECK (current_user_role() = 'admin');
+
+-- ── pre_starts: insert + read-own policies (applied directly in Supabase this
+-- session, documented here for schema accuracy) ────────────────────────────
+DROP POLICY IF EXISTS "pre_starts: all staff can insert" ON pre_starts;
+CREATE POLICY "pre_starts: all staff can insert"
+  ON pre_starts FOR INSERT
+  WITH CHECK (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
+
+DROP POLICY IF EXISTS "pre_starts: staff read own" ON pre_starts;
+CREATE POLICY "pre_starts: staff read own"
+  ON pre_starts FOR SELECT
+  USING (submitted_by = auth.uid());
 
 
 -- =============================================================================

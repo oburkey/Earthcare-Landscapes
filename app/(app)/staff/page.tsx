@@ -7,7 +7,7 @@ export const metadata = { title: 'Staff — Earthcare Landscapes' }
 
 export default async function StaffPage() {
   const profile = await requireAuth()
-  requireRole(profile, 'supervisor')
+  requireRole(profile, 'leading_hand')
 
   const staffData = await getCachedStaff()
 
@@ -31,7 +31,7 @@ export default async function StaffPage() {
       <div className="mx-auto max-w-2xl px-4 py-6">
         <StaffManagement
           staff={staff}
-          canManage={true}
+          canManage={profile.role === 'supervisor' || profile.role === 'admin'}
           allowedRoles={allowedRoles}
         />
       </div>

@@ -33,6 +33,7 @@ function PreviewCard({ doc }: { doc: DocPreview }) {
           <img
             src={doc.url}
             alt={doc.document_name}
+            loading="lazy"
             className="w-full h-full object-contain"
             onError={() => setImgFailed(true)}
           />
@@ -45,6 +46,7 @@ function PreviewCard({ doc }: { doc: DocPreview }) {
              interacting with PDF controls; the overlay link handles click-to-open. */
           <iframe
             src={doc.url}
+            loading="lazy"
             className="w-full h-full border-0"
             title={doc.document_name}
             style={{ pointerEvents: 'none' }}
@@ -78,36 +80,13 @@ function PreviewCard({ doc }: { doc: DocPreview }) {
 }
 
 export default function LotDocumentPreview({ documents }: { documents: DocPreview[] }) {
-  const [open, setOpen] = useState(false)
-
   if (documents.length === 0) return null
 
   return (
-    <div className="mt-3">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-fg-secondary hover:bg-surface-raised transition-colors w-full"
-      >
-        <svg
-          className={`h-4 w-4 text-fg-muted transition-transform ${open ? '' : '-rotate-90'}`}
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={2}
-          stroke="currentColor"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-        </svg>
-        {open ? 'Hide previews' : `Show previews (${documents.length})`}
-      </button>
-
-      {open && (
-        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {documents.map((doc) => (
-            <PreviewCard key={doc.id} doc={doc} />
-          ))}
-        </div>
-      )}
+    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {documents.map((doc) => (
+        <PreviewCard key={doc.id} doc={doc} />
+      ))}
     </div>
   )
 }

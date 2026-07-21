@@ -7,7 +7,7 @@ export const metadata = { title: 'Contacts — Earthcare Landscapes' }
 
 export default async function ContactsPage() {
   const profile = await requireAuth()
-  requireRole(profile, 'leading_hand')
+  requireRole(profile, 'worker')
 
   const canManage = profile.role === 'supervisor' || profile.role === 'admin'
 
