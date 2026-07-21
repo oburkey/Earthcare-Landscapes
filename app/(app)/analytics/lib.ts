@@ -37,7 +37,20 @@ const DEFAULT_REAR_RATIO = 1.75
 // ── Raw input shapes (from Supabase queries in page.tsx) ─────────────────────
 
 export type SiteRow = { id: string; name: string }
-export type StageRow = { id: string; name: string; site_id: string; order: number }
+export type StageRow = {
+  id: string
+  name: string
+  site_id: string
+  order: number
+  is_contract_pricing: boolean | null
+  default_contract_price: number | null
+}
+export type SubcontractorCostRow = {
+  lot_id: string
+  trade: string
+  trade_label: string | null
+  invoice_amount: number
+}
 export type LotRow = {
   id: string
   lot_number: string
@@ -92,6 +105,16 @@ export type RevenueMonthPoint = MonthPoint & { invoiced: number; pipeline: numbe
 export type CompletionMonthPoint = MonthPoint & { count: number }
 export type VarianceTrendPoint = MonthPoint & Record<CategoryKey, number | null>
 
+// NLV = contract-priced work (as opposed to Providence-style quoted lots).
+// contractValue only sums lots that actually resolved to a price (own price
+// or stage default); subcontractorCost sums subcontractor_costs regardless.
+export type NlvSummary = {
+  contractValue: number
+  subcontractorCost: number
+  margin: number
+  marginPct: number | null
+}
+
 export type AggregateSummary = {
   lotCount: number
   completedCount: number
@@ -99,9 +122,11 @@ export type AggregateSummary = {
   revenue: { invoiced: number; pipeline: number; total: number }
   avgLotValue: number
   materialsVariance: MaterialsVariance
+  nlv: NlvSummary
 }
 
 export type LotVarianceCategory = { key: CategoryKey; label: string; pct: number }
+export type SubcontractorCostLine = { trade: string; label: string; amount: number }
 
 export type LotDrillDownRow = {
   id: string
@@ -113,11 +138,16 @@ export type LotDrillDownRow = {
   estimateOnlyTotal: number | null
   varianceCategories: LotVarianceCategory[] | null
   contractPrice: number | null
+  subcontractorCost: number
+  subcontractorBreakdown: SubcontractorCostLine[]
+  margin: number | null
+  marginPct: number | null
 }
 
 export type StageAnalytics = {
   id: string
   name: string
+  isContractPricing: boolean
   summary: AggregateSummary
   lots: LotDrillDownRow[]
 }
@@ -299,9 +329,19 @@ type LotCalc = {
   estimateCats: CategoryQuantities | null
   finalCats: CategoryQuantities | null
   contractPrice: number | null
+  subcontractorCost: number
+  subcontractorBreakdown: SubcontractorCostLine[]
 }
 
-function buildLotCalcs(lots: LotRow[], quotes: QuoteRow[]): LotCalc[] {
+// stageDefaultPriceById lets a lot fall back to its stage's default_contract_price
+// when it has no price of its own set — lot price always wins when present.
+// subcontractorByLot is only needed for the NLV drill-down, so it's optional.
+function buildLotCalcs(
+  lots: LotRow[],
+  quotes: QuoteRow[],
+  stageDefaultPriceById: Map<string, number | null>,
+  subcontractorByLot?: Map<string, SubcontractorCostLine[]>
+): LotCalc[] {
   const byLot = new Map<string, QuoteRow[]>()
   for (const q of quotes) {
     const arr = byLot.get(q.lot_id) ?? []
@@ -317,8 +357,12 @@ function buildLotCalcs(lots: LotRow[], quotes: QuoteRow[]): LotCalc[] {
       ? [...quotesForLot].sort((a, b) => bestQuoteScore(b) - bestQuoteScore(a))[0]
       : null
 
-    const cp = lot.contract_price != null ? Number(lot.contract_price) : null
+    const ownPrice = lot.contract_price != null ? Number(lot.contract_price) : null
+    const cp = ownPrice ?? stageDefaultPriceById.get(lot.stage_id) ?? null
     const hasContractPrice = cp != null
+
+    const subBreakdown = subcontractorByLot?.get(lot.id) ?? []
+    const subcontractorCost = sum(subBreakdown.map((s) => s.amount))
 
     return {
       id: lot.id,
@@ -334,6 +378,8 @@ function buildLotCalcs(lots: LotRow[], quotes: QuoteRow[]): LotCalc[] {
       estimateCats: hasContractPrice ? null : (estimateQuote ? computeCategoryQuantities(estimateQuote.lot_quote_items) : null),
       finalCats: hasContractPrice ? null : (finalQuote ? computeCategoryQuantities(finalQuote.lot_quote_items) : null),
       contractPrice: cp,
+      subcontractorCost,
+      subcontractorBreakdown: subBreakdown,
     }
   })
 }
@@ -454,6 +500,11 @@ function buildAggregateSummary(lots: LotCalc[]): AggregateSummary {
   const total = invoicedRevenue + pipelineRevenue
   const avgLotValue = revenueLotCount > 0 ? total / revenueLotCount : 0
 
+  const contractValue = sum(lots.filter((l) => l.contractPrice != null).map((l) => l.contractPrice!))
+  const subcontractorCost = sum(lots.map((l) => l.subcontractorCost))
+  const margin = contractValue - subcontractorCost
+  const marginPct = contractValue > 0 ? (margin / contractValue) * 100 : null
+
   return {
     lotCount,
     completedCount,
@@ -461,6 +512,7 @@ function buildAggregateSummary(lots: LotCalc[]): AggregateSummary {
     revenue: { invoiced: invoicedRevenue, pipeline: pipelineRevenue, total },
     avgLotValue,
     materialsVariance: computeVariance(lots),
+    nlv: { contractValue, subcontractorCost, margin, marginPct },
   }
 }
 
@@ -481,10 +533,16 @@ export function buildAnalyticsData(input: {
   // All lots/quotes unfiltered by date — used only for the drill-down section
   allLots?: LotRow[]
   allQuotes?: QuoteRow[]
+  // Unfiltered by date, keyed by lot_id — feeds NLV margin in the drill-down
+  subcontractorCosts?: SubcontractorCostRow[]
 }): AnalyticsData {
-  const { rangeLabel, pipelineStartDate, pipelineEndDate, completionStartDate, completionEndDate, sites, stages, lots, completedLots, quotes, plantRatioSettings, allLots, allQuotes } = input
+  const { rangeLabel, pipelineStartDate, pipelineEndDate, completionStartDate, completionEndDate, sites, stages, lots, completedLots, quotes, plantRatioSettings, allLots, allQuotes, subcontractorCosts } = input
 
-  const lotCalcs = buildLotCalcs(lots, quotes)
+  const stageDefaultPriceById = new Map(
+    stages.map((s) => [s.id, s.default_contract_price != null ? Number(s.default_contract_price) : null] as const)
+  )
+
+  const lotCalcs = buildLotCalcs(lots, quotes, stageDefaultPriceById)
   const lotsWithQuotes = lotCalcs.filter((l) => l.hasQuoteData)
   const excludedLotsCount = lotCalcs.length - lotsWithQuotes.length
 
@@ -561,7 +619,15 @@ export function buildAnalyticsData(input: {
 
   // ── Sections 3 & 4: site → stage → lot drill-down ───────────────────────────
   // Uses allLots/allQuotes when provided so the drill-down ignores the date range filter.
-  const drillLotCalcs = allLots ? buildLotCalcs(allLots, allQuotes ?? quotes) : lotCalcs
+  const subcontractorByLot = new Map<string, SubcontractorCostLine[]>()
+  for (const c of subcontractorCosts ?? []) {
+    const arr = subcontractorByLot.get(c.lot_id) ?? []
+    arr.push({ trade: c.trade, label: c.trade_label ?? c.trade, amount: Number(c.invoice_amount ?? 0) })
+    subcontractorByLot.set(c.lot_id, arr)
+  }
+  const drillLotCalcs = allLots
+    ? buildLotCalcs(allLots, allQuotes ?? quotes, stageDefaultPriceById, subcontractorByLot)
+    : lotCalcs
 
   const lotsByStage = new Map<string, LotCalc[]>()
   for (const lot of drillLotCalcs) {
@@ -579,18 +645,32 @@ export function buildAnalyticsData(input: {
         const summary = buildAggregateSummary(stageLots)
         const lotsRows: LotDrillDownRow[] = [...stageLots]
           .sort((a, b) => a.lotNumber.localeCompare(b.lotNumber, undefined, { numeric: true }))
-          .map((lot) => ({
-            id: lot.id,
-            lotNumber: lot.lotNumber,
-            dueDate: lot.dueDate,
-            buildComplete: lot.buildComplete,
-            invoiced: lot.invoiced,
-            finalTotal: lot.finalTotal,
-            estimateOnlyTotal: lot.finalTotal === null ? lot.estimateTotal : null,
-            varianceCategories: lotVarianceCategories(lot),
-            contractPrice: lot.contractPrice,
-          }))
-        return { id: stage.id, name: stage.name, summary, lots: lotsRows }
+          .map((lot) => {
+            const margin = lot.contractPrice != null ? lot.contractPrice - lot.subcontractorCost : null
+            const marginPct = margin != null && lot.contractPrice! > 0 ? (margin / lot.contractPrice!) * 100 : null
+            return {
+              id: lot.id,
+              lotNumber: lot.lotNumber,
+              dueDate: lot.dueDate,
+              buildComplete: lot.buildComplete,
+              invoiced: lot.invoiced,
+              finalTotal: lot.finalTotal,
+              estimateOnlyTotal: lot.finalTotal === null ? lot.estimateTotal : null,
+              varianceCategories: lotVarianceCategories(lot),
+              contractPrice: lot.contractPrice,
+              subcontractorCost: lot.subcontractorCost,
+              subcontractorBreakdown: lot.subcontractorBreakdown,
+              margin,
+              marginPct,
+            }
+          })
+        return {
+          id: stage.id,
+          name: stage.name,
+          isContractPricing: stage.is_contract_pricing ?? false,
+          summary,
+          lots: lotsRows,
+        }
       })
 
       const allSiteLots = siteStages.flatMap((stage) => lotsByStage.get(stage.id) ?? [])

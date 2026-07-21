@@ -1,0 +1,216 @@
+'use client'
+
+import { useActionState, useState } from 'react'
+import { createConversionSetting, updateConversionSetting, deleteConversionSetting } from './settings-actions'
+import type { ActionState } from '@/types/actions'
+
+export type ConversionSettingRow = {
+  id: string
+  name: string
+  unit_from: string
+  unit_to: string
+  conversion_rate: number
+  wastage_pct: number
+  notes: string | null
+}
+
+function ConversionForm({
+  action, defaults, submitLabel, onCancel, idField,
+}: {
+  action: (prev: ActionState, formData: FormData) => Promise<ActionState>
+  defaults: Partial<ConversionSettingRow>
+  submitLabel: string
+  onCancel?: () => void
+  idField?: string
+}) {
+  const [state, formAction, pending] = useActionState<ActionState, FormData>(action, null)
+
+  return (
+    <form action={formAction} className="space-y-3">
+      {idField && <input type="hidden" name="id" value={idField} />}
+      <div>
+        <label className="block text-xs font-medium text-fg-muted mb-1">Name</label>
+        <input
+          name="name" type="text" required defaultValue={defaults.name ?? ''}
+          placeholder="e.g. Mulch"
+          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-fg-muted mb-1">Converts from (unit)</label>
+          <input
+            name="unit_from" type="text" required defaultValue={defaults.unit_from ?? ''}
+            placeholder="e.g. tonne"
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-fg-muted mb-1">Converts to (unit)</label>
+          <input
+            name="unit_to" type="text" required defaultValue={defaults.unit_to ?? ''}
+            placeholder="e.g. m²"
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-fg-muted mb-1">Rate (1 unit_from = X unit_to)</label>
+          <input
+            name="conversion_rate" type="number" step="0.0001" min="0" required defaultValue={defaults.conversion_rate ?? ''}
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-fg-muted mb-1">Wastage %</label>
+          <input
+            name="wastage_pct" type="number" step="0.01" min="0" defaultValue={defaults.wastage_pct ?? 0}
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+          />
+        </div>
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-fg-muted mb-1">Notes</label>
+        <textarea
+          name="notes" rows={2} defaultValue={defaults.notes ?? ''}
+          placeholder="Optional"
+          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 resize-none"
+        />
+      </div>
+
+      {state?.error && <p className="text-xs text-red-600">{state.error}</p>}
+
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={pending}
+          className="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50"
+        >
+          {pending ? 'Saving…' : submitLabel}
+        </button>
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-fg-muted hover:bg-surface-raised"
+          >
+            Cancel
+          </button>
+        )}
+      </div>
+    </form>
+  )
+}
+
+export default function SettingsTab({ settings, isAdmin, tableExists }: {
+  settings: ConversionSettingRow[]
+  isAdmin: boolean
+  tableExists: boolean
+}) {
+  const [adding, setAdding] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+
+  if (!tableExists) {
+    return (
+      <div className="rounded-xl border border-border bg-surface p-4">
+        <p className="text-sm text-fg-muted">
+          The material conversion settings table hasn&apos;t been created yet. Run the SQL migration to enable this tab.
+        </p>
+      </div>
+    )
+  }
+
+  async function addAction(prev: ActionState, formData: FormData): Promise<ActionState> {
+    const result = await createConversionSetting(prev, formData)
+    if (!result) setAdding(false)
+    return result
+  }
+
+  async function editAction(prev: ActionState, formData: FormData): Promise<ActionState> {
+    const result = await updateConversionSetting(prev, formData)
+    if (!result) setEditingId(null)
+    return result
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-surface p-5 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-fg-secondary">Material conversion rates</h2>
+          <p className="mt-0.5 text-xs text-fg-muted">Used to convert ordered quantities into usable coverage.</p>
+        </div>
+        {isAdmin && !adding && (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-muted hover:bg-surface-raised"
+          >
+            + Add new conversion
+          </button>
+        )}
+      </div>
+
+      {settings.length === 0 && !adding && (
+        <p className="text-sm text-fg-muted">No conversion rates configured yet.</p>
+      )}
+
+      <div className="space-y-2">
+        {settings.map((s) => {
+          if (editingId === s.id) {
+            return (
+              <div key={s.id} className="rounded-lg border border-border p-3 bg-surface-raised">
+                <ConversionForm
+                  action={editAction}
+                  defaults={s}
+                  submitLabel="Save"
+                  onCancel={() => setEditingId(null)}
+                  idField={s.id}
+                />
+              </div>
+            )
+          }
+          return (
+            <div key={s.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-fg-secondary truncate">{s.name}</p>
+                <p className="text-xs text-fg-muted">
+                  1 {s.unit_from} → {s.conversion_rate} {s.unit_to} · {s.wastage_pct}% wastage
+                </p>
+                {s.notes && <p className="mt-0.5 text-xs text-fg-muted italic">{s.notes}</p>}
+              </div>
+              {isAdmin && (
+                <div className="flex gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setEditingId(s.id)}
+                    className="rounded px-2 py-1 text-xs text-fg-muted hover:bg-surface-raised"
+                  >
+                    Edit
+                  </button>
+                  <form action={async (fd) => { await deleteConversionSetting(null, fd) }}>
+                    <input type="hidden" name="id" value={s.id} />
+                    <button type="submit" className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50">
+                      Delete
+                    </button>
+                  </form>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {adding && (
+        <div className="rounded-lg border border-dashed border-border p-3 bg-surface-raised">
+          <ConversionForm
+            action={addAction}
+            defaults={{ wastage_pct: 0 }}
+            submitLabel="Add conversion"
+            onCancel={() => setAdding(false)}
+          />
+        </div>
+      )}
+    </div>
+  )
+}

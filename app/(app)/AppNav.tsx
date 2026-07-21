@@ -63,7 +63,7 @@ const NAV_ITEMS: NavItem[] = [
     icon: <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.955 11.955 0 012.25 10.313c0 5.438 3.938 9.937 9.75 10.688 5.812-.75 9.75-5.25 9.75-10.688 0-1.51-.347-2.944-.958-4.313A11.956 11.956 0 0112 2.714z" /></svg>,
   },
   {
-    href: '/materials', label: 'Materials', exactRoles: ['supervisor', 'admin'],
+    href: '/materials', label: 'Materials', minRole: 'worker',
     icon: <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v17.25m0-17.25c-1.472 0-2.882.265-4.185.75M12 3c1.472 0 2.882.265 4.185.75M4.5 8.25l-1.5 4.5a3 3 0 006 0l-1.5-4.5m-3 0h3m12 0l-1.5 4.5a3 3 0 006 0l-1.5-4.5m-3 0h3m-15 0l3-1.5m12 1.5l-3-1.5" /></svg>,
   },
   {

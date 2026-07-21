@@ -154,6 +154,10 @@ export default async function LotPage({ params }: Props) {
   const stageAny = stage as any
   const stageIsContractPricing   = stageAny?.is_contract_pricing ?? false
   const stageDefaultContractPrice = stageAny?.default_contract_price != null ? Number(stageAny.default_contract_price) : null
+  // Lot-level contract_price overrides the stage default; falls back to the
+  // stage default when the lot has none set — same COALESCE pattern used on
+  // the invoices and analytics pages.
+  const effectiveContractPrice = contractPrice ?? stageDefaultContractPrice
   const site             = Array.isArray(stage.sites) ? stage.sites[0] : stage.sites as { id: string; name: string; has_client_extras?: boolean }
   const siteClientExtras = (site as { has_client_extras?: boolean }).has_client_extras ?? true
   const showClientExtras = siteClientExtras && lotClientExtras
@@ -390,7 +394,7 @@ export default async function LotPage({ params }: Props) {
         )}
 
         {/* ── Subcontractor Costs (contract-priced lots, admin only) ────────── */}
-        {isAdmin && contractPrice != null && (
+        {isAdmin && effectiveContractPrice != null && (
           <div>
             <h2 className="text-base font-semibold text-fg-secondary mb-3">Subcontractor Costs</h2>
             <SubcontractorCosts
@@ -398,7 +402,7 @@ export default async function LotPage({ params }: Props) {
               siteId={siteId}
               stageId={stageId}
               initialCosts={subcontractorCosts}
-              contractPrice={contractPrice}
+              contractPrice={effectiveContractPrice}
               isAdmin={isAdmin}
             />
           </div>

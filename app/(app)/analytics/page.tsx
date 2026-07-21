@@ -12,6 +12,7 @@ import {
   type CompletedLotRow,
   type QuoteRow,
   type RatioRow,
+  type SubcontractorCostRow,
 } from './lib'
 import DateRangeFilter from './DateRangeFilter'
 import AnalyticsView from './AnalyticsView'
@@ -40,7 +41,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
 
   const [sitesResult, stagesResult, ratiosResult] = await Promise.all([
     supabase.from('sites').select('id, name').order('name'),
-    supabase.from('stages').select('id, name, site_id, order').order('order'),
+    supabase.from('stages').select('id, name, site_id, order, is_contract_pricing, default_contract_price').order('order'),
     supabase.from('plant_ratio_settings').select('site_id, front_ratio, rear_ratio'),
   ])
 
@@ -95,6 +96,22 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     allQuotes = (allQuotesResult.data ?? []) as unknown as QuoteRow[]
   }
 
+  // Subcontractor costs feed the NLV (contract-priced stage) drill-down —
+  // fetched unfiltered by date, matching the drill-down's all-time semantics.
+  // Table may not exist in every environment yet, so degrade gracefully.
+  let subcontractorCosts: SubcontractorCostRow[] = []
+  if (allLotIds.length > 0) {
+    try {
+      const { data, error } = await supabase
+        .from('subcontractor_costs')
+        .select('lot_id, trade, trade_label, invoice_amount')
+        .in('lot_id', allLotIds)
+      if (!error && data) subcontractorCosts = data as SubcontractorCostRow[]
+    } catch {
+      // table doesn't exist yet — skip gracefully
+    }
+  }
+
   const data = buildAnalyticsData({
     rangeLabel,
     pipelineStartDate,
@@ -109,6 +126,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     plantRatioSettings: (ratiosResult.data ?? []) as RatioRow[],
     allLots,
     allQuotes,
+    subcontractorCosts,
   })
 
   return (

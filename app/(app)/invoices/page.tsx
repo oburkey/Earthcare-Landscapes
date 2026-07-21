@@ -27,7 +27,7 @@ export default async function InvoicesPage() {
       .from('sites')
       .select(`
         id, name, client_contact, completed_at, has_client_extras,
-        stages(id, name, order, completed_at, is_contract_pricing,
+        stages(id, name, order, completed_at, is_contract_pricing, default_contract_price,
           lots(id, lot_number, build_complete, quant_done, invoiced, pending_review, approved_for_invoicing, has_client_extras, contract_price),
           extra_jobs(id, title, status)
         )
@@ -42,7 +42,7 @@ export default async function InvoicesPage() {
         .from('sites')
         .select(`
           id, name, client_contact, completed_at, has_client_extras,
-          stages(id, name, order, is_contract_pricing,
+          stages(id, name, order, is_contract_pricing, default_contract_price,
             lots(id, lot_number, build_complete, quant_done, invoiced, has_client_extras, contract_price),
             extra_jobs(id, title, status)
           )
@@ -291,11 +291,18 @@ export default async function InvoicesPage() {
         .map((stage): StageData => {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const siteShowClientExtras = (site as any).has_client_extras ?? true
+          // Lot-level contract_price overrides the stage default; if the lot
+          // has none set, fall back to the stage's default_contract_price so
+          // NLV lots don't need a manual per-lot entry when the stage default covers them.
+          const stageDefaultContractPrice: number | null =
+            stage.default_contract_price != null ? Number(stage.default_contract_price) : null
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const lots: LotRow[] = ((stage.lots ?? []) as any[])
             .map((lot): LotRow => {
               const amounts          = amountByLot.get(lot.id) ?? { standard: 0, extras: 0, sections: [] }
               const showClientExtras = siteShowClientExtras && (lot.has_client_extras ?? true)
+              const effectiveContractPrice =
+                lot.contract_price != null ? Number(lot.contract_price) : stageDefaultContractPrice
 
               // Collect approved lots for the panel
               if (lot.approved_for_invoicing) {
@@ -309,7 +316,7 @@ export default async function InvoicesPage() {
                   stageId:             stage.id,
                   standardAmount:      amounts.standard,
                   clientExtrasAmount:  showClientExtras ? amounts.extras : 0,
-                  contractPrice:       lot.contract_price != null ? Number(lot.contract_price) : null,
+                  contractPrice:       effectiveContractPrice,
                   showClientExtras,
                   sections:            amounts.sections,
                 })
@@ -328,7 +335,7 @@ export default async function InvoicesPage() {
                 estimateTotal:        estimateByLot.get(lot.id) ?? null,
                 sections:             amounts.sections,
                 showClientExtras,
-                contractPrice:        lot.contract_price != null ? Number(lot.contract_price) : null,
+                contractPrice:        effectiveContractPrice,
               }
             })
             .sort((a, b) =>
