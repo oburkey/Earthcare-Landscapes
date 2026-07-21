@@ -5,7 +5,7 @@ import MaterialsAccuracySection from './MaterialsAccuracySection'
 import VarianceTrendChart from './VarianceTrendChart'
 import type { MaterialsSection, MaterialsSiteOption } from '../lib'
 
-type Selection = { type: 'all' } | { type: 'site'; id: string } | { type: 'stage'; id: string }
+type Selection = { type: 'all' } | { type: 'stage'; id: string }
 
 interface Props {
   global: MaterialsSection
@@ -14,17 +14,12 @@ interface Props {
   siteIndex: MaterialsSiteOption[]
 }
 
-function selectionKey(s: Selection): string {
-  return s.type === 'all' ? 'all' : `${s.type}:${s.id}`
-}
-
-export default function MaterialsAccuracyPanel({ global, bySite, byStage, siteIndex }: Props) {
+export default function MaterialsAccuracyPanel({ global, byStage, siteIndex }: Props) {
   const [selection, setSelection] = useState<Selection>({ type: 'all' })
+  // Accordion: at most one site expanded at a time.
+  const [expandedSiteId, setExpandedSiteId] = useState<string | null>(null)
 
-  const active =
-    selection.type === 'all' ? global
-    : selection.type === 'site' ? (bySite[selection.id] ?? global)
-    : (byStage[selection.id] ?? global)
+  const active = selection.type === 'all' ? global : (byStage[selection.id] ?? global)
 
   function stageLabel(stageId: string): string {
     for (const site of siteIndex) {
@@ -34,10 +29,11 @@ export default function MaterialsAccuracyPanel({ global, bySite, byStage, siteIn
     return 'Stage'
   }
 
-  const activeLabel =
-    selection.type === 'all' ? 'All sites'
-    : selection.type === 'site' ? (siteIndex.find((s) => s.id === selection.id)?.name ?? 'Site')
-    : stageLabel(selection.id)
+  const activeLabel = selection.type === 'all' ? 'All Sites' : stageLabel(selection.id)
+
+  function toggleSite(siteId: string) {
+    setExpandedSiteId((prev) => (prev === siteId ? null : siteId))
+  }
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_240px]">
@@ -47,55 +43,71 @@ export default function MaterialsAccuracyPanel({ global, bySite, byStage, siteIn
         <VarianceTrendChart trend={active.trend} />
       </div>
 
-      <div className="rounded-xl border border-border bg-surface p-2 h-fit lg:sticky lg:top-4">
-        <p className="px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">Filter</p>
-        <nav className="space-y-0.5">
-          <button
-            type="button"
-            onClick={() => setSelection({ type: 'all' })}
-            className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-sm font-medium transition-colors ${
-              selectionKey(selection) === 'all'
-                ? 'bg-green-700 text-white'
-                : 'text-fg-secondary hover:bg-surface-raised'
-            }`}
-          >
-            All sites
-          </button>
+      <div className="rounded-xl border border-border bg-surface overflow-hidden h-fit lg:sticky lg:top-4">
+        <p className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-fg-muted border-b border-border-subtle">
+          Filter
+        </p>
 
-          {siteIndex.map((site) => (
-            <div key={site.id}>
-              <button
-                type="button"
-                onClick={() => setSelection({ type: 'site', id: site.id })}
-                className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-sm font-medium transition-colors ${
-                  selectionKey(selection) === `site:${site.id}`
-                    ? 'bg-green-700 text-white'
-                    : 'text-fg-secondary hover:bg-surface-raised'
-                }`}
-              >
-                {site.name}
-              </button>
-              {site.stages.length > 0 && (
-                <div className="ml-3 space-y-0.5 border-l border-border-subtle pl-2">
-                  {site.stages.map((stage) => (
-                    <button
-                      key={stage.id}
-                      type="button"
-                      onClick={() => setSelection({ type: 'stage', id: stage.id })}
-                      className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-xs font-medium transition-colors ${
-                        selectionKey(selection) === `stage:${stage.id}`
-                          ? 'bg-green-700 text-white'
-                          : 'text-fg-muted hover:bg-surface-raised'
-                      }`}
-                    >
-                      {stage.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </nav>
+        <button
+          type="button"
+          onClick={() => setSelection({ type: 'all' })}
+          className={`w-full px-4 py-3 text-left text-sm font-medium transition-colors ${
+            selection.type === 'all'
+              ? 'bg-green-700 text-white'
+              : 'text-fg-secondary hover:bg-surface-raised'
+          }`}
+        >
+          All Sites
+        </button>
+
+        <div className="border-t border-border-subtle divide-y divide-border-subtle">
+          {siteIndex.map((site) => {
+            const isExpanded = expandedSiteId === site.id
+            return (
+              <div key={site.id}>
+                <button
+                  type="button"
+                  onClick={() => toggleSite(site.id)}
+                  className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium text-fg-secondary hover:bg-surface-raised transition-colors"
+                >
+                  <svg
+                    className={`h-3.5 w-3.5 shrink-0 text-fg-muted transition-transform ${isExpanded ? '' : '-rotate-90'}`}
+                    fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                  </svg>
+                  <span className="flex-1 truncate">{site.name}</span>
+                </button>
+
+                {isExpanded && (
+                  site.stages.length === 0 ? (
+                    <p className="px-4 py-2 pl-10 text-xs text-fg-muted">No stages</p>
+                  ) : (
+                    <div className="divide-y divide-border-subtle">
+                      {site.stages.map((stage) => {
+                        const stageSelected = selection.type === 'stage' && selection.id === stage.id
+                        return (
+                          <button
+                            key={stage.id}
+                            type="button"
+                            onClick={() => setSelection({ type: 'stage', id: stage.id })}
+                            className={`block w-full py-2 pl-10 pr-4 text-left text-xs font-medium transition-colors ${
+                              stageSelected
+                                ? 'bg-green-700 text-white'
+                                : 'text-fg-muted hover:bg-surface-raised'
+                            }`}
+                          >
+                            {stage.name}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )
+                )}
+              </div>
+            )
+          })}
+        </div>
       </div>
     </div>
   )

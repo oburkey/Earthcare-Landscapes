@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useOptimistic, useState, useTransition } from 'react'
 import { saveQuote, deleteQuote, getStagesForSite, convertQuoteToExtraJob } from './actions'
 import { LOGO_DATA_URL } from '@/lib/pdfAssets'
 
@@ -346,11 +346,24 @@ export default function QuotesView({
 
   // Conversion state
   const [conversions, setConversions]         = useState<ConversionMap>(initialConversions)
+  // Optimistic overlay on top of `conversions` — shows the "Converted" badge
+  // instantly while the action is in flight, and (since it's read from
+  // `conversions` on every render) is immune to any Server Component refresh
+  // that revalidatePath() triggers in the background: the overlay reverts to
+  // whatever `conversions` holds once the transition settles, and we only
+  // commit `conversions` for real after the action confirms success.
+  const [optimisticConversions, addOptimisticConversion] = useOptimistic(
+    conversions,
+    (state: ConversionMap, entry: { quoteId: string; info: ConversionInfo }) => ({
+      ...state,
+      [entry.quoteId]: entry.info,
+    })
+  )
   const [convertingQuoteId, setConvertingQuoteId] = useState<string | null>(null)
   const [convertSiteId, setConvertSiteId]     = useState('')
   const [convertStageId, setConvertStageId]   = useState('')
   const [convertStages, setConvertStages]     = useState<{ id: string; name: string }[]>([])
-  const [converting, setConverting]           = useState(false)
+  const [converting, startConvertTransition]  = useTransition()
   const [convertError, setConvertError]       = useState<string | null>(null)
   const [loadingStages, setLoadingStages]     = useState(false)
 
@@ -520,34 +533,51 @@ export default function QuotesView({
     fetchStages(newSiteId)
   }
 
-  async function handleConvert() {
+  function handleConvert() {
     if (!convertingQuoteId || !convertStageId || !convertSiteId) return
-    setConverting(true)
+    const quoteId       = convertingQuoteId
+    const targetStageId = convertStageId
+    const targetSiteId  = convertSiteId
+    const targetStageName = convertStages.find((s) => s.id === targetStageId)?.name ?? ''
+
     setConvertError(null)
 
-    const fd = new FormData()
-    fd.set('quote_id', convertingQuoteId)
-    fd.set('stage_id', convertStageId)
-    fd.set('site_id', convertSiteId)
+    startConvertTransition(async () => {
+      // Shows the "Converted" badge immediately; reverts automatically if the
+      // transition ends without a matching update to `conversions` (i.e. on error).
+      addOptimisticConversion({
+        quoteId,
+        info: { extraJobId: '', stageName: targetStageName, siteId: targetSiteId, stageId: targetStageId },
+      })
 
-    const result = await convertQuoteToExtraJob(fd)
-    setConverting(false)
+      let result: Awaited<ReturnType<typeof convertQuoteToExtraJob>>
+      try {
+        const fd = new FormData()
+        fd.set('quote_id', quoteId)
+        fd.set('stage_id', targetStageId)
+        fd.set('site_id', targetSiteId)
+        result = await convertQuoteToExtraJob(fd)
+      } catch {
+        setConvertError('Failed to convert quote. Please try again.')
+        return
+      }
 
-    if ('error' in result) {
-      setConvertError(result.error)
-      return
-    }
+      if ('error' in result) {
+        setConvertError(result.error)
+        return
+      }
 
-    setConversions((prev) => ({
-      ...prev,
-      [convertingQuoteId]: {
-        extraJobId: result.extraJobId,
-        stageName:  result.stageName,
-        siteId:     result.siteId,
-        stageId:    result.stageId,
-      },
-    }))
-    setConvertingQuoteId(null)
+      setConversions((prev) => ({
+        ...prev,
+        [quoteId]: {
+          extraJobId: result.extraJobId,
+          stageName:  result.stageName,
+          siteId:     result.siteId,
+          stageId:    result.stageId,
+        },
+      }))
+      setConvertingQuoteId(null)
+    })
   }
 
   function handleExportCombined() {
@@ -851,15 +881,15 @@ export default function QuotesView({
         </div>
 
         {/* Conversion indicator (edit view) */}
-        {!isNew && conversions[view] && (
+        {!isNew && optimisticConversions[view] && (
           <a
-            href={`/sites/${conversions[view].siteId}/stages/${conversions[view].stageId}`}
+            href={`/sites/${optimisticConversions[view].siteId}/stages/${optimisticConversions[view].stageId}`}
             className="flex items-center gap-2 rounded-xl border border-green-200 bg-accent-dim px-4 py-3 text-sm text-accent-fg hover:bg-accent-dim transition-colors"
           >
             <svg className="h-4 w-4 shrink-0 text-green-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span>Converted to extra job &mdash; {conversions[view].stageName}</span>
+            <span>Converted to extra job &mdash; {optimisticConversions[view].stageName}</span>
             <svg className="h-3.5 w-3.5 shrink-0 ml-auto" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
             </svg>
@@ -885,7 +915,7 @@ export default function QuotesView({
             {pdfGenerating ? <Spinner /> : <PdfIcon />}
             {pdfGenerating ? 'Generating…' : 'Download PDF'}
           </button>
-          {!isNew && status === 'accepted' && !conversions[view] && canEdit && (
+          {!isNew && status === 'accepted' && !optimisticConversions[view] && canEdit && (
             <button
               type="button"
               onClick={() => openConvertModal(view, siteId || '', stageId || '')}
@@ -977,7 +1007,7 @@ export default function QuotesView({
               day: 'numeric', month: 'short', year: 'numeric',
             })
             const selected = selectedIds.has(q.id)
-            const conv = conversions[q.id]
+            const conv = optimisticConversions[q.id]
             return (
               <div
                 key={q.id}
