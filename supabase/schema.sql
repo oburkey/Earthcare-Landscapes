@@ -1503,6 +1503,14 @@ CREATE POLICY "pre_starts: staff read own"
   ON pre_starts FOR SELECT
   USING (submitted_by = auth.uid());
 
+-- ── pre_starts: admin delete policy (from migration_prestarts_admin_delete.sql) ─
+-- No policy previously granted admins DELETE access, so admin deletes silently
+-- matched zero rows and the record reappeared after the next page load.
+DROP POLICY IF EXISTS "pre_starts: admin delete all" ON pre_starts;
+CREATE POLICY "pre_starts: admin delete all"
+  ON pre_starts FOR DELETE
+  USING (current_user_role() = 'admin');
+
 
 -- =============================================================================
 -- END OF SCHEMA

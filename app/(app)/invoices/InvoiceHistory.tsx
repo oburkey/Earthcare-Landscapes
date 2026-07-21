@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import { useActionState } from 'react'
+import { deleteInvoiceRun } from './actions'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -26,6 +28,65 @@ function fmt(n: number): string {
 
 function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function confirmMessage(run: InvoiceRun): string {
+  const parts: string[] = []
+  if (run.lotCount > 0) parts.push(`${run.lotCount} lot${run.lotCount === 1 ? '' : 's'}`)
+  if (run.extraJobCount > 0) parts.push(`${run.extraJobCount} extra job${run.extraJobCount === 1 ? '' : 's'}`)
+  if (run.progressClaimCount > 0) parts.push(`${run.progressClaimCount} progress claim${run.progressClaimCount === 1 ? '' : 's'}`)
+  const list = parts.length > 1
+    ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
+    : parts[0] ?? 'these items'
+  return `Delete this invoice run? This will unmark ${list} as invoiced and return them to approved status.`
+}
+
+// ── Delete ────────────────────────────────────────────────────────────────────
+
+function DeleteRunButton({ run }: { run: InvoiceRun }) {
+  const [confirming, setConfirming] = useState(false)
+  const [state, action, pending] = useActionState(deleteInvoiceRun, null)
+
+  if (!confirming) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setConfirming(true) }}
+        className="shrink-0 text-xs font-medium text-red-500 hover:text-red-700"
+      >
+        Delete
+      </button>
+    )
+  }
+
+  return (
+    <div
+      onClick={(e) => e.stopPropagation()}
+      className="flex flex-col items-end gap-1.5 shrink-0"
+    >
+      <p className="max-w-xs text-right text-xs text-fg-muted">{confirmMessage(run)}</p>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setConfirming(false)}
+          className="text-xs font-medium text-fg-muted hover:text-fg-secondary"
+        >
+          Cancel
+        </button>
+        <form action={action}>
+          <input type="hidden" name="run_id" value={run.id} />
+          <button
+            type="submit"
+            disabled={pending}
+            className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            {pending ? 'Deleting…' : 'Yes, delete'}
+          </button>
+        </form>
+      </div>
+      {state?.error && <p className="text-xs text-red-600">{state.error}</p>}
+    </div>
+  )
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -125,6 +186,10 @@ export default function InvoiceHistory({ runs }: { runs: InvoiceRun[] }) {
                         </div>
                       </div>
                     )}
+
+                    <div className="flex justify-end pt-2 border-t border-border-subtle">
+                      <DeleteRunButton run={run} />
+                    </div>
                   </div>
                 )}
               </div>

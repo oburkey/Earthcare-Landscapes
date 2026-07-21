@@ -371,12 +371,20 @@ export async function deletePreStart(preStartId: string) {
   }
 
   // Delete the record — cascades to pre_start_photos in DB
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('pre_starts')
     .delete()
     .eq('id', preStartId)
+    .select('id')
 
   if (error) return { error: error.message }
+  // Without .select() above, PostgREST reports success even when the delete
+  // matches zero rows (e.g. an RLS policy silently filtering it out) — check
+  // explicitly so a blocked delete surfaces as an error instead of silently
+  // reappearing the next time the page loads.
+  if (!data || data.length === 0) {
+    return { error: 'Delete failed — the record could not be found or you do not have permission to delete it.' }
+  }
 
   revalidatePath('/safety')
   return { success: true }

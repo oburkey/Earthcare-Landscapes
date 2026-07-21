@@ -101,14 +101,17 @@ export type AggregateSummary = {
   materialsVariance: MaterialsVariance
 }
 
+export type LotVarianceCategory = { key: CategoryKey; label: string; pct: number }
+
 export type LotDrillDownRow = {
   id: string
   lotNumber: string
   dueDate: string | null
   buildComplete: boolean
   invoiced: boolean
-  varianceSummary: string | null
+  finalTotal: number | null
   estimateOnlyTotal: number | null
+  varianceCategories: LotVarianceCategory[] | null
   contractPrice: number | null
 }
 
@@ -126,6 +129,21 @@ export type SiteAnalytics = {
   stages: StageAnalytics[]
 }
 
+export type MaterialsSection = {
+  variance: MaterialsVariance
+  trend: VarianceTrendPoint[]
+  plantRatios: {
+    configuredFront: number
+    configuredRear: number
+    actualFront: number | null
+    actualRear: number | null
+  }
+}
+
+// Lightweight site/stage list for the materials-accuracy filter sidebar —
+// independent of whether a site/stage currently has any lots.
+export type MaterialsSiteOption = { id: string; name: string; stages: { id: string; name: string }[] }
+
 export type AnalyticsData = {
   rangeLabel: string
   revenue: {
@@ -136,16 +154,10 @@ export type AnalyticsData = {
     monthly: RevenueMonthPoint[]
     completedPerMonth: CompletionMonthPoint[]
   }
-  materials: {
-    variance: MaterialsVariance
-    trend: VarianceTrendPoint[]
-    plantRatios: {
-      configuredFront: number
-      configuredRear: number
-      actualFront: number | null
-      actualRear: number | null
-    }
-  }
+  materials: MaterialsSection
+  materialsBySite: Record<string, MaterialsSection>
+  materialsByStage: Record<string, MaterialsSection>
+  materialsSiteIndex: MaterialsSiteOption[]
   sites: SiteAnalytics[]
 }
 
@@ -347,18 +359,76 @@ function computeVariance(lots: LotCalc[]): MaterialsVariance {
   return result
 }
 
-function lotVarianceSummary(lot: LotCalc): string | null {
-  if (lot.contractPrice != null) return `Contract $${lot.contractPrice.toLocaleString('en-AU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+// Builds the variance / trend / plant-ratio bundle for a set of lots against
+// a shared month axis (`months`) — used for the global "all sites" view and,
+// filtered to a subset of lotCalcs, for the per-site and per-stage views in
+// the materials-accuracy filter sidebar.
+function buildMaterialsSection(
+  lotCalcs: LotCalc[],
+  months: MonthPoint[],
+  configuredFront: number,
+  configuredRear: number
+): MaterialsSection {
+  const variance = computeVariance(lotCalcs)
+
+  const trend: VarianceTrendPoint[] = months.map(({ key, label }) => {
+    const monthLots = lotCalcs.filter((l) => l.dueDate && monthKey(l.dueDate) === key)
+    const v = computeVariance(monthLots)
+    return {
+      key,
+      label,
+      turf: v.turf.avgPct,
+      gardenBedFront: v.gardenBedFront.avgPct,
+      gardenBedRear: v.gardenBedRear.avgPct,
+      edging: v.edging.avgPct,
+      plantsFront: v.plantsFront.avgPct,
+      plantsRear: v.plantsRear.avgPct,
+    }
+  })
+
+  let totalFrontM2 = 0, totalFrontPlants = 0, totalRearM2 = 0, totalRearPlants = 0
+  for (const lot of lotCalcs) {
+    if (!lot.finalCats) continue
+    totalFrontM2 += lot.finalCats.gardenBedFront
+    totalFrontPlants += lot.finalCats.plantsFront
+    totalRearM2 += lot.finalCats.gardenBedRear
+    totalRearPlants += lot.finalCats.plantsRear
+  }
+  const actualFront = totalFrontM2 > 0 ? totalFrontPlants / totalFrontM2 : null
+  const actualRear = totalRearM2 > 0 ? totalRearPlants / totalRearM2 : null
+
+  return {
+    variance,
+    trend,
+    plantRatios: { configuredFront, configuredRear, actualFront, actualRear },
+  }
+}
+
+// Resolves plant ratio settings for a site, falling back to the global
+// (site_id = null) setting, then to hardcoded defaults.
+function resolveRatios(siteId: string | null, plantRatioSettings: RatioRow[]): { front: number; rear: number } {
+  const globalSetting = plantRatioSettings.find((s) => s.site_id === null)
+  const siteSetting = siteId ? plantRatioSettings.find((s) => s.site_id === siteId) : undefined
+  return {
+    front: siteSetting?.front_ratio ?? globalSetting?.front_ratio ?? DEFAULT_FRONT_RATIO,
+    rear: siteSetting?.rear_ratio ?? globalSetting?.rear_ratio ?? DEFAULT_REAR_RATIO,
+  }
+}
+
+// Per-category material variance for a single lot's expandable detail. Only
+// meaningful when both an estimate and a final quote have quote-item data
+// (contract-priced lots skip category tracking entirely — see buildLotCalcs).
+function lotVarianceCategories(lot: LotCalc): LotVarianceCategory[] | null {
   if (!lot.estimateCats || !lot.finalCats) return null
-  const parts: string[] = []
+  const parts: LotVarianceCategory[] = []
   for (const key of CATEGORY_KEYS) {
     const est = lot.estimateCats[key]
     const fin = lot.finalCats[key]
     if (est <= 0) continue
     const pct = ((fin - est) / est) * 100
-    parts.push(`${CATEGORY_LABELS[key]} ${pct >= 0 ? '+' : ''}${pct.toFixed(0)}%`)
+    parts.push({ key, label: CATEGORY_LABELS[key], pct })
   }
-  return parts.length > 0 ? parts.join(', ') : null
+  return parts.length > 0 ? parts : null
 }
 
 // ── Aggregate summaries (shared by drill-down & comparison) ────────────────────
@@ -466,37 +536,28 @@ export function buildAnalyticsData(input: {
   }))
 
   // ── Section 2: materials & quote accuracy ──────────────────────────────────
-  const variance = computeVariance(lotCalcs)
+  const globalRatios = resolveRatios(null, plantRatioSettings)
+  const materials = buildMaterialsSection(lotCalcs, revenueMonths, globalRatios.front, globalRatios.rear)
 
-  const trend: VarianceTrendPoint[] = revenueMonths.map(({ key, label }) => {
-    const monthLots = lotCalcs.filter((l) => l.dueDate && monthKey(l.dueDate) === key)
-    const v = computeVariance(monthLots)
-    return {
-      key,
-      label,
-      turf: v.turf.avgPct,
-      gardenBedFront: v.gardenBedFront.avgPct,
-      gardenBedRear: v.gardenBedRear.avgPct,
-      edging: v.edging.avgPct,
-      plantsFront: v.plantsFront.avgPct,
-      plantsRear: v.plantsRear.avgPct,
+  // Per-site / per-stage breakdowns for the materials-accuracy filter sidebar —
+  // built from the same date-filtered lotCalcs as the global view above, so
+  // switching the filter doesn't change what date range is being looked at.
+  const materialsBySite: Record<string, MaterialsSection> = {}
+  const materialsByStage: Record<string, MaterialsSection> = {}
+  const materialsSiteIndex: MaterialsSiteOption[] = sites.map((site) => {
+    const siteStages = stages.filter((s) => s.site_id === site.id).sort((a, b) => a.order - b.order)
+    const siteRatios = resolveRatios(site.id, plantRatioSettings)
+
+    const siteLotCalcs = lotCalcs.filter((l) => siteStages.some((s) => s.id === l.stageId))
+    materialsBySite[site.id] = buildMaterialsSection(siteLotCalcs, revenueMonths, siteRatios.front, siteRatios.rear)
+
+    for (const stage of siteStages) {
+      const stageLotCalcs = lotCalcs.filter((l) => l.stageId === stage.id)
+      materialsByStage[stage.id] = buildMaterialsSection(stageLotCalcs, revenueMonths, siteRatios.front, siteRatios.rear)
     }
+
+    return { id: site.id, name: site.name, stages: siteStages.map((s) => ({ id: s.id, name: s.name })) }
   })
-
-  const globalRatioSetting = plantRatioSettings.find((s) => s.site_id === null)
-  const configuredFront = globalRatioSetting?.front_ratio ?? DEFAULT_FRONT_RATIO
-  const configuredRear = globalRatioSetting?.rear_ratio ?? DEFAULT_REAR_RATIO
-
-  let totalFrontM2 = 0, totalFrontPlants = 0, totalRearM2 = 0, totalRearPlants = 0
-  for (const lot of lotCalcs) {
-    if (!lot.finalCats) continue
-    totalFrontM2 += lot.finalCats.gardenBedFront
-    totalFrontPlants += lot.finalCats.plantsFront
-    totalRearM2 += lot.finalCats.gardenBedRear
-    totalRearPlants += lot.finalCats.plantsRear
-  }
-  const actualFront = totalFrontM2 > 0 ? totalFrontPlants / totalFrontM2 : null
-  const actualRear = totalRearM2 > 0 ? totalRearPlants / totalRearM2 : null
 
   // ── Sections 3 & 4: site → stage → lot drill-down ───────────────────────────
   // Uses allLots/allQuotes when provided so the drill-down ignores the date range filter.
@@ -524,8 +585,9 @@ export function buildAnalyticsData(input: {
             dueDate: lot.dueDate,
             buildComplete: lot.buildComplete,
             invoiced: lot.invoiced,
-            varianceSummary: lotVarianceSummary(lot),
-            estimateOnlyTotal: lot.finalCats === null && lot.contractPrice === null ? lot.estimateTotal : null,
+            finalTotal: lot.finalTotal,
+            estimateOnlyTotal: lot.finalTotal === null ? lot.estimateTotal : null,
+            varianceCategories: lotVarianceCategories(lot),
             contractPrice: lot.contractPrice,
           }))
         return { id: stage.id, name: stage.name, summary, lots: lotsRows }
@@ -548,11 +610,10 @@ export function buildAnalyticsData(input: {
       monthly,
       completedPerMonth,
     },
-    materials: {
-      variance,
-      trend,
-      plantRatios: { configuredFront, configuredRear, actualFront, actualRear },
-    },
+    materials,
+    materialsBySite,
+    materialsByStage,
+    materialsSiteIndex,
     sites: siteAnalytics,
   }
 }

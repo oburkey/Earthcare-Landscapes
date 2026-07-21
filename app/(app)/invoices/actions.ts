@@ -132,3 +132,55 @@ export async function markAsInvoiced(
   revalidatePath('/invoices')
   return null
 }
+
+// Reverses an invoice run: unmarks its lots/progress claims as invoiced and
+// returns them to approved status, then deletes the run itself. Extra jobs
+// need no column update — their invoiced status is derived from membership in
+// invoice_runs.extra_job_ids, so deleting the run un-invoices them automatically.
+export async function deleteInvoiceRun(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Only admins can delete invoice runs.' }
+
+  const runId = formData.get('run_id') as string
+  if (!runId) return { error: 'Invoice run ID is missing.' }
+
+  const supabase = await createClient()
+
+  const { data: run, error: fetchError } = await supabase
+    .from('invoice_runs')
+    .select('lot_ids, progress_claim_ids')
+    .eq('id', runId)
+    .single()
+  if (fetchError || !run) return { error: fetchError?.message ?? 'Invoice run not found.' }
+
+  const lotIds = (run.lot_ids ?? []) as string[]
+  const progressClaimIds = (run.progress_claim_ids ?? []) as string[]
+
+  if (lotIds.length > 0) {
+    const { error } = await supabase
+      .from('lots')
+      .update({ invoiced: false, approved_for_invoicing: true })
+      .in('id', lotIds)
+    if (error) return { error: error.message }
+  }
+
+  if (progressClaimIds.length > 0) {
+    const { error } = await supabase
+      .from('progress_claims')
+      .update({ invoiced: false, approved_for_invoicing: true, invoice_run_id: null })
+      .in('id', progressClaimIds)
+    if (error) return { error: error.message }
+  }
+
+  const { error: deleteError } = await supabase
+    .from('invoice_runs')
+    .delete()
+    .eq('id', runId)
+  if (deleteError) return { error: deleteError.message }
+
+  revalidatePath('/invoices')
+  return null
+}

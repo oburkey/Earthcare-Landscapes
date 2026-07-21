@@ -1,8 +1,7 @@
 import RevenueOverviewSection from './components/RevenueOverviewSection'
 import RevenueChart from './components/RevenueChart'
 import LotsCompletedChart from './components/LotsCompletedChart'
-import MaterialsAccuracySection from './components/MaterialsAccuracySection'
-import VarianceTrendChart from './components/VarianceTrendChart'
+import MaterialsAccuracyPanel from './components/MaterialsAccuracyPanel'
 import DrillDownSection from './components/DrillDownSection'
 import ComparisonSection from './components/ComparisonSection'
 import type { AnalyticsData } from './lib'
@@ -27,8 +26,12 @@ export default function AnalyticsView({ data }: { data: AnalyticsData }) {
 
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-fg">Materials & quote accuracy</h2>
-        <MaterialsAccuracySection materials={data.materials} />
-        <VarianceTrendChart trend={data.materials.trend} />
+        <MaterialsAccuracyPanel
+          global={data.materials}
+          bySite={data.materialsBySite}
+          byStage={data.materialsByStage}
+          siteIndex={data.materialsSiteIndex}
+        />
       </section>
 
       <section className="space-y-4">
