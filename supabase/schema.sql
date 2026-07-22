@@ -787,6 +787,13 @@ CREATE POLICY "vehicles: all staff can read"
   ON vehicles FOR SELECT
   USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
 
+-- Leading hands can edit vehicle details (from migration_vehicles_leading_hand_update.sql)
+DROP POLICY IF EXISTS "vehicles: leading_hand can update" ON vehicles;
+CREATE POLICY "vehicles: leading_hand can update"
+  ON vehicles FOR UPDATE
+  USING (current_user_role() = 'leading_hand')
+  WITH CHECK (current_user_role() = 'leading_hand');
+
 
 -- Quote template sections (from migration_phase2.sql)
 CREATE TABLE IF NOT EXISTS quote_template_sections (

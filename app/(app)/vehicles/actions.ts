@@ -83,8 +83,8 @@ export async function updateVehicle(
   formData: FormData
 ): Promise<MutationState> {
   const profile = await requireAuth()
-  if (profile.role !== 'supervisor' && profile.role !== 'admin') {
-    return { error: 'Only supervisors and admins can manage vehicles.' }
+  if (profile.role !== 'leading_hand' && profile.role !== 'supervisor' && profile.role !== 'admin') {
+    return { error: 'Only leading hands and above can edit vehicles.' }
   }
 
   const vehicleId = formData.get('vehicle_id') as string

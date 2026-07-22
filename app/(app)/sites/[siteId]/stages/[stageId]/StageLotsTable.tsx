@@ -32,11 +32,53 @@ export type TableExtraJobRow = {
 
 export type ChecklistColumn = { key: string; label: string; shortLabel: string }
 
+// Display-only tweaks for the full Checklist view's column headers — labels,
+// removals, and ordering here are specific to this table. They intentionally
+// diverge from lib/checklist.ts's item labels (unchanged) and don't affect
+// the lot detail page's checklist section (unchanged) or the Overview view
+// (which has its own curated short labels and doesn't include these keys).
+const CHECKLIST_VIEW_LABEL_OVERRIDES: Record<string, string> = {
+  lw_tree_installed_pills: 'Tree installed',
+  lw_irrigation_installed: 'Irrigation running',
+  lw_plants_installed:     'Plants installed',
+  lw_drippers_installed:   'Drippers installed',
+  fin_mulch:                'Mulch installed',
+  fin_general_clean:        'Site cleaned and swept',
+  fin_quantity_survey:      'Quantity survey done',
+}
+
+const CHECKLIST_VIEW_HIDDEN_KEYS = new Set(['lw_planting_install_approved', 'fin_hardstand_clean'])
+
+function applyChecklistViewOverrides(columns: ChecklistColumn[]): ChecklistColumn[] {
+  const visible = columns
+    .filter((c) => !CHECKLIST_VIEW_HIDDEN_KEYS.has(c.key))
+    .map((c) => ({ ...c, shortLabel: CHECKLIST_VIEW_LABEL_OVERRIDES[c.key] ?? c.shortLabel }))
+
+  // Mulch installed → right after Drippers installed.
+  const mulchIdx = visible.findIndex((c) => c.key === 'fin_mulch')
+  if (mulchIdx !== -1) {
+    const [mulch] = visible.splice(mulchIdx, 1)
+    const dripIdx = visible.findIndex((c) => c.key === 'lw_drippers_installed')
+    visible.splice(dripIdx === -1 ? visible.length : dripIdx + 1, 0, mulch)
+  }
+
+  // Site cleaned and swept → right before Quantity survey done.
+  const cleanIdx = visible.findIndex((c) => c.key === 'fin_general_clean')
+  if (cleanIdx !== -1) {
+    const [clean] = visible.splice(cleanIdx, 1)
+    const qtyIdx = visible.findIndex((c) => c.key === 'fin_quantity_survey')
+    visible.splice(qtyIdx === -1 ? visible.length : qtyIdx, 0, clean)
+  }
+
+  return visible
+}
+
 interface Props {
   lots: TableLotRow[]
   extraJobs: TableExtraJobRow[]
   checklistMap: Record<string, Record<string, boolean>>
   checklistColumns: ChecklistColumn[]
+  view: 'overview' | 'checklist'
   siteId: string
   stageId: string
   canTickChecklist: boolean
@@ -52,8 +94,10 @@ function TradeMark({ done }: { done: boolean }) {
 }
 
 export default function StageLotsTable({
-  lots, extraJobs, checklistMap, checklistColumns, siteId, stageId, canTickChecklist, canToggleBuildComplete,
+  lots, extraJobs, checklistMap, checklistColumns, view, siteId, stageId, canTickChecklist, canToggleBuildComplete,
 }: Props) {
+  const displayColumns = view === 'checklist' ? applyChecklistViewOverrides(checklistColumns) : checklistColumns
+
   if (lots.length === 0 && extraJobs.length === 0) {
     return (
       <div className="rounded-xl border border-border bg-surface px-4 py-12 text-center">
@@ -73,7 +117,7 @@ export default function StageLotsTable({
             <th className="text-left font-medium px-2 py-2 whitespace-nowrap">Delayed</th>
             <th className="text-center font-medium px-2 py-2 whitespace-nowrap">Fencer</th>
             <th className="text-center font-medium px-2 py-2 whitespace-nowrap">Concreter</th>
-            {checklistColumns.map((col) => (
+            {displayColumns.map((col) => (
               <th key={col.key} title={col.label} className="text-center font-medium px-2 py-2 whitespace-nowrap">
                 {col.shortLabel}
               </th>
@@ -105,7 +149,7 @@ export default function StageLotsTable({
                 </td>
                 <td className="px-2 py-2 text-center"><TradeMark done={lot.tradesCompleted.includes('Fencer')} /></td>
                 <td className="px-2 py-2 text-center"><TradeMark done={lot.tradesCompleted.includes('Concreter')} /></td>
-                {checklistColumns.map((col) => (
+                {displayColumns.map((col) => (
                   <td key={col.key} className="px-2 py-2 text-center">
                     <InlineCheckbox
                       checked={items[col.key] ?? false}
@@ -131,7 +175,7 @@ export default function StageLotsTable({
 
           {extraJobs.length > 0 && (
             <tr className="border-b border-border bg-surface-raised">
-              <td colSpan={7 + checklistColumns.length} className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-fg-muted">
+              <td colSpan={7 + displayColumns.length} className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-fg-muted">
                 Extra jobs
               </td>
             </tr>
@@ -156,7 +200,7 @@ export default function StageLotsTable({
                     </span>
                   )}
                 </td>
-                <td className="px-2 py-2 text-center text-fg-muted" colSpan={2 + checklistColumns.length}>—</td>
+                <td className="px-2 py-2 text-center text-fg-muted" colSpan={2 + displayColumns.length}>—</td>
                 <td className="px-2 py-2 text-center text-fg-muted">—</td>
               </tr>
             )

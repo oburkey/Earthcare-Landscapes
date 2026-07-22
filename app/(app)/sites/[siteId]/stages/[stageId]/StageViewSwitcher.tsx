@@ -124,6 +124,7 @@ export default function StageViewSwitcher({
           extraJobs={extraJobs}
           checklistMap={checklistMap}
           checklistColumns={view === 'overview' ? OVERVIEW_COLUMNS : CHECKLIST_COLUMNS}
+          view={view}
           siteId={siteId}
           stageId={stageId}
           canTickChecklist={canTickChecklist}

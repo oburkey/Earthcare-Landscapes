@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAuth } from '@/lib/auth'
 import { uploadToR2, deleteFromR2, getR2SignedUrlSafe } from '@/lib/r2'
 import type { Role } from '@/types/database'
@@ -160,10 +161,12 @@ export async function submitPreStart(formData: FormData) {
 
   if (error) return { error: error.message }
 
-  // Set vehicle meter reading (replaces stored value — number entered IS the current reading)
+  // Set vehicle meter reading (replaces stored value — number entered IS the current reading).
+  // Uses the admin client since RLS only grants vehicle writes to leading_hand+ — workers
+  // submit pre-starts too, and this update must still land for them.
   if (usingMachinery && machineId && hoursToday !== null) {
     try {
-      await supabase
+      await createAdminClient()
         .from('vehicles')
         .update({
           current_hours: hoursToday,

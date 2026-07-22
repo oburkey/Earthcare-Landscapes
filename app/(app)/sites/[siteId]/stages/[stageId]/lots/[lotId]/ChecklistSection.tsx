@@ -161,7 +161,7 @@ export default function ChecklistSection({
                                 value={itemState.date}
                                 onChange={(e) => handleDateChange(item.key, e.target.value)}
                                 disabled={!canManage}
-                                className="rounded-lg border border-border px-2 py-1 text-xs focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 disabled:bg-surface-raised"
+                                className="rounded-lg border border-border px-2 py-1 text-xs text-fg-secondary focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 disabled:bg-surface-raised"
                               />
                             )}
                           </div>
@@ -190,7 +190,7 @@ export default function ChecklistSection({
                             value={itemState.date}
                             onChange={(e) => handleDateChange(item.key, e.target.value)}
                             disabled={!canManage}
-                            className="shrink-0 rounded-lg border border-border px-2 py-1 text-xs focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 disabled:bg-surface-raised"
+                            className="shrink-0 rounded-lg border border-border px-2 py-1 text-xs text-fg-secondary focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 disabled:bg-surface-raised"
                           />
                         )}
                       </div>
