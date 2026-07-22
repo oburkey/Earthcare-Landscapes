@@ -3,12 +3,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
+import { STOCK_FIELDS, type StockField } from './stock-constants'
 import type { ActionState } from '@/types/actions'
-
-export const STOCK_FIELDS = [
-  'plants_140mm', 'plants_200mm', 'mulch_tonnes', 'edging_metres', 'turf_rolls', 'drippers_packs',
-] as const
-export type StockField = typeof STOCK_FIELDS[number]
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function logDbError(context: string, error: any) {

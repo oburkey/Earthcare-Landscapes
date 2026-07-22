@@ -1,7 +1,8 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { updateSiteStock, type StockField } from './stock-actions'
+import { updateSiteStock } from './stock-actions'
+import type { StockField } from './stock-constants'
 import type { ActionState } from '@/types/actions'
 
 export type SiteStockRow = {

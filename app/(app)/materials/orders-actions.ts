@@ -4,13 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { uploadToR2, deleteFromR2 } from '@/lib/r2'
+import { ATTACHMENT_TYPES, type AttachmentType, type OrderStatus } from './order-constants'
 import type { ActionState } from '@/types/actions'
-
-export const ORDER_STATUSES = ['draft', 'ordered', 'on_hold', 'delivered'] as const
-export type OrderStatus = typeof ORDER_STATUSES[number]
-
-export const ATTACHMENT_TYPES = ['invoice', 'photo', 'document'] as const
-export type AttachmentType = typeof ATTACHMENT_TYPES[number]
 
 function canManageOrders(role: string): boolean {
   return role === 'leading_hand' || role === 'supervisor' || role === 'admin'
