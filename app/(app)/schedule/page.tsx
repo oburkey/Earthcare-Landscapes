@@ -32,6 +32,8 @@ export default async function SchedulePage() {
       dueDate: lot.due_date as string,
       tradesCompleted: [],
       readyForLandscaping: false,
+      delayed: (lot as unknown as { delayed?: boolean }).delayed ?? false,
+      delayReason: (lot as unknown as { delay_reason?: string | null }).delay_reason ?? null,
     })
   }
 
@@ -48,6 +50,8 @@ export default async function SchedulePage() {
       title: job.title,
       status: job.status as ExtraJobStatus,
       dueDate: job.due_date as string,
+      delayed: (job as unknown as { delayed?: boolean }).delayed ?? false,
+      delayReason: (job as unknown as { delay_reason?: string | null }).delay_reason ?? null,
     })
   }
 

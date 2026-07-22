@@ -4,7 +4,7 @@ import { requireAuth } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { STATUS_CONFIG, formatDate, PHOTO_TYPE_LABELS, DOC_TYPE_LABELS } from '@/lib/lotStatus'
 import type { LotStatus } from '@/types/database'
-import { uploadLotPhoto } from './actions'
+import { uploadLotPhoto, setLotDelayed, clearLotDelayed } from './actions'
 import EditLotForm from './EditLotForm'
 import PhotoUpload from '@/app/_components/PhotoUpload'
 import LotDocumentUpload from './LotDocumentUpload'
@@ -12,6 +12,7 @@ import LotDocumentRow from './LotDocumentRow'
 import LotDocumentPreview from './LotDocumentPreview'
 import LotQuantities from './LotQuantities'
 import LotStatusToggles from './LotStatusToggles'
+import DelayControl from '@/app/_components/DelayControl'
 import SubcontractorCosts from './SubcontractorCosts'
 import type { SubcontractorCostRow } from './SubcontractorCosts'
 import TradeStatusSection from './TradeStatusSection'
@@ -64,7 +65,7 @@ export default async function LotPage({ params }: Props) {
       .select(`
         id, lot_number, status, due_date, scheduled_date, completion_date, notes,
         build_complete, quant_done, invoiced, has_client_extras, extras_notes, contract_price,
-        pending_review, approved_for_invoicing,
+        pending_review, approved_for_invoicing, delayed, delay_reason,
         stages!inner(id, name, is_contract_pricing, default_contract_price, sites!inner(id, name, has_client_extras))
       `)
       .eq('id', lotId)
@@ -148,6 +149,8 @@ export default async function LotPage({ params }: Props) {
   const contractPrice          = lotAny?.contract_price != null ? Number(lotAny.contract_price) : null
   const pendingReview          = lotAny?.pending_review          ?? false
   const approvedForInvoicing   = lotAny?.approved_for_invoicing  ?? false
+  const delayed                = lotAny?.delayed                ?? false
+  const delayReason            = lotAny?.delay_reason            ?? null
 
   const stage = Array.isArray(lot.stages) ? lot.stages[0] : lot.stages as { id: string; name: string; sites: unknown }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -309,6 +312,17 @@ export default async function LotPage({ params }: Props) {
           <h1 className="text-xl font-semibold text-fg">Lot {lot.lot_number}</h1>
           <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${cfg.badge}`}>{cfg.label}</span>
         </div>
+
+        {/* Delayed */}
+        <DelayControl
+          delayed={delayed}
+          delayReason={delayReason}
+          canManage={canManage}
+          promptLabel="Why is this lot delayed?"
+          setAction={setLotDelayed}
+          clearAction={clearLotDelayed}
+          hiddenFields={{ lot_id: lotId, site_id: siteId, stage_id: stageId }}
+        />
 
         {/* Status toggles — supervisor+ sees Build Complete & Quant Done; admin also sees Invoiced */}
         {canSupervise && (

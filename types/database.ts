@@ -77,6 +77,8 @@ export interface Lot {
   notes: string | null
   has_client_extras: boolean
   extras_notes: string | null
+  delayed: boolean
+  delay_reason: string | null
   created_at: string
   updated_at: string
 }
@@ -143,6 +145,8 @@ export interface ExtraJob {
   status: ExtraJobStatus
   due_date: string | null
   notes: string | null
+  delayed: boolean
+  delay_reason: string | null
   created_at: string
   updated_at: string
 }

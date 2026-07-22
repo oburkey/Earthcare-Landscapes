@@ -54,6 +54,73 @@ export async function toggleLotFlag(
   return null
 }
 
+function canManageDelay(role: string): boolean {
+  return role === 'leading_hand' || role === 'supervisor' || role === 'admin'
+}
+
+function revalidateAfterDelayChange(siteId: string, stageId: string, lotId: string) {
+  revalidatePath(`/sites/${siteId}/stages/${stageId}/lots/${lotId}`)
+  revalidatePath(`/sites/${siteId}/stages/${stageId}`)
+  revalidatePath('/schedule')
+  revalidatePath('/dashboard')
+  revalidateTag('stages')
+  revalidateTag('schedule')
+  revalidateTag('dashboard')
+}
+
+export async function setLotDelayed(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireAuth()
+  if (!canManageDelay(profile.role)) return { error: 'Only leading hands and above can mark a lot as delayed.' }
+
+  const lotId   = formData.get('lot_id')   as string
+  const siteId  = formData.get('site_id')  as string
+  const stageId = formData.get('stage_id') as string
+  const reason  = (formData.get('delay_reason') as string)?.trim()
+
+  if (!reason) return { error: 'A reason is required.' }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('lots')
+    .update({ delayed: true, delay_reason: reason })
+    .eq('id', lotId)
+    .select('id')
+
+  if (error) return { error: error.message }
+  if (!data || data.length === 0) return { error: 'Update failed — the lot could not be found or you do not have permission to edit it.' }
+
+  revalidateAfterDelayChange(siteId, stageId, lotId)
+  return null
+}
+
+export async function clearLotDelayed(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireAuth()
+  if (!canManageDelay(profile.role)) return { error: 'Only leading hands and above can remove a delay.' }
+
+  const lotId   = formData.get('lot_id')   as string
+  const siteId  = formData.get('site_id')  as string
+  const stageId = formData.get('stage_id') as string
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('lots')
+    .update({ delayed: false, delay_reason: null })
+    .eq('id', lotId)
+    .select('id')
+
+  if (error) return { error: error.message }
+  if (!data || data.length === 0) return { error: 'Update failed — the lot could not be found or you do not have permission to edit it.' }
+
+  revalidateAfterDelayChange(siteId, stageId, lotId)
+  return null
+}
+
 export async function uploadLotDocument(
   _prev: ActionState,
   formData: FormData

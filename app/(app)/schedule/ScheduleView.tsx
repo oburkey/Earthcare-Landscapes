@@ -9,6 +9,7 @@ import {
   TRADE_OPTIONS,
   formatDate,
   siteColour,
+  DELAYED_BADGE_CLASS,
 } from '@/lib/lotStatus'
 import type { LotStatus, ExtraJobStatus } from '@/types/database'
 import EventDayPanel from './EventDayPanel'
@@ -27,6 +28,8 @@ export type LotItem = {
   dueDate: string
   tradesCompleted: string[]
   readyForLandscaping: boolean
+  delayed: boolean
+  delayReason: string | null
 }
 
 export type JobItem = {
@@ -38,6 +41,8 @@ export type JobItem = {
   title: string
   status: ExtraJobStatus
   dueDate: string
+  delayed: boolean
+  delayReason: string | null
 }
 
 export type CalendarEvent = {
@@ -231,7 +236,14 @@ function TwoWeekLotChip({ item, today }: { item: LotItem; today: string }) {
         <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold shrink-0 ${sc.badge}`}>{sc.abbr}</span>
         <span className="text-xs font-semibold text-fg leading-tight">Lot {item.lotNumber}</span>
       </div>
-      <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${cfg.badge}`}>{cfg.label}</span>
+      <div className="flex items-center gap-1 flex-wrap">
+        <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${cfg.badge}`}>{cfg.label}</span>
+        {item.delayed && (
+          <span title={item.delayReason ?? undefined} className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${DELAYED_BADGE_CLASS}`}>
+            Delayed
+          </span>
+        )}
+      </div>
     </Link>
   )
 }
@@ -247,7 +259,14 @@ function TwoWeekJobChip({ item }: { item: JobItem }) {
         <span className="rounded px-1.5 py-0.5 text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 shrink-0">XJ</span>
         <span className="text-[10px] font-medium text-fg-secondary truncate leading-tight">{item.title}</span>
       </div>
-      <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${cfg.badge}`}>{cfg.label}</span>
+      <div className="flex items-center gap-1 flex-wrap">
+        <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${cfg.badge}`}>{cfg.label}</span>
+        {item.delayed && (
+          <span title={item.delayReason ?? undefined} className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${DELAYED_BADGE_CLASS}`}>
+            Delayed
+          </span>
+        )}
+      </div>
     </Link>
   )
 }
@@ -513,8 +532,8 @@ function MonthView({
 // ── List view ─────────────────────────────────────────────────────────────────
 
 type FlatItem =
-  | { kind: 'lot';   id: string; siteId: string; stageId: string; lotId: string;  label: string; site: string; stage: string; status: LotStatus;      due_date: string; tradesCompleted: string[]; readyForLandscaping: boolean }
-  | { kind: 'job';   id: string; siteId: string; stageId: string;                 label: string; site: string; stage: string; status: ExtraJobStatus; due_date: string }
+  | { kind: 'lot';   id: string; siteId: string; stageId: string; lotId: string;  label: string; site: string; stage: string; status: LotStatus;      due_date: string; tradesCompleted: string[]; readyForLandscaping: boolean; delayed: boolean; delayReason: string | null }
+  | { kind: 'job';   id: string; siteId: string; stageId: string;                 label: string; site: string; stage: string; status: ExtraJobStatus; due_date: string; delayed: boolean; delayReason: string | null }
   | { kind: 'event'; id: string; title: string; description: string | null; startTime: string | null; endDate: string | null; due_date: string }
 
 function ListView({ lots, jobs, events, today, onDayClick }: {
@@ -529,10 +548,12 @@ function ListView({ lots, jobs, events, today, onDayClick }: {
       kind: 'lot', id: l.id, siteId: l.siteId, stageId: l.stageId, lotId: l.lotId,
       label: `Lot ${l.lotNumber}`, site: l.siteName, stage: l.stageName, status: l.status,
       due_date: l.dueDate, tradesCompleted: l.tradesCompleted, readyForLandscaping: l.readyForLandscaping,
+      delayed: l.delayed, delayReason: l.delayReason,
     })),
     ...jobs.map((j): FlatItem => ({
       kind: 'job', id: j.id, siteId: j.siteId, stageId: j.stageId,
       label: j.title, site: j.siteName, stage: j.stageName, status: j.status, due_date: j.dueDate,
+      delayed: j.delayed, delayReason: j.delayReason,
     })),
     // Events appear on their start date only (multi-day events not repeated)
     ...events.map((e): FlatItem => ({
@@ -619,6 +640,11 @@ function ListView({ lots, jobs, events, today, onDayClick }: {
                             item.readyForLandscaping ? 'bg-accent-dim text-accent-fg' : 'bg-amber-100 text-amber-700'
                           }`}>
                             {item.readyForLandscaping ? 'Ready' : 'Blocked'}
+                          </span>
+                        )}
+                        {item.delayed && (
+                          <span title={item.delayReason ?? undefined} className={`rounded-full px-2 py-0.5 text-xs font-medium ${DELAYED_BADGE_CLASS}`}>
+                            Delayed
                           </span>
                         )}
                       </div>

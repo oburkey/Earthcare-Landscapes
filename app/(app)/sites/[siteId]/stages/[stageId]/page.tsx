@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { requireAuth } from '@/lib/auth'
 import { getCachedStage, getCachedTradeStatusByLotIds } from '@/lib/data'
 import { PrefetchLink } from '@/app/_components/PrefetchLink'
-import { STATUS_CONFIG, EXTRA_JOB_STATUS_CONFIG, formatDate, tradeStatusBadge } from '@/lib/lotStatus'
+import { STATUS_CONFIG, EXTRA_JOB_STATUS_CONFIG, formatDate, tradeStatusBadge, DELAYED_BADGE_CLASS } from '@/lib/lotStatus'
 import type { LotStatus, ExtraJobStatus } from '@/types/database'
 import { uploadStagePlan } from './actions'
 import PlanPhotoUpload from '../../PlanPhotoUpload'
@@ -200,6 +200,14 @@ export default async function StagePage({ params }: Props) {
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cfg.badge}`}>
                           {cfg.label}
                         </span>
+                        {(lot as unknown as { delayed?: boolean }).delayed && (
+                          <span
+                            title={(lot as unknown as { delay_reason?: string | null }).delay_reason ?? undefined}
+                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${DELAYED_BADGE_CLASS}`}
+                          >
+                            Delayed
+                          </span>
+                        )}
                         {tradeBadge && !(lot as unknown as { build_complete?: boolean }).build_complete && (
                           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${tradeBadge.badge}`}>
                             {tradeBadge.label}
@@ -274,6 +282,14 @@ export default async function StagePage({ params }: Props) {
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cfg.badge}`}>
                           {cfg.label}
                         </span>
+                        {(job as unknown as { delayed?: boolean }).delayed && (
+                          <span
+                            title={(job as unknown as { delay_reason?: string | null }).delay_reason ?? undefined}
+                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${DELAYED_BADGE_CLASS}`}
+                          >
+                            Delayed
+                          </span>
+                        )}
                       </div>
                       {job.description && (
                         <p className="mt-0.5 text-xs text-fg-muted truncate">{job.description}</p>

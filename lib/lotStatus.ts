@@ -44,6 +44,11 @@ export const EXTRA_JOB_STATUS_OPTIONS = (
   Object.entries(EXTRA_JOB_STATUS_CONFIG) as [ExtraJobStatus, { label: string; badge: string }][]
 ).map(([value, { label }]) => ({ value, label }))
 
+// "Delayed" is an independent flag (behind schedule, with a reason) — not a
+// status value. Distinct orange so it doesn't read as either "on hold" (red)
+// or "in progress" (amber).
+export const DELAYED_BADGE_CLASS = 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300'
+
 export const PHOTO_TYPE_LABELS: Record<string, string> = {
   before: 'Before',
   during: 'During',

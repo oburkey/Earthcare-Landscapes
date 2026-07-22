@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { EXTRA_JOB_STATUS_CONFIG, siteColour, formatDate } from '@/lib/lotStatus'
+import { EXTRA_JOB_STATUS_CONFIG, siteColour, formatDate, DELAYED_BADGE_CLASS } from '@/lib/lotStatus'
 import type { ExtraJobStatus } from '@/types/database'
 
 export type ExtraJobItem = {
@@ -10,6 +10,8 @@ export type ExtraJobItem = {
   stageId: string
   dueDate: string | null
   status: ExtraJobStatus
+  delayed: boolean
+  delayReason: string | null
 }
 
 export default function ExtraJobsList({ jobs }: { jobs: ExtraJobItem[] }) {
@@ -40,6 +42,14 @@ export default function ExtraJobsList({ jobs }: { jobs: ExtraJobItem[] }) {
               <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${cfg.badge}`}>
                 {cfg.label}
               </span>
+              {job.delayed && (
+                <span
+                  title={job.delayReason ?? undefined}
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${DELAYED_BADGE_CLASS}`}
+                >
+                  Delayed
+                </span>
+              )}
             </Link>
           )
         })}

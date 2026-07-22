@@ -5,10 +5,11 @@ import { createClient } from '@/lib/supabase/server'
 import { getR2SignedUrlSafe } from '@/lib/r2'
 import type { ExtraJobStatus } from '@/types/database'
 import { EXTRA_JOB_STATUS_CONFIG, PHOTO_TYPE_LABELS, formatDate } from '@/lib/lotStatus'
-import { uploadExtraJobPhoto } from './actions'
+import { uploadExtraJobPhoto, setExtraJobDelayed, clearExtraJobDelayed } from './actions'
 import EditExtraJobForm from './EditExtraJobForm'
 import ExtraJobPricing from './ExtraJobPricing'
 import PhotoUpload from '@/app/_components/PhotoUpload'
+import DelayControl from '@/app/_components/DelayControl'
 import SourceQuotePdf from './SourceQuotePdf'
 
 interface Props {
@@ -48,7 +49,7 @@ export default async function ExtraJobPage({ params }: Props) {
     supabase
       .from('extra_jobs')
       .select(`
-        id, title, description, status, notes, due_date, source_quote_id,
+        id, title, description, status, notes, due_date, source_quote_id, delayed, delay_reason,
         stages!inner(
           id, name,
           sites!inner(id, name)
@@ -163,6 +164,17 @@ export default async function ExtraJobPage({ params }: Props) {
             {cfg.label}
           </span>
         </div>
+
+        {/* Delayed */}
+        <DelayControl
+          delayed={(job as unknown as { delayed?: boolean }).delayed ?? false}
+          delayReason={(job as unknown as { delay_reason?: string | null }).delay_reason ?? null}
+          canManage={canManage}
+          promptLabel="Why is this job delayed?"
+          setAction={setExtraJobDelayed}
+          clearAction={clearExtraJobDelayed}
+          hiddenFields={{ extra_job_id: extraJobId, site_id: siteId, stage_id: stageId }}
+        />
 
         {/* Info card */}
         {job.description && (

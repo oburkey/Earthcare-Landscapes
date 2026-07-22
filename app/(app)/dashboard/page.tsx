@@ -35,23 +35,28 @@ async function fetchLotsAndTradeStatus(fortnightStr: string) {
 async function fetchOverdueAndExtraJobs(todayStr: string) {
   try {
     const supabase = await createClient()
-    const [{ count }, { data: ejData }] = await Promise.all([
+    const [{ count }, { count: delayedCount }, { data: ejData }] = await Promise.all([
       supabase
         .from('lots')
         .select('id', { count: 'exact', head: true })
         .lt('due_date', todayStr)
         .neq('status', 'complete'),
       supabase
+        .from('lots')
+        .select('id', { count: 'exact', head: true })
+        .eq('delayed', true)
+        .neq('status', 'complete'),
+      supabase
         .from('extra_jobs')
-        .select('id, title, status, due_date, stages!inner(id, name, sites!inner(id, name))')
+        .select('id, title, status, due_date, delayed, delay_reason, stages!inner(id, name, sites!inner(id, name))')
         .neq('status', 'complete')
         .order('due_date', { ascending: true, nullsFirst: false }),
     ])
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return { overdueLotCount: count ?? 0, extraJobs: (ejData ?? []) as any[] }
+    return { overdueLotCount: count ?? 0, delayedLotCount: delayedCount ?? 0, extraJobs: (ejData ?? []) as any[] }
   } catch {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return { overdueLotCount: 0, extraJobs: [] as any[] }
+    return { overdueLotCount: 0, delayedLotCount: 0, extraJobs: [] as any[] }
   }
 }
 
@@ -198,7 +203,7 @@ export default async function DashboardPage() {
 
   const [
     { lotsData, tradeStatus },
-    { overdueLotCount, extraJobs },
+    { overdueLotCount, delayedLotCount, extraJobs },
     { pendingReviewCount, approvedForInvoicingCount },
     incidentCount,
     sitesForModal,
@@ -270,6 +275,8 @@ export default async function DashboardPage() {
       stageId: stage?.id ?? '',
       dueDate: jobAny.due_date ?? null,
       status: jobAny.status as ExtraJobStatus,
+      delayed: jobAny.delayed ?? false,
+      delayReason: jobAny.delay_reason ?? null,
     }
   })
 
@@ -323,7 +330,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* Section 1 — Summary cards (all roles) */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-4 gap-2">
           <MetricCard
             label="Due this fortnight"
             value={lotsData.length}
@@ -334,6 +341,12 @@ export default async function DashboardPage() {
             label="Blocked lots"
             value={blockedCount}
             color={blockedCount > 0 ? 'amber' : 'green'}
+            href="/schedule"
+          />
+          <MetricCard
+            label="Delayed"
+            value={delayedLotCount}
+            color={delayedLotCount > 0 ? 'orange' : 'green'}
             href="/schedule"
           />
           <MetricCard
@@ -409,22 +422,23 @@ function MetricCard({
 }: {
   label: string
   value: number
-  color: 'blue' | 'amber' | 'red' | 'green'
+  color: 'blue' | 'amber' | 'orange' | 'red' | 'green'
   href?: string
 }) {
   const colors = {
-    blue:  'text-blue-700 dark:text-blue-400',
-    amber: 'text-amber-700 dark:text-amber-400',
-    red:   'text-red-700 dark:text-red-400',
-    green: 'text-accent-fg',
+    blue:   'text-blue-700 dark:text-blue-400',
+    amber:  'text-amber-700 dark:text-amber-400',
+    orange: 'text-orange-700 dark:text-orange-400',
+    red:    'text-red-700 dark:text-red-400',
+    green:  'text-accent-fg',
   }
 
   const inner = (
-    <div className={`rounded-xl border border-border bg-surface px-3 py-3.5 flex flex-col gap-1${href ? ' hover:bg-surface-raised transition-colors' : ''}`}>
-      <span className={`text-2xl font-bold ${colors[color]}`}>
+    <div className={`rounded-xl border border-border bg-surface px-2 py-3 flex flex-col gap-0.5${href ? ' hover:bg-surface-raised transition-colors' : ''}`}>
+      <span className={`text-lg sm:text-xl font-bold ${colors[color]}`}>
         {value.toLocaleString('en-AU')}
       </span>
-      <span className="text-xs text-fg-muted leading-tight">{label}</span>
+      <span className="text-[10px] sm:text-xs text-fg-muted leading-tight">{label}</span>
     </div>
   )
 
