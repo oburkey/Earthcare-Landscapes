@@ -28,8 +28,8 @@ export default async function InvoicesPage() {
       .select(`
         id, name, client_contact, completed_at, has_client_extras,
         stages(id, name, order, completed_at, is_contract_pricing, default_contract_price,
-          lots(id, lot_number, build_complete, quant_done, invoiced, pending_review, approved_for_invoicing, has_client_extras, contract_price),
-          extra_jobs(id, title, status, approved_by_name)
+          lots(id, lot_number, home_design, build_complete, quant_done, invoiced, pending_review, approved_for_invoicing, has_client_extras, contract_price),
+          extra_jobs(id, title, status, approved_by_name, source_quote_id, pending_review, approved_for_invoicing, invoiced)
         )
       `)
       .order('name')
@@ -88,8 +88,10 @@ export default async function InvoicesPage() {
     }
   }
 
-  // Collect all extra job IDs
+  // Collect all extra job IDs, plus the source_quote_ids of jobs converted
+  // from a quote (used to look up their original quoted amount below).
   const allExtraJobIds: string[] = []
+  const sourceQuoteIds: string[] = []
   for (const site of activeSites) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const stage of (site.stages ?? []) as any[]) {
@@ -97,6 +99,7 @@ export default async function InvoicesPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const job of (stage.extra_jobs ?? []) as any[]) {
         allExtraJobIds.push(job.id)
+        if (job.source_quote_id) sourceQuoteIds.push(job.source_quote_id)
       }
     }
   }
@@ -224,10 +227,35 @@ export default async function InvoicesPage() {
     }
   }
 
-  const [extraJobPricingData, quotesData, progressClaimsData] = await Promise.all([
+  // Quoted amount for extra jobs converted from a quote — sum(qty * rate)
+  // over the source quote's line_items. Jobs created directly (no
+  // source_quote_id) have no quoted amount and show a dash.
+  async function fetchQuotedAmountBySourceQuoteId() {
+    const byQuoteId = new Map<string, number>()
+    if (sourceQuoteIds.length === 0) return byQuoteId
+    try {
+      const { data, error } = await supabase
+        .from('quotes')
+        .select('id, line_items')
+        .in('id', [...new Set(sourceQuoteIds)])
+      if (error || !data) return byQuoteId
+      for (const q of data) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const lineItems: any[] = Array.isArray(q.line_items) ? q.line_items : []
+        const total = lineItems.reduce((s, item) => s + (Number(item.qty ?? 0) * Number(item.rate ?? 0)), 0)
+        byQuoteId.set(q.id, total)
+      }
+    } catch {
+      // quotes table may not exist yet — skip gracefully
+    }
+    return byQuoteId
+  }
+
+  const [extraJobPricingData, quotesData, progressClaimsData, quotedAmountBySourceQuoteId] = await Promise.all([
     allExtraJobIds.length > 0 ? getExtraJobsPricing(allExtraJobIds) : Promise.resolve([]),
     fetchQuotes(),
     fetchProgressClaims(),
+    fetchQuotedAmountBySourceQuoteId(),
   ])
   const extraJobTotalById = new Map(extraJobPricingData.map((d) => [d.id, d.total]))
 
@@ -259,11 +287,6 @@ export default async function InvoicesPage() {
       }
     }
   }
-
-  const invoicedExtraJobIds = new Set<string>(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    invoiceRunsRaw.flatMap((r: any) => r.extra_job_ids ?? [])
-  )
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const progressClaimsByStage = new Map<string, any[]>()
@@ -325,6 +348,7 @@ export default async function InvoicesPage() {
               return {
                 id:                   lot.id,
                 lotNumber:            lot.lot_number,
+                homeDesign:           lot.home_design           ?? null,
                 buildComplete:        lot.build_complete        ?? false,
                 quantDone:            lot.quant_done            ?? false,
                 invoiced:             lot.invoiced              ?? false,
@@ -345,8 +369,12 @@ export default async function InvoicesPage() {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const extraJobs: ExtraJobRow[] = ((stage.extra_jobs ?? []) as any[]).map((j): ExtraJobRow => {
             const total = extraJobTotalById.get(j.id) ?? 0
-            // Collect non-invoiced extra jobs with pricing for the panel
-            if (!invoicedExtraJobIds.has(j.id) && total > 0) {
+            const quotedAmount = j.source_quote_id ? (quotedAmountBySourceQuoteId.get(j.source_quote_id) ?? null) : null
+            const pendingReview = j.pending_review ?? false
+            const approvedForInvoicing = j.approved_for_invoicing ?? false
+            const invoiced = j.invoiced ?? false
+            // Collect approved-for-invoicing extra jobs for the panel — same rule as lots.
+            if (approvedForInvoicing) {
               approvedExtraJobs.push({
                 id:             j.id,
                 title:          j.title,
@@ -357,7 +385,11 @@ export default async function InvoicesPage() {
                 approvedByName: j.approved_by_name ?? null,
               })
             }
-            return { id: j.id, title: j.title, status: j.status, total, approvedByName: j.approved_by_name ?? null }
+            return {
+              id: j.id, title: j.title, status: j.status, total, quotedAmount,
+              approvedByName: j.approved_by_name ?? null,
+              pendingReview, approvedForInvoicing, invoiced,
+            }
           })
 
           const isContractPricing = stage.is_contract_pricing ?? false

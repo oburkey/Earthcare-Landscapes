@@ -99,6 +99,97 @@ export async function toggleApprovedForInvoicing(
   return null
 }
 
+// ── Extra jobs — same toggle flow as lots ────────────────────────────────────
+
+export async function toggleExtraJobComplete(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'leading_hand' && profile.role !== 'supervisor' && profile.role !== 'admin') {
+    return { error: 'Only leading hands and above can toggle Job Completed.' }
+  }
+
+  const extraJobId = formData.get('extra_job_id') as string
+  const value = formData.get('value') === 'true'
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('extra_jobs')
+    .update({ status: value ? 'complete' : 'not_started' })
+    .eq('id', extraJobId)
+  if (error) return { error: error.message }
+
+  revalidatePath('/invoices')
+  return null
+}
+
+export async function toggleExtraJobPendingReview(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Only admins can toggle Pending Review.' }
+
+  const extraJobId = formData.get('extra_job_id') as string
+  const value = formData.get('value') === 'true'
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('extra_jobs')
+    .update({ pending_review: value })
+    .eq('id', extraJobId)
+  if (error) return { error: error.message }
+
+  revalidatePath('/invoices')
+  return null
+}
+
+export async function toggleExtraJobApprovedForInvoicing(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Only admins can toggle Approved for Invoicing.' }
+
+  const extraJobId = formData.get('extra_job_id') as string
+  const value = formData.get('value') === 'true'
+
+  const supabase = await createClient()
+  const update: Record<string, boolean> = { approved_for_invoicing: value }
+  if (value) update.pending_review = false
+
+  const { error } = await supabase
+    .from('extra_jobs')
+    .update(update)
+    .eq('id', extraJobId)
+  if (error) return { error: error.message }
+
+  revalidatePath('/invoices')
+  return null
+}
+
+export async function toggleExtraJobInvoiced(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Only admins can toggle Invoiced.' }
+
+  const extraJobId = formData.get('extra_job_id') as string
+  const value = formData.get('value') === 'true'
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('extra_jobs')
+    .update({ invoiced: value })
+    .eq('id', extraJobId)
+  if (error) return { error: error.message }
+
+  revalidatePath('/invoices')
+  return null
+}
+
 export async function markAsInvoiced(
   _prev: ActionState,
   formData: FormData
@@ -148,6 +239,14 @@ export async function markAsInvoiced(
     if (error) return { error: error.message }
   }
 
+  if (extraJobIds.length > 0) {
+    const { error } = await supabase
+      .from('extra_jobs')
+      .update({ invoiced: true, approved_for_invoicing: false })
+      .in('id', extraJobIds)
+    if (error) return { error: error.message }
+  }
+
   if (progressClaimIds.length > 0) {
     const { error } = await supabase
       .from('progress_claims')
@@ -160,10 +259,8 @@ export async function markAsInvoiced(
   return null
 }
 
-// Reverses an invoice run: unmarks its lots/progress claims as invoiced and
-// returns them to approved status, then deletes the run itself. Extra jobs
-// need no column update — their invoiced status is derived from membership in
-// invoice_runs.extra_job_ids, so deleting the run un-invoices them automatically.
+// Reverses an invoice run: unmarks its lots/extra jobs/progress claims as
+// invoiced and returns them to approved status, then deletes the run itself.
 export async function deleteInvoiceRun(
   _prev: ActionState,
   formData: FormData
@@ -178,12 +275,13 @@ export async function deleteInvoiceRun(
 
   const { data: run, error: fetchError } = await supabase
     .from('invoice_runs')
-    .select('lot_ids, progress_claim_ids')
+    .select('lot_ids, extra_job_ids, progress_claim_ids')
     .eq('id', runId)
     .single()
   if (fetchError || !run) return { error: fetchError?.message ?? 'Invoice run not found.' }
 
   const lotIds = (run.lot_ids ?? []) as string[]
+  const extraJobIds = (run.extra_job_ids ?? []) as string[]
   const progressClaimIds = (run.progress_claim_ids ?? []) as string[]
 
   if (lotIds.length > 0) {
@@ -191,6 +289,14 @@ export async function deleteInvoiceRun(
       .from('lots')
       .update({ invoiced: false, approved_for_invoicing: true })
       .in('id', lotIds)
+    if (error) return { error: error.message }
+  }
+
+  if (extraJobIds.length > 0) {
+    const { error } = await supabase
+      .from('extra_jobs')
+      .update({ invoiced: false, approved_for_invoicing: true })
+      .in('id', extraJobIds)
     if (error) return { error: error.message }
   }
 

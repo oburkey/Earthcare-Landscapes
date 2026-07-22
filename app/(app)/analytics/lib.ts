@@ -54,6 +54,7 @@ export type SubcontractorCostRow = {
 export type LotRow = {
   id: string
   lot_number: string
+  home_design: string | null
   stage_id: string
   due_date: string | null
   build_complete: boolean
@@ -131,6 +132,7 @@ export type SubcontractorCostLine = { trade: string; label: string; amount: numb
 export type LotDrillDownRow = {
   id: string
   lotNumber: string
+  homeDesign: string | null
   dueDate: string | null
   buildComplete: boolean
   invoiced: boolean
@@ -318,6 +320,7 @@ function computeCategoryQuantities(items: QuoteItemRow[] | null | undefined): Ca
 type LotCalc = {
   id: string
   lotNumber: string
+  homeDesign: string | null
   dueDate: string | null
   stageId: string
   buildComplete: boolean
@@ -367,6 +370,7 @@ function buildLotCalcs(
     return {
       id: lot.id,
       lotNumber: lot.lot_number,
+      homeDesign: lot.home_design,
       dueDate: lot.due_date,
       stageId: lot.stage_id,
       buildComplete: lot.build_complete,
@@ -651,6 +655,7 @@ export function buildAnalyticsData(input: {
             return {
               id: lot.id,
               lotNumber: lot.lotNumber,
+              homeDesign: lot.homeDesign,
               dueDate: lot.dueDate,
               buildComplete: lot.buildComplete,
               invoiced: lot.invoiced,

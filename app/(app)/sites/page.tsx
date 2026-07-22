@@ -13,12 +13,38 @@ export default async function SitesPage() {
   const sites = await getCachedSitesList()
 
   type SiteRow = NonNullable<typeof sites>[number]
+  type StageRow = { id: string; name: string; order: number; completed_at?: string | null; lots?: { id: string; status: string; due_date: string | null }[] }
 
   function siteStats(site: SiteRow) {
-    const allLots = (site.stages ?? []).flatMap((s: { lots?: { status: string }[] }) => s.lots ?? [])
-    const total     = allLots.length
-    const completed = allLots.filter((l: { status: string }) => l.status === 'complete').length
-    return { total, completed, stageCount: (site.stages ?? []).length }
+    const stages = (site.stages ?? []) as StageRow[]
+    const allLots = stages.flatMap((s) => s.lots ?? [])
+    const total       = allLots.length
+    const completed   = allLots.filter((l) => l.status === 'complete').length
+    const activeLots  = allLots.filter((l) => l.status !== 'complete')
+    const nextDueDate = activeLots
+      .map((l) => l.due_date)
+      .filter((d): d is string => !!d)
+      .sort()[0] ?? null
+
+    const stagesForAccordion = [...stages]
+      .filter((s) => !s.completed_at)
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      .map((s) => {
+        const stageLots = s.lots ?? []
+        return {
+          id: s.id,
+          name: s.name,
+          lotCount: stageLots.length,
+          activeLotCount: stageLots.filter((l) => l.status !== 'complete').length,
+        }
+      })
+
+    return {
+      total, completed, stageCount: stages.length,
+      activeLotCount: activeLots.length,
+      nextDueDate,
+      stages: stagesForAccordion,
+    }
   }
 
   const activeSites = (sites ?? [])

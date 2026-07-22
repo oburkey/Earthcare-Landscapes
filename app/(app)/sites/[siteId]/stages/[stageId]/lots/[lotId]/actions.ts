@@ -54,6 +54,33 @@ export async function toggleLotFlag(
   return null
 }
 
+export async function updateLotHomeDesign(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'supervisor' && profile.role !== 'admin') {
+    return { error: 'Only supervisors and admins can edit Home Design.' }
+  }
+
+  const lotId   = formData.get('lot_id')   as string
+  const siteId  = formData.get('site_id')  as string
+  const stageId = formData.get('stage_id') as string
+  const homeDesign = (formData.get('home_design') as string)?.trim() || null
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('lots')
+    .update({ home_design: homeDesign })
+    .eq('id', lotId)
+  if (error) return { error: error.message }
+
+  revalidatePath(`/sites/${siteId}/stages/${stageId}/lots/${lotId}`)
+  revalidatePath(`/sites/${siteId}/stages/${stageId}`)
+  revalidateTag('stages')
+  return null
+}
+
 function canManageDelay(role: string): boolean {
   return role === 'leading_hand' || role === 'supervisor' || role === 'admin'
 }

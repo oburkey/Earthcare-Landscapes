@@ -6,6 +6,7 @@ import { STATUS_CONFIG, formatDate, PHOTO_TYPE_LABELS, DOC_TYPE_LABELS } from '@
 import type { LotStatus } from '@/types/database'
 import { uploadLotPhoto, setLotDelayed, clearLotDelayed } from './actions'
 import EditLotForm from './EditLotForm'
+import HomeDesignField from './HomeDesignField'
 import PhotoUpload from '@/app/_components/PhotoUpload'
 import LotDocumentUpload from './LotDocumentUpload'
 import LotDocumentRow from './LotDocumentRow'
@@ -63,7 +64,7 @@ export default async function LotPage({ params }: Props) {
     supabase
       .from('lots')
       .select(`
-        id, lot_number, status, due_date, scheduled_date, completion_date, notes,
+        id, lot_number, status, due_date, scheduled_date, completion_date, notes, home_design,
         build_complete, quant_done, invoiced, has_client_extras, extras_notes, contract_price,
         pending_review, approved_for_invoicing, delayed, delay_reason,
         stages!inner(id, name, is_contract_pricing, default_contract_price, sites!inner(id, name, has_client_extras))
@@ -151,6 +152,7 @@ export default async function LotPage({ params }: Props) {
   const approvedForInvoicing   = lotAny?.approved_for_invoicing  ?? false
   const delayed                = lotAny?.delayed                ?? false
   const delayReason            = lotAny?.delay_reason            ?? null
+  const homeDesign             = lotAny?.home_design             ?? null
 
   const stage = Array.isArray(lot.stages) ? lot.stages[0] : lot.stages as { id: string; name: string; sites: unknown }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -312,6 +314,15 @@ export default async function LotPage({ params }: Props) {
           <h1 className="text-xl font-semibold text-fg">Lot {lot.lot_number}</h1>
           <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${cfg.badge}`}>{cfg.label}</span>
         </div>
+
+        {/* Home design */}
+        <HomeDesignField
+          lotId={lotId}
+          siteId={siteId}
+          stageId={stageId}
+          homeDesign={homeDesign}
+          canEdit={canSupervise}
+        />
 
         {/* Delayed */}
         <DelayControl

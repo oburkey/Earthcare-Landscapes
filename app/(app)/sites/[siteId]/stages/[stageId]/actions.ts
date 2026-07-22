@@ -50,14 +50,16 @@ export async function bulkUpdateLots(
   let created = 0
 
   for (const line of lines) {
-    // Split on first tab or comma
-    const sepIdx = line.search(/[\t,]/)
-    if (sepIdx === -1) {
+    // Split into up to 3 fields on tab or comma: lot number, date, and an
+    // optional Home Design column.
+    const parts = line.split(/[\t,]/).map(p => p.trim())
+    if (parts.length < 2) {
       errors.push(`"${line}": missing separator — expected tab or comma between lot number and date`)
       continue
     }
-    const lotNumber = line.slice(0, sepIdx).trim()
-    const dateStr   = line.slice(sepIdx + 1).trim()
+    const lotNumber   = parts[0]
+    const dateStr      = parts[1]
+    const homeDesign   = parts[2] || null
 
     if (!lotNumber) {
       errors.push(`"${line}": missing lot number`)
@@ -85,9 +87,11 @@ export async function bulkUpdateLots(
     if (existing) {
       const noDowngrade = existing.status === 'complete' || existing.status === 'in_progress'
       const newStatus   = noDowngrade ? existing.status : 'scheduled'
+      const update: Record<string, unknown> = { due_date: isoDate, status: newStatus }
+      if (homeDesign) update.home_design = homeDesign
       const { error } = await supabase
         .from('lots')
-        .update({ due_date: isoDate, status: newStatus })
+        .update(update)
         .eq('id', existing.id)
       if (error) {
         errors.push(`Lot ${lotNumber}: ${error.message}`)
@@ -98,7 +102,7 @@ export async function bulkUpdateLots(
     } else {
       const { data: newLot, error } = await supabase
         .from('lots')
-        .insert({ stage_id: stageId, lot_number: lotNumber, due_date: isoDate, status: 'scheduled' })
+        .insert({ stage_id: stageId, lot_number: lotNumber, due_date: isoDate, status: 'scheduled', home_design: homeDesign })
         .select('id, lot_number, status')
         .single()
       if (error) {

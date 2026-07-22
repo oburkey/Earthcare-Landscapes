@@ -1519,6 +1519,50 @@ CREATE POLICY "pre_starts: admin delete all"
   USING (current_user_role() = 'admin');
 
 
+-- ── Extra jobs invoicing flags (from migration_extra_jobs_invoicing.sql) ──────
+-- Same toggle flow as lots.pending_review / approved_for_invoicing / invoiced.
+ALTER TABLE extra_jobs ADD COLUMN IF NOT EXISTS pending_review boolean NOT NULL DEFAULT false;
+ALTER TABLE extra_jobs ADD COLUMN IF NOT EXISTS approved_for_invoicing boolean NOT NULL DEFAULT false;
+ALTER TABLE extra_jobs ADD COLUMN IF NOT EXISTS invoiced boolean NOT NULL DEFAULT false;
+
+
+-- ── Home design (from migration_lots_home_design.sql) ─────────────────────────
+ALTER TABLE lots ADD COLUMN IF NOT EXISTS home_design text;
+
+
+-- ── House Types catalogue (from migration_house_types.sql) ────────────────────
+CREATE TABLE IF NOT EXISTS house_types (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  developer       text NOT NULL DEFAULT 'Providence',
+  name            text NOT NULL,
+  size            text NOT NULL CHECK (size IN ('S', 'M', 'L')),
+  site_area       numeric(8, 2),
+  turf_area       numeric(8, 2),
+  softworks_area  numeric(8, 2),
+  alfresco_area   numeric(8, 2),
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  updated_at      timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (developer, name)
+);
+
+DROP TRIGGER IF EXISTS house_types_updated_at ON house_types;
+CREATE TRIGGER house_types_updated_at
+  BEFORE UPDATE ON house_types
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+ALTER TABLE house_types ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "house_types: admin full access" ON house_types;
+CREATE POLICY "house_types: admin full access"
+  ON house_types FOR ALL
+  USING (current_user_role() = 'admin');
+
+DROP POLICY IF EXISTS "house_types: staff read" ON house_types;
+CREATE POLICY "house_types: staff read"
+  ON house_types FOR SELECT
+  USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
+
+
 -- =============================================================================
 -- END OF SCHEMA
 -- =============================================================================

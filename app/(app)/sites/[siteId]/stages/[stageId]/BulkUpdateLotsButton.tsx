@@ -68,14 +68,15 @@ export default function BulkUpdateLotsButton({ stageId, siteId }: Props) {
 
       <p className="text-xs text-fg-muted">
         One lot per line — lot number, then tab or comma, then date in{' '}
-        <span className="font-mono">DD/MM/YYYY</span> format. Lots that exist will be
+        <span className="font-mono">DD/MM/YYYY</span> format, then optionally
+        tab/comma and a Home Design name. Lots that exist will be
         updated; lots that don&apos;t exist will be created.
       </p>
 
       <textarea
         value={text}
         onChange={e => setText(e.target.value)}
-        placeholder={'059\t03/04/2026\n076\t03/04/2026\n077\t25/03/2026'}
+        placeholder={'059\t03/04/2026\tBillie Jean\n076\t03/04/2026\n077\t25/03/2026\tCecilia'}
         rows={6}
         disabled={isPending}
         className="w-full rounded-lg border border-border px-3 py-2 text-sm font-mono text-fg placeholder:text-fg-muted focus:border-border focus:outline-none resize-y disabled:opacity-60 bg-surface"

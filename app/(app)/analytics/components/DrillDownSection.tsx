@@ -23,6 +23,7 @@ function LotRow({ lot }: { lot: LotDrillDownRow }) {
     <>
       <tr className="border-t border-border-subtle">
         <td className="px-4 py-2 text-fg-secondary">{lot.lotNumber}</td>
+        <td className="px-2 py-2 text-fg-muted">{lot.homeDesign || '—'}</td>
         <td className="px-2 py-2 text-fg-muted">{fmtDate(lot.dueDate)}</td>
         <td className="px-2 py-2 text-fg-muted">{lot.buildComplete ? 'Complete' : 'In progress'}</td>
         <td className="px-2 py-2 text-fg-muted">{lot.invoiced ? 'Yes' : 'No'}</td>
@@ -58,7 +59,7 @@ function LotRow({ lot }: { lot: LotDrillDownRow }) {
       </tr>
       {expanded && hasDetail && (
         <tr className="border-t border-border-subtle bg-surface-raised/50">
-          <td colSpan={6} className="px-4 py-2.5">
+          <td colSpan={7} className="px-4 py-2.5">
             <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-fg-muted">
               Estimate vs final material variance
             </p>
@@ -86,6 +87,7 @@ function NlvLotRow({ lot }: { lot: LotDrillDownRow }) {
     <>
       <tr className="border-t border-border-subtle">
         <td className="px-4 py-2 text-fg-secondary">{lot.lotNumber}</td>
+        <td className="px-2 py-2 text-fg-muted">{lot.homeDesign || '—'}</td>
         <td className="px-2 py-2 text-fg-muted">{fmtDate(lot.dueDate)}</td>
         <td className="px-2 py-2 text-fg-muted">{lot.buildComplete ? 'Complete' : 'In progress'}</td>
         <td className="px-2 py-2 text-fg-muted">{lot.invoiced ? 'Yes' : 'No'}</td>
@@ -118,7 +120,7 @@ function NlvLotRow({ lot }: { lot: LotDrillDownRow }) {
       </tr>
       {expanded && hasBreakdown && (
         <tr className="border-t border-border-subtle bg-surface-raised/50">
-          <td colSpan={8} className="px-4 py-2.5">
+          <td colSpan={9} className="px-4 py-2.5">
             <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-fg-muted">
               Subcontractor costs
             </p>
@@ -173,6 +175,7 @@ function StageRow({ stage }: { stage: StageAnalytics }) {
               <thead>
                 <tr className="text-fg-muted">
                   <th className="text-left font-medium px-4 py-2">Lot</th>
+                  <th className="text-left font-medium px-2 py-2">Home Design</th>
                   <th className="text-left font-medium px-2 py-2">Due date</th>
                   <th className="text-left font-medium px-2 py-2">Build</th>
                   <th className="text-left font-medium px-2 py-2">Invoiced</th>
@@ -193,6 +196,7 @@ function StageRow({ stage }: { stage: StageAnalytics }) {
               <thead>
                 <tr className="text-fg-muted">
                   <th className="text-left font-medium px-4 py-2">Lot</th>
+                  <th className="text-left font-medium px-2 py-2">Home Design</th>
                   <th className="text-left font-medium px-2 py-2">Due date</th>
                   <th className="text-left font-medium px-2 py-2">Build</th>
                   <th className="text-left font-medium px-2 py-2">Invoiced</th>

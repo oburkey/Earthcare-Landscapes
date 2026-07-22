@@ -39,7 +39,7 @@ function withCache<TArgs extends unknown[], TReturn>(
 async function _sitesList(db: Db) {
   const { data } = await db
     .from('sites')
-    .select('id, name, address, completed_at, stages(id, lots(id, status))')
+    .select('id, name, address, completed_at, stages(id, name, order, completed_at, lots(id, status, due_date))')
     .order('name', { ascending: true })
   return data ?? []
 }
@@ -60,7 +60,7 @@ async function _stage(db: Db, stageId: string) {
       .select(`
         id, name, site_plan_path, is_contract_pricing, default_contract_price,
         sites!inner(id, name),
-        lots(id, lot_number, status, due_date, scheduled_date, build_complete, quant_done, invoiced, delayed, delay_reason)
+        lots(id, lot_number, home_design, status, due_date, scheduled_date, build_complete, quant_done, invoiced, delayed, delay_reason)
       `)
       .eq('id', stageId)
       .single(),

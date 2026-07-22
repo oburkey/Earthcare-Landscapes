@@ -2,7 +2,10 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { toggleInvoiced, togglePendingReview, toggleApprovedForInvoicing } from './actions'
+import {
+  toggleInvoiced, togglePendingReview, toggleApprovedForInvoicing,
+  toggleExtraJobComplete, toggleExtraJobPendingReview, toggleExtraJobApprovedForInvoicing, toggleExtraJobInvoiced,
+} from './actions'
 import ApprovedByField from './ApprovedByField'
 import { getExtraJobsPricing } from '@/app/(app)/sites/[siteId]/stages/[stageId]/extra-jobs/[extraJobId]/pricing-actions'
 import { LOGO_DATA_URL } from '@/lib/pdfAssets'
@@ -34,6 +37,7 @@ export type LotSection = {
 export type LotRow = {
   id: string
   lotNumber: string
+  homeDesign: string | null
   buildComplete: boolean
   quantDone: boolean
   invoiced: boolean
@@ -52,7 +56,11 @@ export type ExtraJobRow = {
   title: string
   status: string
   total: number
+  quotedAmount: number | null
   approvedByName: string | null
+  pendingReview: boolean
+  approvedForInvoicing: boolean
+  invoiced: boolean
 }
 
 export type StageData = {
@@ -271,7 +279,7 @@ function stageSummaryBody(
         <th>Lot</th>
         <th class="c">Build Complete</th>
         <th class="c">Quant Done</th>
-        <th class="r">Standard Amount</th>
+        <th class="r">Final Amount</th>
         <th class="r">Client Extras</th>
         <th class="r">Total (ex GST)</th>
         <th class="c">Invoiced</th>
@@ -445,6 +453,26 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
       sites.flatMap((s) => s.stages.flatMap((st) => st.lots.map((l) => [l.id, l.approvedForInvoicing])))
     )
   )
+  const [extraJobCompleteMap, setExtraJobCompleteMap] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(
+      sites.flatMap((s) => s.stages.flatMap((st) => st.extraJobs.map((j) => [j.id, j.status === 'complete'])))
+    )
+  )
+  const [extraJobPendingMap, setExtraJobPendingMap] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(
+      sites.flatMap((s) => s.stages.flatMap((st) => st.extraJobs.map((j) => [j.id, j.pendingReview])))
+    )
+  )
+  const [extraJobApprovedMap, setExtraJobApprovedMap] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(
+      sites.flatMap((s) => s.stages.flatMap((st) => st.extraJobs.map((j) => [j.id, j.approvedForInvoicing])))
+    )
+  )
+  const [extraJobInvoicedMap, setExtraJobInvoicedMap] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(
+      sites.flatMap((s) => s.stages.flatMap((st) => st.extraJobs.map((j) => [j.id, j.invoiced])))
+    )
+  )
   const [selectedLots, setSelectedLots]           = useState<Set<string>>(new Set())
   const [selectedExtraJobs, setSelectedExtraJobs] = useState<Set<string>>(new Set())
   const [generating, setGenerating]               = useState<Set<string>>(new Set())
@@ -533,6 +561,67 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
     toggleApprovedForInvoicing(null, fd).then((result) => {
       if (result?.error) {
         setApprovedMap((prev) => ({ ...prev, [lotId]: current }))
+        setActionError(result.error)
+      }
+    })
+  }
+
+  function handleToggleExtraJobComplete(jobId: string, current: boolean) {
+    const next = !current
+    setExtraJobCompleteMap((prev) => ({ ...prev, [jobId]: next }))
+    setActionError(null)
+    const fd = new FormData()
+    fd.set('extra_job_id', jobId)
+    fd.set('value', String(next))
+    toggleExtraJobComplete(null, fd).then((result) => {
+      if (result?.error) {
+        setExtraJobCompleteMap((prev) => ({ ...prev, [jobId]: current }))
+        setActionError(result.error)
+      }
+    })
+  }
+
+  function handleToggleExtraJobPendingReview(jobId: string, current: boolean) {
+    const next = !current
+    setExtraJobPendingMap((prev) => ({ ...prev, [jobId]: next }))
+    setActionError(null)
+    const fd = new FormData()
+    fd.set('extra_job_id', jobId)
+    fd.set('value', String(next))
+    toggleExtraJobPendingReview(null, fd).then((result) => {
+      if (result?.error) {
+        setExtraJobPendingMap((prev) => ({ ...prev, [jobId]: current }))
+        setActionError(result.error)
+      }
+    })
+  }
+
+  function handleToggleExtraJobApprovedForInvoicing(jobId: string, current: boolean) {
+    const next = !current
+    setExtraJobApprovedMap((prev) => ({ ...prev, [jobId]: next }))
+    if (next) setExtraJobPendingMap((prev) => ({ ...prev, [jobId]: false }))
+    setActionError(null)
+    const fd = new FormData()
+    fd.set('extra_job_id', jobId)
+    fd.set('value', String(next))
+    toggleExtraJobApprovedForInvoicing(null, fd).then((result) => {
+      if (result?.error) {
+        setExtraJobApprovedMap((prev) => ({ ...prev, [jobId]: current }))
+        setActionError(result.error)
+      }
+    })
+  }
+
+  function handleToggleExtraJobInvoiced(jobId: string, current: boolean) {
+    const next = !current
+    setExtraJobInvoicedMap((prev) => ({ ...prev, [jobId]: next }))
+    setActionError(null)
+    const fd = new FormData()
+    fd.set('extra_job_id', jobId)
+    fd.set('value', String(next))
+    toggleExtraJobInvoiced(null, fd).then((result) => {
+      if (result?.error) {
+        setExtraJobInvoicedMap((prev) => ({ ...prev, [jobId]: current }))
         setActionError(result.error)
       }
     })
@@ -784,10 +873,11 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                             <tr className="border-b border-border">
                               <th className="pb-2 pr-3 w-8"></th>
                               <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 pr-6 whitespace-nowrap">Lot</th>
+                              <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 pr-6 whitespace-nowrap">Home Design</th>
                               <th className="text-center text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Build Complete</th>
                               <th className="text-center text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Quant Done</th>
                               <th className="text-right text-xs font-semibold text-fg-muted uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Estimate</th>
-                              <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Standard Amount</th>
+                              <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Final Amount</th>
                               <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Client Extras</th>
                               <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Total</th>
                               <th className="text-center text-xs font-semibold text-amber-600 uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Pending</th>
@@ -823,6 +913,9 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                                     {lot.contractPrice != null && (
                                       <span className="ml-1.5 rounded-full bg-purple-100 dark:bg-purple-900/30 px-2 py-0.5 text-xs font-medium text-purple-700 dark:text-purple-400">Contract</span>
                                     )}
+                                  </td>
+                                  <td className="py-2.5 pr-6 text-fg-secondary whitespace-nowrap">
+                                    {lot.homeDesign || <span className="text-fg-muted">—</span>}
                                   </td>
                                   <td className="py-2.5 px-3 text-center">
                                     {lot.buildComplete ? <span className="text-green-600 font-semibold">✓</span> : <span className="text-fg-muted">—</span>}
@@ -897,7 +990,7 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                             })}
 
                             <tr className="border-t-2 border-border bg-surface-raised">
-                              <td colSpan={4} className="py-2.5 pr-6 font-semibold text-fg-secondary">Stage Total</td>
+                              <td colSpan={5} className="py-2.5 pr-6 font-semibold text-fg-secondary">Stage Total</td>
                               <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg-muted">{totEstimate > 0 ? fmt(totEstimate) : <span className="text-fg-muted">—</span>}</td>
                               <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg-secondary">{fmt(totStd)}</td>
                               <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg-secondary">
@@ -917,11 +1010,16 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                             Extra Jobs
                           </p>
                           <div className="rounded-xl border border-border overflow-hidden divide-y divide-border-subtle">
-                            {stage.extraJobs.map((job) => (
+                            {stage.extraJobs.map((job) => {
+                              const jobComplete = extraJobCompleteMap[job.id] ?? (job.status === 'complete')
+                              const jobPending  = extraJobPendingMap[job.id] ?? job.pendingReview
+                              const jobApproved = extraJobApprovedMap[job.id] ?? job.approvedForInvoicing
+                              const jobInvoiced = extraJobInvoicedMap[job.id] ?? job.invoiced
+                              return (
                               <div
                                 key={job.id}
                                 onClick={() => router.push(`/sites/${site.id}/stages/${stage.id}/extra-jobs/${job.id}`)}
-                                className={`flex items-center gap-3 px-4 py-2.5 transition-colors cursor-pointer ${selectedExtraJobs.has(job.id) ? 'bg-amber-50 dark:bg-amber-900/20' : 'hover:bg-surface-raised'}`}
+                                className={`flex items-center gap-3 px-4 py-2.5 flex-wrap transition-colors cursor-pointer ${selectedExtraJobs.has(job.id) ? 'bg-amber-50 dark:bg-amber-900/20' : 'hover:bg-surface-raised'}`}
                               >
                                 <input
                                   type="checkbox"
@@ -930,18 +1028,63 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                                   onClick={e => e.stopPropagation()}
                                   className="h-4 w-4 rounded border-border text-amber-600 focus:ring-amber-500 cursor-pointer shrink-0"
                                 />
-                                <span className="text-sm text-fg-secondary flex-1 truncate">{job.title}</span>
-                                {job.status === 'complete' && (
-                                  <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 shrink-0">
-                                    Completed
-                                  </span>
-                                )}
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); handleToggleExtraJobComplete(job.id, jobComplete) }}
+                                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
+                                    jobComplete
+                                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                                      : 'bg-surface-raised text-fg-muted hover:bg-border'
+                                  }`}
+                                >
+                                  {jobComplete ? 'Completed' : 'Complete'}
+                                </button>
+                                <span className="text-sm text-fg-secondary flex-1 min-w-32 truncate">{job.title}</span>
                                 <ApprovedByField extraJobId={job.id} approvedByName={job.approvedByName} />
-                                <span className="text-sm tabular-nums text-fg-muted shrink-0">
+                                <span className="text-xs text-fg-muted shrink-0 w-24 text-right" title="Quoted amount">
+                                  {job.quotedAmount != null ? fmt(job.quotedAmount) : '—'}
+                                </span>
+                                <button
+                                  type="button"
+                                  disabled={!isAdmin}
+                                  onClick={(e) => { e.stopPropagation(); handleToggleExtraJobPendingReview(job.id, jobPending) }}
+                                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors whitespace-nowrap disabled:opacity-40 shrink-0 ${
+                                    jobPending
+                                      ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                                      : 'bg-surface-raised text-fg-muted hover:bg-border'
+                                  }`}
+                                >
+                                  Pending
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={!isAdmin}
+                                  onClick={(e) => { e.stopPropagation(); handleToggleExtraJobApprovedForInvoicing(job.id, jobApproved) }}
+                                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors whitespace-nowrap disabled:opacity-40 shrink-0 ${
+                                    jobApproved
+                                      ? 'bg-accent-dim text-accent-fg'
+                                      : 'bg-surface-raised text-fg-muted hover:bg-border'
+                                  }`}
+                                >
+                                  Approved
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); handleToggleExtraJobInvoiced(job.id, jobInvoiced) }}
+                                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
+                                    jobInvoiced
+                                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+                                      : 'bg-surface-raised text-fg-muted hover:bg-border'
+                                  }`}
+                                >
+                                  {jobInvoiced ? 'Invoiced' : 'Invoice'}
+                                </button>
+                                <span className="text-sm tabular-nums text-fg-muted shrink-0 w-20 text-right">
                                   {job.total > 0 ? fmt(job.total) : <span className="text-fg-muted">—</span>}
                                 </span>
                               </div>
-                            ))}
+                              )
+                            })}
                           </div>
                         </div>
                       )}

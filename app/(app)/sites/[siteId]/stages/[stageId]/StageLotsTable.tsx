@@ -9,6 +9,7 @@ import { toggleChecklistItemInline, toggleBuildCompleteInline } from './checklis
 export type TableLotRow = {
   id: string
   lotNumber: string
+  homeDesign: string | null
   dueDate: string | null
   status: LotStatus
   delayed: boolean
@@ -112,6 +113,7 @@ export default function StageLotsTable({
         <thead>
           <tr className="border-b border-border bg-surface-raised text-fg-muted">
             <th className="text-left font-medium px-3 py-2 whitespace-nowrap sticky left-0 bg-surface-raised">Lot</th>
+            <th className="text-left font-medium px-2 py-2 whitespace-nowrap">Home Design</th>
             <th className="text-left font-medium px-2 py-2 whitespace-nowrap">Due date</th>
             <th className="text-left font-medium px-2 py-2 whitespace-nowrap">Status</th>
             <th className="text-left font-medium px-2 py-2 whitespace-nowrap">Delayed</th>
@@ -136,6 +138,7 @@ export default function StageLotsTable({
                     Lot {lot.lotNumber}
                   </Link>
                 </td>
+                <td className="px-2 py-2 whitespace-nowrap text-fg-secondary">{lot.homeDesign || <span className="text-fg-muted">—</span>}</td>
                 <td className="px-2 py-2 whitespace-nowrap text-fg-muted">{formatDate(lot.dueDate)}</td>
                 <td className="px-2 py-2 whitespace-nowrap">
                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${cfg.badge}`}>{cfg.label}</span>
@@ -175,7 +178,7 @@ export default function StageLotsTable({
 
           {extraJobs.length > 0 && (
             <tr className="border-b border-border bg-surface-raised">
-              <td colSpan={7 + displayColumns.length} className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-fg-muted">
+              <td colSpan={8 + displayColumns.length} className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-fg-muted">
                 Extra jobs
               </td>
             </tr>
@@ -184,7 +187,7 @@ export default function StageLotsTable({
             const cfg = EXTRA_JOB_STATUS_CONFIG[job.status] ?? EXTRA_JOB_STATUS_CONFIG.not_started
             return (
               <tr key={job.id} className="border-b border-border-subtle hover:bg-surface-raised/60">
-                <td className="px-3 py-2 whitespace-nowrap sticky left-0 bg-surface" colSpan={1}>
+                <td className="px-3 py-2 whitespace-nowrap sticky left-0 bg-surface" colSpan={2}>
                   <Link href={`/sites/${siteId}/stages/${stageId}/extra-jobs/${job.id}`} className="font-medium text-accent-fg hover:underline">
                     {job.title}
                   </Link>

@@ -81,6 +81,7 @@ export default async function StagePage({ params }: Props) {
     return {
       id: lot.id,
       lotNumber: lot.lot_number,
+      homeDesign: lotAny.home_design ?? null,
       dueDate: lot.due_date,
       status: lot.status,
       delayed: lotAny.delayed ?? false,

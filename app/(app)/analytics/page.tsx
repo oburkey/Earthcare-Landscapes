@@ -48,7 +48,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   // Date-filtered lots — used for revenue/materials charts and summary cards only
   let lotsQuery = supabase
     .from('lots')
-    .select('id, lot_number, stage_id, due_date, build_complete, invoiced, contract_price')
+    .select('id, lot_number, home_design, stage_id, due_date, build_complete, invoiced, contract_price')
   if (pipelineStartDate && pipelineEndDate) {
     lotsQuery = lotsQuery.gte('due_date', pipelineStartDate).lt('due_date', pipelineEndDate)
   }
@@ -64,7 +64,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   // All lots (no date filter) — used only for the drill-down section
   const allLotsQuery = supabase
     .from('lots')
-    .select('id, lot_number, stage_id, due_date, build_complete, invoiced, contract_price')
+    .select('id, lot_number, home_design, stage_id, due_date, build_complete, invoiced, contract_price')
 
   const [lotsResult, completedResult, allLotsResult] = await Promise.all([lotsQuery, completedQuery, allLotsQuery])
 
