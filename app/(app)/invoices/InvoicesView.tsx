@@ -6,7 +6,6 @@ import {
   toggleInvoiced, togglePendingReview, toggleApprovedForInvoicing,
   toggleExtraJobComplete, toggleExtraJobPendingReview, toggleExtraJobApprovedForInvoicing, toggleExtraJobInvoiced,
 } from './actions'
-import ApprovedByField from './ApprovedByField'
 import { getExtraJobsPricing } from '@/app/(app)/sites/[siteId]/stages/[stageId]/extra-jobs/[extraJobId]/pricing-actions'
 import { LOGO_DATA_URL } from '@/lib/pdfAssets'
 import ProgressClaimsSection from './ProgressClaimsSection'
@@ -1009,82 +1008,111 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                           <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-2">
                             Extra Jobs
                           </p>
-                          <div className="rounded-xl border border-border overflow-hidden divide-y divide-border-subtle">
-                            {stage.extraJobs.map((job) => {
-                              const jobComplete = extraJobCompleteMap[job.id] ?? (job.status === 'complete')
-                              const jobPending  = extraJobPendingMap[job.id] ?? job.pendingReview
-                              const jobApproved = extraJobApprovedMap[job.id] ?? job.approvedForInvoicing
-                              const jobInvoiced = extraJobInvoicedMap[job.id] ?? job.invoiced
-                              return (
-                              <div
-                                key={job.id}
-                                onClick={() => router.push(`/sites/${site.id}/stages/${stage.id}/extra-jobs/${job.id}`)}
-                                className={`flex items-center gap-3 px-4 py-2.5 flex-wrap transition-colors cursor-pointer ${selectedExtraJobs.has(job.id) ? 'bg-amber-50 dark:bg-amber-900/20' : 'hover:bg-surface-raised'}`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={selectedExtraJobs.has(job.id)}
-                                  onChange={() => toggleExtraJobSelection(job.id)}
-                                  onClick={e => e.stopPropagation()}
-                                  className="h-4 w-4 rounded border-border text-amber-600 focus:ring-amber-500 cursor-pointer shrink-0"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={(e) => { e.stopPropagation(); handleToggleExtraJobComplete(job.id, jobComplete) }}
-                                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
-                                    jobComplete
-                                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                                      : 'bg-surface-raised text-fg-muted hover:bg-border'
-                                  }`}
-                                >
-                                  {jobComplete ? 'Completed' : 'Complete'}
-                                </button>
-                                <span className="text-sm text-fg-secondary flex-1 min-w-32 truncate">{job.title}</span>
-                                <ApprovedByField extraJobId={job.id} approvedByName={job.approvedByName} />
-                                <span className="text-xs text-fg-muted shrink-0 w-24 text-right" title="Quoted amount">
-                                  {job.quotedAmount != null ? fmt(job.quotedAmount) : '—'}
-                                </span>
-                                <button
-                                  type="button"
-                                  disabled={!isAdmin}
-                                  onClick={(e) => { e.stopPropagation(); handleToggleExtraJobPendingReview(job.id, jobPending) }}
-                                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors whitespace-nowrap disabled:opacity-40 shrink-0 ${
-                                    jobPending
-                                      ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
-                                      : 'bg-surface-raised text-fg-muted hover:bg-border'
-                                  }`}
-                                >
-                                  Pending
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={!isAdmin}
-                                  onClick={(e) => { e.stopPropagation(); handleToggleExtraJobApprovedForInvoicing(job.id, jobApproved) }}
-                                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors whitespace-nowrap disabled:opacity-40 shrink-0 ${
-                                    jobApproved
-                                      ? 'bg-accent-dim text-accent-fg'
-                                      : 'bg-surface-raised text-fg-muted hover:bg-border'
-                                  }`}
-                                >
-                                  Approved
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => { e.stopPropagation(); handleToggleExtraJobInvoiced(job.id, jobInvoiced) }}
-                                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
-                                    jobInvoiced
-                                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
-                                      : 'bg-surface-raised text-fg-muted hover:bg-border'
-                                  }`}
-                                >
-                                  {jobInvoiced ? 'Invoiced' : 'Invoice'}
-                                </button>
-                                <span className="text-sm tabular-nums text-fg-muted shrink-0 w-20 text-right">
-                                  {job.total > 0 ? fmt(job.total) : <span className="text-fg-muted">—</span>}
-                                </span>
-                              </div>
-                              )
-                            })}
+                          <div className="rounded-xl border border-border overflow-hidden">
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm border-collapse">
+                                <thead>
+                                  <tr className="border-b border-border">
+                                    <th className="pb-2 pl-4 pr-3 w-8"></th>
+                                    <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 pr-6 whitespace-nowrap">Job</th>
+                                    <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 pr-6 whitespace-nowrap">Home Design</th>
+                                    <th className="text-right text-xs font-semibold text-fg-muted uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Quoted Amount</th>
+                                    <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Final Amount</th>
+                                    <th className="text-center text-xs font-semibold text-amber-600 uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Pending</th>
+                                    <th className="text-center text-xs font-semibold text-accent-fg uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Approved</th>
+                                    <th className="text-center text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide pb-2 pr-4 whitespace-nowrap">Invoiced</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {stage.extraJobs.map((job) => {
+                                    const jobComplete = extraJobCompleteMap[job.id] ?? (job.status === 'complete')
+                                    const jobPending  = extraJobPendingMap[job.id] ?? job.pendingReview
+                                    const jobApproved = extraJobApprovedMap[job.id] ?? job.approvedForInvoicing
+                                    const jobInvoiced = extraJobInvoicedMap[job.id] ?? job.invoiced
+                                    return (
+                                      <tr
+                                        key={job.id}
+                                        onClick={() => router.push(`/sites/${site.id}/stages/${stage.id}/extra-jobs/${job.id}`)}
+                                        className={`border-b border-border-subtle last:border-0 transition-colors cursor-pointer ${selectedExtraJobs.has(job.id) ? 'bg-amber-50 dark:bg-amber-900/20' : 'hover:bg-surface-raised'}`}
+                                      >
+                                        <td className="py-2.5 pl-4 pr-3" onClick={e => e.stopPropagation()}>
+                                          <input
+                                            type="checkbox"
+                                            checked={selectedExtraJobs.has(job.id)}
+                                            onChange={() => toggleExtraJobSelection(job.id)}
+                                            className="h-4 w-4 rounded border-border text-amber-600 focus:ring-amber-500 cursor-pointer"
+                                          />
+                                        </td>
+                                        <td className="py-2.5 pr-6">
+                                          <div className="flex items-center gap-2">
+                                            <button
+                                              type="button"
+                                              onClick={(e) => { e.stopPropagation(); handleToggleExtraJobComplete(job.id, jobComplete) }}
+                                              className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
+                                                jobComplete
+                                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                                                  : 'bg-surface-raised text-fg-muted hover:bg-border'
+                                              }`}
+                                            >
+                                              {jobComplete ? 'Completed' : 'Complete'}
+                                            </button>
+                                            <span className="text-sm text-fg-secondary truncate">{job.title}</span>
+                                          </div>
+                                        </td>
+                                        <td className="py-2.5 pr-6 text-fg-muted whitespace-nowrap">—</td>
+                                        <td className="py-2.5 px-3 text-right tabular-nums text-fg-muted">
+                                          {job.quotedAmount != null ? fmt(job.quotedAmount) : <span className="text-fg-muted">—</span>}
+                                        </td>
+                                        <td className="py-2.5 px-3 text-right tabular-nums text-fg-secondary">
+                                          {job.total > 0 ? fmt(job.total) : <span className="text-fg-muted">—</span>}
+                                        </td>
+                                        <td className="py-2.5 px-3 text-center" onClick={e => e.stopPropagation()}>
+                                          <button
+                                            type="button"
+                                            disabled={!isAdmin}
+                                            onClick={() => handleToggleExtraJobPendingReview(job.id, jobPending)}
+                                            className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors whitespace-nowrap disabled:opacity-40 ${
+                                              jobPending
+                                                ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                                                : 'bg-surface-raised text-fg-muted hover:bg-border'
+                                            }`}
+                                          >
+                                            Pending
+                                          </button>
+                                        </td>
+                                        <td className="py-2.5 px-3 text-center" onClick={e => e.stopPropagation()}>
+                                          <button
+                                            type="button"
+                                            disabled={!isAdmin}
+                                            onClick={() => handleToggleExtraJobApprovedForInvoicing(job.id, jobApproved)}
+                                            className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors whitespace-nowrap disabled:opacity-40 ${
+                                              jobApproved
+                                                ? 'bg-accent-dim text-accent-fg'
+                                                : 'bg-surface-raised text-fg-muted hover:bg-border'
+                                            }`}
+                                          >
+                                            Approved
+                                          </button>
+                                        </td>
+                                        <td className="py-2.5 pr-4 text-center" onClick={e => e.stopPropagation()}>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleToggleExtraJobInvoiced(job.id, jobInvoiced)}
+                                            className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors whitespace-nowrap ${
+                                              jobInvoiced
+                                                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+                                                : 'bg-surface-raised text-fg-muted hover:bg-border'
+                                            }`}
+                                          >
+                                            {jobInvoiced ? 'Invoiced' : 'Invoice'}
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    )
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
                           </div>
                         </div>
                       )}

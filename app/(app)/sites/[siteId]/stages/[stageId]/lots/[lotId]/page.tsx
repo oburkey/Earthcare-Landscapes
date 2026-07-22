@@ -315,15 +315,6 @@ export default async function LotPage({ params }: Props) {
           <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${cfg.badge}`}>{cfg.label}</span>
         </div>
 
-        {/* Home design */}
-        <HomeDesignField
-          lotId={lotId}
-          siteId={siteId}
-          stageId={stageId}
-          homeDesign={homeDesign}
-          canEdit={canSupervise}
-        />
-
         {/* Delayed */}
         <DelayControl
           delayed={delayed}
@@ -503,6 +494,15 @@ export default async function LotPage({ params }: Props) {
             <p className="text-sm text-fg-muted text-center py-4">No documents yet.</p>
           )}
         </div>
+
+        {/* Home design */}
+        <HomeDesignField
+          lotId={lotId}
+          siteId={siteId}
+          stageId={stageId}
+          homeDesign={homeDesign}
+          canEdit={canSupervise}
+        />
 
         {/* ── Edit ──────────────────────────────────────────────────────────── */}
         <div>

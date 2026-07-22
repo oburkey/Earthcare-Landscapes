@@ -39,7 +39,7 @@ function withCache<TArgs extends unknown[], TReturn>(
 async function _sitesList(db: Db) {
   const { data } = await db
     .from('sites')
-    .select('id, name, address, completed_at, stages(id, name, order, completed_at, lots(id, status, due_date))')
+    .select('id, name, address, completed_at, stages(id, lots(id, status))')
     .order('name', { ascending: true })
   return data ?? []
 }
