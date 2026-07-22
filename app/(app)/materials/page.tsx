@@ -1,12 +1,13 @@
 import { requireAuth, requireRole } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { getCachedMaterialsPlanningData, getCachedPlantRatioSettings } from '@/lib/data'
+import { getCachedMaterialsPlanningData, getCachedPlantRatioSettings, getCachedSitesList } from '@/lib/data'
 import { getR2SignedUrlSafe } from '@/lib/r2'
 import { buildMaterialsPlan, getMaterialsDateRange, type MaterialsLotRow, type MaterialsExtraJobRow, type RatioSettingRow } from './lib'
 import MaterialsTabs from './MaterialsTabs'
 import type { OrderRow, SiteOption as OrdersSiteOption, SupplierOption } from './OrdersTab'
 import type { SiteStockRow, SiteOption as StockSiteOption } from './StockTab'
 import type { ConversionSettingRow } from './SettingsTab'
+import type { RatioRow, SiteOption as PlantRatioSiteOption } from './PlantRatiosSettings'
 
 export const metadata = { title: 'Materials — Earthcare Landscapes' }
 
@@ -27,10 +28,12 @@ export default async function MaterialsPage() {
   const supabase = await createClient()
 
   // ── Planning tab data (unchanged) ─────────────────────────────────────────
+  // ratioSettings is also used below by the Settings tab's Plant Ratios
+  // section, so it's fetched unconditionally rather than gated on showPlanning.
   const { startDate, endDate, months } = getMaterialsDateRange()
   const [planningData, ratioSettings] = await Promise.all([
     showPlanning ? getCachedMaterialsPlanningData(startDate, endDate) : Promise.resolve({ lots: [], jobs: [] }),
-    showPlanning ? getCachedPlantRatioSettings() : Promise.resolve([]),
+    getCachedPlantRatioSettings(),
   ])
   const plan = showPlanning
     ? buildMaterialsPlan(
@@ -53,10 +56,24 @@ export default async function MaterialsPage() {
   // ── Shared: active sites + supplier contacts ──────────────────────────────
   const [{ data: sitesRaw }, { data: suppliersRaw }] = await Promise.all([
     supabase.from('sites').select('id, name').is('completed_at', null).order('name'),
-    supabase.from('contacts').select('id, name').in('category', ['Nursery', 'Materials Suppliers']).order('name'),
+    supabase.from('contacts').select('id, name, company, category').in('category', ['Nursery', 'Materials Suppliers']).order('company'),
   ])
   const sites: OrdersSiteOption[] = (sitesRaw ?? []).map((s) => ({ id: s.id, name: s.name }))
-  const suppliers: SupplierOption[] = (suppliersRaw ?? []).map((s) => ({ id: s.id, name: s.name }))
+  // Supplier dropdown shows the company name (falling back to the contact's
+  // own name if no company is set), with category in brackets for clarity.
+  const suppliers: SupplierOption[] = (suppliersRaw ?? []).map((s) => ({
+    id: s.id,
+    name: `${s.company || s.name}${s.category ? ` [${s.category}]` : ''}`,
+  }))
+
+  // ── Plant Ratios (Settings tab, admin only) ───────────────────────────────
+  // Uses all sites (not just active ones), matching the original
+  // /settings/plant-ratios page's site-override options.
+  const plantRatioRows = ratioSettings as unknown as RatioRow[]
+  const plantRatiosGlobal: RatioRow | null = plantRatioRows.find((r) => r.site_id === null) ?? null
+  const plantRatiosOverrides: RatioRow[] = plantRatioRows.filter((r) => r.site_id !== null)
+  const allSitesForRatios = isAdmin ? await getCachedSitesList() : []
+  const plantRatiosSites: PlantRatioSiteOption[] = allSitesForRatios.map((s) => ({ id: s.id, name: s.name }))
 
   // ── Orders tab data ────────────────────────────────────────────────────────
   let orders: OrderRow[] = []
@@ -205,6 +222,9 @@ export default async function MaterialsPage() {
         stockTableExists={stockTableExists}
         conversionSettings={conversionSettings}
         conversionSettingsTableExists={conversionSettingsTableExists}
+        plantRatiosGlobal={plantRatiosGlobal}
+        plantRatiosOverrides={plantRatiosOverrides}
+        plantRatiosSites={plantRatiosSites}
         showPlanning={showPlanning}
         canManageOrders={canManageOrders}
         canEditStock={canEditStock}

@@ -5,6 +5,13 @@ import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import type { ActionState } from '@/types/actions'
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function logDbError(context: string, error: any) {
+  console.error(`[materials/settings-actions] ${context}:`, {
+    message: error?.message, code: error?.code, details: error?.details, hint: error?.hint,
+  })
+}
+
 type ConversionValues = {
   name: string
   unit_from: string
@@ -51,19 +58,20 @@ export async function createConversionSetting(
 
   const supabase = await createClient()
 
-  const { data: maxRow } = await supabase
+  const { data: maxRow, error: maxRowError } = await supabase
     .from('material_conversion_settings')
     .select('order_index')
     .order('order_index', { ascending: false })
     .limit(1)
     .maybeSingle()
+  if (maxRowError) logDbError('createConversionSetting fetch max order_index', maxRowError)
   const nextIndex = (maxRow?.order_index ?? 0) + 1
 
   const { error } = await supabase
     .from('material_conversion_settings')
     .insert({ ...parsed.values, order_index: nextIndex })
 
-  if (error) return { error: error.message }
+  if (error) { logDbError('createConversionSetting insert', error); return { error: error.message } }
 
   revalidatePath('/materials')
   return null
@@ -88,7 +96,7 @@ export async function updateConversionSetting(
     .update(parsed.values)
     .eq('id', id)
 
-  if (error) return { error: error.message }
+  if (error) { logDbError('updateConversionSetting update', error); return { error: error.message } }
 
   revalidatePath('/materials')
   return null
@@ -106,7 +114,7 @@ export async function deleteConversionSetting(
 
   const supabase = await createClient()
   const { error } = await supabase.from('material_conversion_settings').delete().eq('id', id)
-  if (error) return { error: error.message }
+  if (error) { logDbError('deleteConversionSetting delete', error); return { error: error.message } }
 
   revalidatePath('/materials')
   return null

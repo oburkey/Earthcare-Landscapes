@@ -78,7 +78,7 @@ export async function saveGlobalRatios(
     : await supabase.from('plant_ratio_settings').insert({ ...payload, site_id: null })
 
   if (error) return { error: error.message }
-  revalidatePath('/settings/plant-ratios')
+  revalidatePath('/materials')
   revalidateTag('plant-ratios')
   return null
 }
@@ -123,7 +123,7 @@ export async function saveSiteOverride(
     : await supabase.from('plant_ratio_settings').insert({ ...payload, site_id: siteId })
 
   if (error) return { error: error.message }
-  revalidatePath('/settings/plant-ratios')
+  revalidatePath('/materials')
   revalidateTag('plant-ratios')
   return null
 }
@@ -135,6 +135,6 @@ export async function deleteSiteOverride(formData: FormData): Promise<void> {
   const supabase = await createClient()
   await supabase.from('plant_ratio_settings').delete().eq('id', id)
 
-  revalidatePath('/settings/plant-ratios')
+  revalidatePath('/materials')
   revalidateTag('plant-ratios')
 }

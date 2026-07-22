@@ -5,6 +5,7 @@ import MaterialsView from './MaterialsView'
 import OrdersTab, { type OrderRow, type SiteOption as OrdersSiteOption, type SupplierOption } from './OrdersTab'
 import StockTab, { type SiteStockRow, type SiteOption as StockSiteOption } from './StockTab'
 import SettingsTab, { type ConversionSettingRow } from './SettingsTab'
+import type { RatioRow, SiteOption as PlantRatioSiteOption } from './PlantRatiosSettings'
 import type { MonthMaterialGroup } from './lib'
 
 type Tab = 'planning' | 'orders' | 'stock' | 'settings'
@@ -32,6 +33,9 @@ interface Props {
   // Settings
   conversionSettings: ConversionSettingRow[]
   conversionSettingsTableExists: boolean
+  plantRatiosGlobal: RatioRow | null
+  plantRatiosOverrides: RatioRow[]
+  plantRatiosSites: PlantRatioSiteOption[]
   // Access
   showPlanning: boolean
   canManageOrders: boolean
@@ -44,6 +48,7 @@ export default function MaterialsTabs({
   orders, ordersSites, suppliers, ordersTableExists,
   stockSites, stockBySite, stockTableExists,
   conversionSettings, conversionSettingsTableExists,
+  plantRatiosGlobal, plantRatiosOverrides, plantRatiosSites,
   showPlanning, canManageOrders, canEditStock, isAdmin,
 }: Props) {
   const visibleTabs = TABS.filter((t) => t.id !== 'planning' || showPlanning)
@@ -97,6 +102,9 @@ export default function MaterialsTabs({
           settings={conversionSettings}
           isAdmin={isAdmin}
           tableExists={conversionSettingsTableExists}
+          plantRatiosGlobal={plantRatiosGlobal}
+          plantRatiosOverrides={plantRatiosOverrides}
+          plantRatiosSites={plantRatiosSites}
         />
       )}
     </div>

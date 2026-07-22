@@ -10,6 +10,13 @@ export const STOCK_FIELDS = [
 ] as const
 export type StockField = typeof STOCK_FIELDS[number]
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function logDbError(context: string, error: any) {
+  console.error(`[materials/stock-actions] ${context}:`, {
+    message: error?.message, code: error?.code, details: error?.details, hint: error?.hint,
+  })
+}
+
 export async function updateSiteStock(
   _prev: ActionState,
   formData: FormData
@@ -37,7 +44,7 @@ export async function updateSiteStock(
       { onConflict: 'site_id' }
     )
 
-  if (error) return { error: error.message }
+  if (error) { logDbError('updateSiteStock upsert site_stock', error); return { error: error.message } }
 
   revalidatePath('/materials')
   return null

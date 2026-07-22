@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation'
 
 const TABS = [
   { href: '/settings/materials', label: 'Materials Template' },
-  { href: '/settings/plant-ratios', label: 'Plant Ratios' },
 ]
 
 export default function SettingsNav() {

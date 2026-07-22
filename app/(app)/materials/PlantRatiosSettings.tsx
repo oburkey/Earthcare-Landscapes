@@ -1,7 +1,7 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { saveGlobalRatios, saveSiteOverride, deleteSiteOverride } from './actions'
+import { saveGlobalRatios, saveSiteOverride, deleteSiteOverride } from './plant-ratios-actions'
 import type { ActionState } from '@/types/actions'
 
 type PotSizeSplit = Record<string, number>

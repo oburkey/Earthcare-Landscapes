@@ -4,8 +4,9 @@ import { useActionState, useState } from 'react'
 import {
   createOrder, deleteOrder, submitOrder, holdOrder, reactivateOrder, markOrderDelivered,
   uploadOrderAttachment, deleteOrderAttachment,
-  ORDER_ITEM_CATEGORIES, type OrderItemPayload,
+  type OrderItemPayload,
 } from './orders-actions'
+import { ORDER_ITEM_CATEGORIES } from './order-constants'
 import type { ActionState } from '@/types/actions'
 
 // ── Types ─────────────────────────────────────────────────────────────────────

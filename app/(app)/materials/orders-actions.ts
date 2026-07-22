@@ -6,11 +6,6 @@ import { revalidatePath } from 'next/cache'
 import { uploadToR2, deleteFromR2 } from '@/lib/r2'
 import type { ActionState } from '@/types/actions'
 
-export const ORDER_ITEM_CATEGORIES = [
-  'Small Shrubs', 'Medium Shrubs', 'Ground Covers', 'Strappy/Grasses',
-  'Hedging', 'Trees', 'Mulch', 'Edging', 'Turf', 'Drippers', 'Other',
-] as const
-
 export const ORDER_STATUSES = ['draft', 'ordered', 'on_hold', 'delivered'] as const
 export type OrderStatus = typeof ORDER_STATUSES[number]
 
@@ -19,6 +14,13 @@ export type AttachmentType = typeof ATTACHMENT_TYPES[number]
 
 function canManageOrders(role: string): boolean {
   return role === 'leading_hand' || role === 'supervisor' || role === 'admin'
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function logDbError(context: string, error: any) {
+  console.error(`[materials/orders-actions] ${context}:`, {
+    message: error?.message, code: error?.code, details: error?.details, hint: error?.hint,
+  })
 }
 
 export type OrderItemPayload = {
@@ -71,7 +73,10 @@ export async function createOrder(
     .select('id')
     .single()
 
-  if (orderError || !order) return { error: orderError?.message ?? 'Failed to create order.' }
+  if (orderError || !order) {
+    if (orderError) logDbError('createOrder insert material_orders', orderError)
+    return { error: orderError?.message ?? 'Failed to create order.' }
+  }
 
   const { error: itemsError } = await supabase
     .from('material_order_items')
@@ -86,7 +91,7 @@ export async function createOrder(
       order_index: i,
     })))
 
-  if (itemsError) return { error: itemsError.message }
+  if (itemsError) { logDbError('createOrder insert material_order_items', itemsError); return { error: itemsError.message } }
 
   revalidatePath('/materials')
   return null
@@ -104,17 +109,18 @@ export async function deleteOrder(
 
   const supabase = await createClient()
 
-  const { data: attachments } = await supabase
+  const { data: attachments, error: attachmentsFetchError } = await supabase
     .from('material_order_attachments')
     .select('storage_path')
     .eq('order_id', orderId)
+  if (attachmentsFetchError) logDbError('deleteOrder fetch material_order_attachments', attachmentsFetchError)
 
   await Promise.all(
     (attachments ?? []).map((a) => deleteFromR2(a.storage_path).catch(() => null))
   )
 
   const { error } = await supabase.from('material_orders').delete().eq('id', orderId)
-  if (error) return { error: error.message }
+  if (error) { logDbError('deleteOrder delete material_orders', error); return { error: error.message } }
 
   revalidatePath('/materials')
   return null
@@ -162,7 +168,7 @@ async function transitionStatus(
     .eq('status', from)
     .select('id')
 
-  if (error) return { error: error.message }
+  if (error) { logDbError(`transitionStatus ${from}->${to}`, error); return { error: error.message } }
   if (!data || data.length === 0) return { error: 'Order is no longer in the expected state — refresh and try again.' }
 
   revalidatePath('/materials')
@@ -213,14 +219,15 @@ export async function markOrderDelivered(
     .in('status', ['ordered', 'on_hold'])
     .select('id')
 
-  if (error) return { error: error.message }
+  if (error) { logDbError('markOrderDelivered update material_orders', error); return { error: error.message } }
   if (!data || data.length === 0) return { error: 'Order is no longer in the expected state — refresh and try again.' }
 
   if (updateStock) {
-    const { data: items } = await supabase
+    const { data: items, error: itemsFetchError } = await supabase
       .from('material_order_items')
       .select('category, quantity, unit')
       .eq('order_id', orderId)
+    if (itemsFetchError) logDbError('markOrderDelivered fetch material_order_items', itemsFetchError)
 
     const stockDelta = { mulch_tonnes: 0, edging_metres: 0, turf_rolls: 0, drippers_packs: 0 }
     for (const item of items ?? []) {
@@ -234,13 +241,14 @@ export async function markOrderDelivered(
 
     const hasDelta = Object.values(stockDelta).some((v) => v > 0)
     if (hasDelta) {
-      const { data: existing } = await supabase
+      const { data: existing, error: stockFetchError } = await supabase
         .from('site_stock')
         .select('mulch_tonnes, edging_metres, turf_rolls, drippers_packs')
         .eq('site_id', order.site_id)
         .maybeSingle()
+      if (stockFetchError) logDbError('markOrderDelivered fetch site_stock', stockFetchError)
 
-      await supabase.from('site_stock').upsert({
+      const { error: stockUpsertError } = await supabase.from('site_stock').upsert({
         site_id:          order.site_id,
         mulch_tonnes:     Number(existing?.mulch_tonnes ?? 0) + stockDelta.mulch_tonnes,
         edging_metres:    Number(existing?.edging_metres ?? 0) + stockDelta.edging_metres,
@@ -248,6 +256,7 @@ export async function markOrderDelivered(
         drippers_packs:   Number(existing?.drippers_packs ?? 0) + stockDelta.drippers_packs,
         last_updated_by:  profile.id,
       }, { onConflict: 'site_id' })
+      if (stockUpsertError) logDbError('markOrderDelivered upsert site_stock', stockUpsertError)
 
       revalidatePath('/materials')
     }
@@ -295,6 +304,7 @@ export async function uploadOrderAttachment(
   })
 
   if (dbError) {
+    logDbError('uploadOrderAttachment insert material_order_attachments', dbError)
     await deleteFromR2(key).catch(() => null)
     return { error: dbError.message }
   }
@@ -315,18 +325,19 @@ export async function deleteOrderAttachment(
 
   const supabase = await createClient()
 
-  const { data: attachment } = await supabase
+  const { data: attachment, error: fetchError } = await supabase
     .from('material_order_attachments')
     .select('storage_path')
     .eq('id', attachmentId)
     .single()
+  if (fetchError) logDbError('deleteOrderAttachment fetch material_order_attachments', fetchError)
 
   if (attachment?.storage_path) {
     await deleteFromR2(attachment.storage_path).catch(() => null)
   }
 
   const { error } = await supabase.from('material_order_attachments').delete().eq('id', attachmentId)
-  if (error) return { error: error.message }
+  if (error) { logDbError('deleteOrderAttachment delete material_order_attachments', error); return { error: error.message } }
 
   revalidatePath('/materials')
   return null

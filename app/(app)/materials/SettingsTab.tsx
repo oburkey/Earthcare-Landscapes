@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from 'react'
 import { createConversionSetting, updateConversionSetting, deleteConversionSetting } from './settings-actions'
+import PlantRatiosSettings, { type RatioRow, type SiteOption as PlantRatioSiteOption } from './PlantRatiosSettings'
 import type { ActionState } from '@/types/actions'
 
 export type ConversionSettingRow = {
@@ -103,23 +104,19 @@ function ConversionForm({
   )
 }
 
-export default function SettingsTab({ settings, isAdmin, tableExists }: {
+export default function SettingsTab({
+  settings, isAdmin, tableExists,
+  plantRatiosGlobal, plantRatiosOverrides, plantRatiosSites,
+}: {
   settings: ConversionSettingRow[]
   isAdmin: boolean
   tableExists: boolean
+  plantRatiosGlobal: RatioRow | null
+  plantRatiosOverrides: RatioRow[]
+  plantRatiosSites: PlantRatioSiteOption[]
 }) {
   const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-
-  if (!tableExists) {
-    return (
-      <div className="rounded-xl border border-border bg-surface p-4">
-        <p className="text-sm text-fg-muted">
-          The material conversion settings table hasn&apos;t been created yet. Run the SQL migration to enable this tab.
-        </p>
-      </div>
-    )
-  }
 
   async function addAction(prev: ActionState, formData: FormData): Promise<ActionState> {
     const result = await createConversionSetting(prev, formData)
@@ -134,80 +131,106 @@ export default function SettingsTab({ settings, isAdmin, tableExists }: {
   }
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-5 space-y-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-sm font-semibold text-fg-secondary">Material conversion rates</h2>
-          <p className="mt-0.5 text-xs text-fg-muted">Used to convert ordered quantities into usable coverage.</p>
-        </div>
-        {isAdmin && !adding && (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-muted hover:bg-surface-raised"
-          >
-            + Add new conversion
-          </button>
+    <div className="space-y-5">
+      <div className="rounded-xl border border-border bg-surface p-5 space-y-3">
+        {!tableExists ? (
+          <p className="text-sm text-fg-muted">
+            The material conversion settings table hasn&apos;t been created yet. Run the SQL migration to enable this section.
+          </p>
+        ) : (
+          <>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-fg-secondary">Material conversion rates</h2>
+                <p className="mt-0.5 text-xs text-fg-muted">Used to convert ordered quantities into usable coverage.</p>
+              </div>
+              {isAdmin && !adding && (
+                <button
+                  type="button"
+                  onClick={() => setAdding(true)}
+                  className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-muted hover:bg-surface-raised"
+                >
+                  + Add new conversion
+                </button>
+              )}
+            </div>
+
+            {settings.length === 0 && !adding && (
+              <p className="text-sm text-fg-muted">No conversion rates configured yet.</p>
+            )}
+
+            <div className="space-y-2">
+              {settings.map((s) => {
+                if (editingId === s.id) {
+                  return (
+                    <div key={s.id} className="rounded-lg border border-border p-3 bg-surface-raised">
+                      <ConversionForm
+                        action={editAction}
+                        defaults={s}
+                        submitLabel="Save"
+                        onCancel={() => setEditingId(null)}
+                        idField={s.id}
+                      />
+                    </div>
+                  )
+                }
+                return (
+                  <div key={s.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-fg-secondary truncate">{s.name}</p>
+                      <p className="text-xs text-fg-muted">
+                        1 {s.unit_from} → {s.conversion_rate} {s.unit_to} · {s.wastage_pct}% wastage
+                      </p>
+                      {s.notes && <p className="mt-0.5 text-xs text-fg-muted italic">{s.notes}</p>}
+                    </div>
+                    {isAdmin && (
+                      <div className="flex gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setEditingId(s.id)}
+                          className="rounded px-2 py-1 text-xs text-fg-muted hover:bg-surface-raised"
+                        >
+                          Edit
+                        </button>
+                        <form action={async (fd) => { await deleteConversionSetting(null, fd) }}>
+                          <input type="hidden" name="id" value={s.id} />
+                          <button type="submit" className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50">
+                            Delete
+                          </button>
+                        </form>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {adding && (
+              <div className="rounded-lg border border-dashed border-border p-3 bg-surface-raised">
+                <ConversionForm
+                  action={addAction}
+                  defaults={{ wastage_pct: 0 }}
+                  submitLabel="Add conversion"
+                  onCancel={() => setAdding(false)}
+                />
+              </div>
+            )}
+          </>
         )}
       </div>
 
-      {settings.length === 0 && !adding && (
-        <p className="text-sm text-fg-muted">No conversion rates configured yet.</p>
-      )}
-
-      <div className="space-y-2">
-        {settings.map((s) => {
-          if (editingId === s.id) {
-            return (
-              <div key={s.id} className="rounded-lg border border-border p-3 bg-surface-raised">
-                <ConversionForm
-                  action={editAction}
-                  defaults={s}
-                  submitLabel="Save"
-                  onCancel={() => setEditingId(null)}
-                  idField={s.id}
-                />
-              </div>
-            )
-          }
-          return (
-            <div key={s.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-fg-secondary truncate">{s.name}</p>
-                <p className="text-xs text-fg-muted">
-                  1 {s.unit_from} → {s.conversion_rate} {s.unit_to} · {s.wastage_pct}% wastage
-                </p>
-                {s.notes && <p className="mt-0.5 text-xs text-fg-muted italic">{s.notes}</p>}
-              </div>
-              {isAdmin && (
-                <div className="flex gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setEditingId(s.id)}
-                    className="rounded px-2 py-1 text-xs text-fg-muted hover:bg-surface-raised"
-                  >
-                    Edit
-                  </button>
-                  <form action={async (fd) => { await deleteConversionSetting(null, fd) }}>
-                    <input type="hidden" name="id" value={s.id} />
-                    <button type="submit" className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50">
-                      Delete
-                    </button>
-                  </form>
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-
-      {adding && (
-        <div className="rounded-lg border border-dashed border-border p-3 bg-surface-raised">
-          <ConversionForm
-            action={addAction}
-            defaults={{ wastage_pct: 0 }}
-            submitLabel="Add conversion"
-            onCancel={() => setAdding(false)}
+      {isAdmin && (
+        <div className="space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold text-fg-secondary">Plant Ratios</h2>
+            <p className="mt-0.5 text-xs text-fg-muted">
+              Plants-per-m² ratios and pot size splits used for plant quantity calculations.
+            </p>
+          </div>
+          <PlantRatiosSettings
+            global={plantRatiosGlobal}
+            overrides={plantRatiosOverrides}
+            sites={plantRatiosSites}
           />
         </div>
       )}
