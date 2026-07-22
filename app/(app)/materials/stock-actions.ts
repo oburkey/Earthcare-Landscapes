@@ -26,26 +26,31 @@ export async function updateSiteStock(
     return { error: 'Only leading hands and above can update stock.' }
   }
 
-  const siteId = formData.get('site_id') as string
-  const field  = formData.get('field') as string
-  const valueRaw = formData.get('value') as string
+  try {
+    const siteId = formData.get('site_id') as string
+    const field  = formData.get('field') as string
+    const valueRaw = formData.get('value') as string
 
-  if (!siteId) return { error: 'Site is required.' }
-  if (!STOCK_FIELDS.includes(field as StockField)) return { error: 'Invalid stock field.' }
+    if (!siteId) return { error: 'Site is required.' }
+    if (!STOCK_FIELDS.includes(field as StockField)) return { error: 'Invalid stock field.' }
 
-  const value = parseFloat(valueRaw)
-  if (isNaN(value) || value < 0) return { error: 'Enter a valid, non-negative number.' }
+    const value = parseFloat(valueRaw)
+    if (isNaN(value) || value < 0) return { error: 'Enter a valid, non-negative number.' }
 
-  const supabase = await createClient()
-  const { error } = await supabase
-    .from('site_stock')
-    .upsert(
-      { site_id: siteId, [field]: value, last_updated_by: profile.id },
-      { onConflict: 'site_id' }
-    )
+    const supabase = await createClient()
+    const { error } = await supabase
+      .from('site_stock')
+      .upsert(
+        { site_id: siteId, [field]: value, last_updated_by: profile.id },
+        { onConflict: 'site_id' }
+      )
 
-  if (error) { logDbError('updateSiteStock upsert site_stock', error); return { error: error.message } }
+    if (error) { logDbError('updateSiteStock upsert site_stock', error); return { error: error.message } }
 
-  revalidatePath('/materials')
-  return null
+    revalidatePath('/materials')
+    return null
+  } catch (err) {
+    console.error('[materials/stock-actions] updateSiteStock unexpected error:', err)
+    return { error: err instanceof Error ? err.message : 'An unexpected error occurred while updating stock.' }
+  }
 }

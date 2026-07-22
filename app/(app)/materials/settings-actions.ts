@@ -53,28 +53,33 @@ export async function createConversionSetting(
   const profile = await requireAuth()
   if (profile.role !== 'admin') return { error: 'Only admins can manage conversion rates.' }
 
-  const parsed = parseConversionForm(formData)
-  if (!parsed.ok) return { error: parsed.error }
+  try {
+    const parsed = parseConversionForm(formData)
+    if (!parsed.ok) return { error: parsed.error }
 
-  const supabase = await createClient()
+    const supabase = await createClient()
 
-  const { data: maxRow, error: maxRowError } = await supabase
-    .from('material_conversion_settings')
-    .select('order_index')
-    .order('order_index', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  if (maxRowError) logDbError('createConversionSetting fetch max order_index', maxRowError)
-  const nextIndex = (maxRow?.order_index ?? 0) + 1
+    const { data: maxRow, error: maxRowError } = await supabase
+      .from('material_conversion_settings')
+      .select('order_index')
+      .order('order_index', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (maxRowError) logDbError('createConversionSetting fetch max order_index', maxRowError)
+    const nextIndex = (maxRow?.order_index ?? 0) + 1
 
-  const { error } = await supabase
-    .from('material_conversion_settings')
-    .insert({ ...parsed.values, order_index: nextIndex })
+    const { error } = await supabase
+      .from('material_conversion_settings')
+      .insert({ ...parsed.values, order_index: nextIndex })
 
-  if (error) { logDbError('createConversionSetting insert', error); return { error: error.message } }
+    if (error) { logDbError('createConversionSetting insert', error); return { error: error.message } }
 
-  revalidatePath('/materials')
-  return null
+    revalidatePath('/materials')
+    return null
+  } catch (err) {
+    console.error('[materials/settings-actions] createConversionSetting unexpected error:', err)
+    return { error: err instanceof Error ? err.message : 'An unexpected error occurred while creating the conversion rate.' }
+  }
 }
 
 export async function updateConversionSetting(
@@ -84,22 +89,27 @@ export async function updateConversionSetting(
   const profile = await requireAuth()
   if (profile.role !== 'admin') return { error: 'Only admins can manage conversion rates.' }
 
-  const id = formData.get('id') as string
-  if (!id) return { error: 'Setting ID is missing.' }
+  try {
+    const id = formData.get('id') as string
+    if (!id) return { error: 'Setting ID is missing.' }
 
-  const parsed = parseConversionForm(formData)
-  if (!parsed.ok) return { error: parsed.error }
+    const parsed = parseConversionForm(formData)
+    if (!parsed.ok) return { error: parsed.error }
 
-  const supabase = await createClient()
-  const { error } = await supabase
-    .from('material_conversion_settings')
-    .update(parsed.values)
-    .eq('id', id)
+    const supabase = await createClient()
+    const { error } = await supabase
+      .from('material_conversion_settings')
+      .update(parsed.values)
+      .eq('id', id)
 
-  if (error) { logDbError('updateConversionSetting update', error); return { error: error.message } }
+    if (error) { logDbError('updateConversionSetting update', error); return { error: error.message } }
 
-  revalidatePath('/materials')
-  return null
+    revalidatePath('/materials')
+    return null
+  } catch (err) {
+    console.error('[materials/settings-actions] updateConversionSetting unexpected error:', err)
+    return { error: err instanceof Error ? err.message : 'An unexpected error occurred while updating the conversion rate.' }
+  }
 }
 
 export async function deleteConversionSetting(
@@ -109,13 +119,18 @@ export async function deleteConversionSetting(
   const profile = await requireAuth()
   if (profile.role !== 'admin') return { error: 'Only admins can manage conversion rates.' }
 
-  const id = formData.get('id') as string
-  if (!id) return { error: 'Setting ID is missing.' }
+  try {
+    const id = formData.get('id') as string
+    if (!id) return { error: 'Setting ID is missing.' }
 
-  const supabase = await createClient()
-  const { error } = await supabase.from('material_conversion_settings').delete().eq('id', id)
-  if (error) { logDbError('deleteConversionSetting delete', error); return { error: error.message } }
+    const supabase = await createClient()
+    const { error } = await supabase.from('material_conversion_settings').delete().eq('id', id)
+    if (error) { logDbError('deleteConversionSetting delete', error); return { error: error.message } }
 
-  revalidatePath('/materials')
-  return null
+    revalidatePath('/materials')
+    return null
+  } catch (err) {
+    console.error('[materials/settings-actions] deleteConversionSetting unexpected error:', err)
+    return { error: err instanceof Error ? err.message : 'An unexpected error occurred while deleting the conversion rate.' }
+  }
 }
