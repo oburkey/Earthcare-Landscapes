@@ -24,6 +24,7 @@ export const CHECKLIST_SECTIONS: ChecklistSectionDef[] = [
     gatesBuildComplete: false,
     items: [
       { key: 'pc_backfill_grading',        label: 'Backfill, fine grading, rubbish removal',                   type: 'checkbox' },
+      { key: 'pc_concrete_paver_prelay',   label: 'Concrete/paver prelay complete',                            type: 'checkbox' },
       { key: 'pc_retic_water_meter',       label: 'Retic cut/water meter position correct (prelay)',           type: 'checkbox' },
       { key: 'pc_power_point_retic',       label: 'Power point for retic box correct location (prelay)',       type: 'checkbox' },
       { key: 'pc_downpipes_checked',       label: 'Downpipes require raising or lowering — checked',           type: 'checkbox' },

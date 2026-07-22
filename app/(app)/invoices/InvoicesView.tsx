@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toggleInvoiced, togglePendingReview, toggleApprovedForInvoicing } from './actions'
+import ApprovedByField from './ApprovedByField'
 import { getExtraJobsPricing } from '@/app/(app)/sites/[siteId]/stages/[stageId]/extra-jobs/[extraJobId]/pricing-actions'
 import { LOGO_DATA_URL } from '@/lib/pdfAssets'
 import ProgressClaimsSection from './ProgressClaimsSection'
@@ -51,6 +52,7 @@ export type ExtraJobRow = {
   title: string
   status: string
   total: number
+  approvedByName: string | null
 }
 
 export type StageData = {
@@ -929,6 +931,12 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                                   className="h-4 w-4 rounded border-border text-amber-600 focus:ring-amber-500 cursor-pointer shrink-0"
                                 />
                                 <span className="text-sm text-fg-secondary flex-1 truncate">{job.title}</span>
+                                {job.status === 'complete' && (
+                                  <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 shrink-0">
+                                    Completed
+                                  </span>
+                                )}
+                                <ApprovedByField extraJobId={job.id} approvedByName={job.approvedByName} />
                                 <span className="text-sm tabular-nums text-fg-muted shrink-0">
                                   {job.total > 0 ? fmt(job.total) : <span className="text-fg-muted">—</span>}
                                 </span>

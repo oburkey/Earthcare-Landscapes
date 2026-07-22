@@ -30,6 +30,7 @@ export type ApprovedExtraJob = {
   siteId: string
   stageId: string
   amount: number
+  approvedByName: string | null
 }
 
 export type ApprovedProgressClaim = {
@@ -351,6 +352,9 @@ export default function ApprovedPanel({
                       <span className="text-sm text-fg-secondary flex-1 min-w-0 truncate">
                         <span className="font-medium">{job.title}</span>
                         <span className="text-fg-muted"> · {job.siteName}</span>
+                        {job.approvedByName && (
+                          <span className="text-fg-muted"> · Approved by {job.approvedByName}</span>
+                        )}
                       </span>
                       <span className="text-sm tabular-nums font-medium text-fg-secondary shrink-0">{fmt(job.amount)}</span>
                     </label>

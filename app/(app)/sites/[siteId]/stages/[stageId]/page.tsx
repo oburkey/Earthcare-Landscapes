@@ -1,15 +1,14 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireAuth } from '@/lib/auth'
+import { createClient } from '@/lib/supabase/server'
 import { getCachedStage, getCachedTradeStatusByLotIds } from '@/lib/data'
-import { PrefetchLink } from '@/app/_components/PrefetchLink'
-import { STATUS_CONFIG, EXTRA_JOB_STATUS_CONFIG, formatDate, tradeStatusBadge, DELAYED_BADGE_CLASS } from '@/lib/lotStatus'
-import type { LotStatus, ExtraJobStatus } from '@/types/database'
 import { uploadStagePlan } from './actions'
 import PlanPhotoUpload from '../../PlanPhotoUpload'
 import EditStageForm from './EditStageForm'
 import MaterialsSummary from './MaterialsSummary'
-import BulkUpdateLotsButton from './BulkUpdateLotsButton'
+import StageViewSwitcher from './StageViewSwitcher'
+import type { TableLotRow, TableExtraJobRow } from './StageLotsTable'
 import { getR2SignedUrl } from '@/lib/r2'
 
 interface Props {
@@ -38,6 +37,11 @@ export default async function StagePage({ params }: Props) {
   const canManageStage     = profile.role === 'supervisor' || profile.role === 'admin'
   const isAdmin            = profile.role === 'admin'
   const showSummary        = profile.role === 'supervisor' || profile.role === 'admin'
+  // TEMPORARY (testing): Overview/Checklist table views are admin-only.
+  // Everyone else sees Cards only, with no view toggle. To widen access
+  // later, just change this line — e.g. `canManageStage` for supervisor+,
+  // or `true` to open it to everyone.
+  const canUseStageTableViews = isAdmin
 
   const { stage, extraJobs } = await getCachedStage(stageId)
 
@@ -51,7 +55,55 @@ export default async function StagePage({ params }: Props) {
   const total = lots.length
   const completed = lots.filter((l) => l.status === 'complete').length
 
-  const tradeStatusMap = await getCachedTradeStatusByLotIds(lots.map((l) => l.id))
+  const lotIds = lots.map((l) => l.id)
+  const tradeStatusMap = await getCachedTradeStatusByLotIds(lotIds)
+
+  // All checklist items for every lot in the stage, fetched in one query
+  // (not per-lot) and grouped into a lot_id -> item_key -> completed map for
+  // the Overview/Checklist table views.
+  const checklistMap: Record<string, Record<string, boolean>> = {}
+  if (lotIds.length > 0) {
+    const supabase = await createClient()
+    const { data: checklistRows } = await supabase
+      .from('lot_checklist_items')
+      .select('lot_id, item_key, completed')
+      .in('lot_id', lotIds)
+    for (const row of checklistRows ?? []) {
+      const forLot = checklistMap[row.lot_id] ?? {}
+      forLot[row.item_key] = row.completed
+      checklistMap[row.lot_id] = forLot
+    }
+  }
+
+  const lotsForTable: TableLotRow[] = lots.map((lot) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const lotAny = lot as any
+    return {
+      id: lot.id,
+      lotNumber: lot.lot_number,
+      dueDate: lot.due_date,
+      status: lot.status,
+      delayed: lotAny.delayed ?? false,
+      delayReason: lotAny.delay_reason ?? null,
+      buildComplete: lotAny.build_complete ?? false,
+      tradesCompleted: tradeStatusMap[lot.id]?.trades_completed ?? [],
+      invoiced: lotAny.invoiced ?? false,
+      quantDone: lotAny.quant_done ?? false,
+    }
+  })
+
+  const extraJobsForTable: TableExtraJobRow[] = (extraJobs ?? []).map((job) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const jobAny = job as any
+    return {
+      id: job.id,
+      title: job.title,
+      dueDate: jobAny.due_date ?? null,
+      status: job.status,
+      delayed: jobAny.delayed ?? false,
+      delayReason: jobAny.delay_reason ?? null,
+    }
+  })
 
   // Generate R2 signed URL for the stage plan if one exists
   let stagePlanUrl: string | null = null
@@ -161,154 +213,20 @@ export default async function StagePage({ params }: Props) {
           )}
         </div>
 
-        {/* ── Lots list ─────────────────────────────────────────────────────── */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-fg-secondary">Lots</h2>
-          </div>
-          {canAddLot && <BulkUpdateLotsButton stageId={stageId} siteId={siteId} />}
-
-          {lots.length === 0 ? (
-            <div className="rounded-xl border border-border bg-surface px-4 py-12 text-center">
-              <p className="text-sm text-fg-muted">No lots in this stage yet.</p>
-              {canAddLot && (
-                <Link
-                  href={`/sites/${siteId}/stages/${stageId}/new-lot`}
-                  className="mt-3 inline-block text-sm font-medium text-accent-fg hover:underline"
-                >
-                  Add the first lot →
-                </Link>
-              )}
-            </div>
-          ) : (
-            <div className="rounded-xl border border-border bg-surface overflow-hidden divide-y divide-border-subtle">
-              {lots.map((lot) => {
-                const status = lot.status as LotStatus
-                const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.not_started
-                const tradeBadge = tradeStatusBadge(tradeStatusMap[lot.id])
-                return (
-                  <PrefetchLink
-                    key={lot.id}
-                    href={`/sites/${siteId}/stages/${stageId}/lots/${lot.id}`}
-                    className="flex items-center gap-3 px-4 py-3.5 hover:bg-surface-raised active:bg-surface-raised transition-colors"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-fg">
-                          Lot {lot.lot_number}
-                        </span>
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cfg.badge}`}>
-                          {cfg.label}
-                        </span>
-                        {(lot as unknown as { delayed?: boolean }).delayed && (
-                          <span
-                            title={(lot as unknown as { delay_reason?: string | null }).delay_reason ?? undefined}
-                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${DELAYED_BADGE_CLASS}`}
-                          >
-                            Delayed
-                          </span>
-                        )}
-                        {tradeBadge && !(lot as unknown as { build_complete?: boolean }).build_complete && (
-                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${tradeBadge.badge}`}>
-                            {tradeBadge.label}
-                          </span>
-                        )}
-                        {(lot as unknown as { invoiced?: boolean }).invoiced ? (
-                          <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
-                            Invoiced
-                          </span>
-                        ) : (lot as unknown as { quant_done?: boolean }).quant_done ? (
-                          <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-surface-raised text-fg-muted">
-                            Quant Done
-                          </span>
-                        ) : null}
-                      </div>
-                      {lot.due_date && (
-                        <p className="mt-1 text-xs text-fg-muted">
-                          Due {formatDate(lot.due_date)}
-                        </p>
-                      )}
-                    </div>
-                    <svg className="h-4 w-4 shrink-0 text-fg-muted" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                    </svg>
-                  </PrefetchLink>
-                )
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* ── Extra Jobs ────────────────────────────────────────────────────── */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-semibold text-fg-secondary">Extra jobs</h2>
-            {canManageExtraJobs && (
-              <Link
-                href={`/sites/${siteId}/stages/${stageId}/extra-jobs/new`}
-                className="rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800 active:bg-green-900"
-              >
-                + Add job
-              </Link>
-            )}
-          </div>
-
-          {!extraJobs || extraJobs.length === 0 ? (
-            <div className="rounded-xl border border-border bg-surface px-4 py-10 text-center">
-              <p className="text-sm text-fg-muted">No extra jobs yet.</p>
-              {canManageExtraJobs && (
-                <Link
-                  href={`/sites/${siteId}/stages/${stageId}/extra-jobs/new`}
-                  className="mt-3 inline-block text-sm font-medium text-accent-fg hover:underline"
-                >
-                  Add the first extra job →
-                </Link>
-              )}
-            </div>
-          ) : (
-            <div className="rounded-xl border border-border bg-surface overflow-hidden divide-y divide-border-subtle">
-              {extraJobs.map((job) => {
-                const jobStatus = job.status as ExtraJobStatus
-                const cfg = EXTRA_JOB_STATUS_CONFIG[jobStatus] ?? EXTRA_JOB_STATUS_CONFIG.not_started
-                return (
-                  <Link
-                    key={job.id}
-                    href={`/sites/${siteId}/stages/${stageId}/extra-jobs/${job.id}`}
-                    className="flex items-center gap-3 px-4 py-3.5 hover:bg-surface-raised active:bg-surface-raised transition-colors"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-fg">{job.title}</span>
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cfg.badge}`}>
-                          {cfg.label}
-                        </span>
-                        {(job as unknown as { delayed?: boolean }).delayed && (
-                          <span
-                            title={(job as unknown as { delay_reason?: string | null }).delay_reason ?? undefined}
-                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${DELAYED_BADGE_CLASS}`}
-                          >
-                            Delayed
-                          </span>
-                        )}
-                      </div>
-                      {job.description && (
-                        <p className="mt-0.5 text-xs text-fg-muted truncate">{job.description}</p>
-                      )}
-                      {(job as unknown as { due_date?: string }).due_date && (
-                        <p className="mt-0.5 text-xs text-fg-muted">
-                          Due {formatDate((job as unknown as { due_date: string }).due_date)}
-                        </p>
-                      )}
-                    </div>
-                    <svg className="h-4 w-4 shrink-0 text-fg-muted" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                    </svg>
-                  </Link>
-                )
-              })}
-            </div>
-          )}
-        </div>
+        {/* ── Lots & Extra Jobs ─────────────────────────────────────────────── */}
+        <StageViewSwitcher
+          lots={lotsForTable}
+          extraJobs={extraJobsForTable}
+          tradeStatusMap={tradeStatusMap}
+          checklistMap={checklistMap}
+          siteId={siteId}
+          stageId={stageId}
+          canAddLot={canAddLot}
+          canManageExtraJobs={canManageExtraJobs}
+          canTickChecklist={canAddLot}
+          canToggleBuildComplete={canManageStage}
+          canUseTableViews={canUseStageTableViews}
+        />
 
         {/* ── Materials Summary ────────────────────────────────────────────── */}
         {showSummary && (

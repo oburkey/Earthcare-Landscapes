@@ -147,6 +147,7 @@ export interface ExtraJob {
   notes: string | null
   delayed: boolean
   delay_reason: string | null
+  approved_by_name: string | null
   created_at: string
   updated_at: string
 }

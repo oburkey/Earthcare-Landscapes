@@ -5,6 +5,33 @@ import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import type { ActionState } from '@/types/actions'
 
+// Free text, not a profiles lookup — approval sometimes comes from an
+// external developer's contact who isn't a user in the system, and finance
+// needs to know which entity to invoice regardless.
+export async function updateExtraJobApprovedBy(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Only admins can set who approved an extra job.' }
+
+  const extraJobId = formData.get('extra_job_id') as string
+  if (!extraJobId) return { error: 'Extra job ID is missing.' }
+
+  const approvedByName = (formData.get('approved_by_name') as string)?.trim() || null
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('extra_jobs')
+    .update({ approved_by_name: approvedByName })
+    .eq('id', extraJobId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/invoices')
+  return null
+}
+
 export async function toggleInvoiced(
   _prev: ActionState,
   formData: FormData

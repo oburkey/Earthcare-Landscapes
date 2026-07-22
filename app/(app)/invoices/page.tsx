@@ -29,7 +29,7 @@ export default async function InvoicesPage() {
         id, name, client_contact, completed_at, has_client_extras,
         stages(id, name, order, completed_at, is_contract_pricing, default_contract_price,
           lots(id, lot_number, build_complete, quant_done, invoiced, pending_review, approved_for_invoicing, has_client_extras, contract_price),
-          extra_jobs(id, title, status)
+          extra_jobs(id, title, status, approved_by_name)
         )
       `)
       .order('name')
@@ -348,15 +348,16 @@ export default async function InvoicesPage() {
             // Collect non-invoiced extra jobs with pricing for the panel
             if (!invoicedExtraJobIds.has(j.id) && total > 0) {
               approvedExtraJobs.push({
-                id:       j.id,
-                title:    j.title,
-                siteName: site.name,
-                siteId:   site.id,
-                stageId:  stage.id,
-                amount:   total,
+                id:             j.id,
+                title:          j.title,
+                siteName:       site.name,
+                siteId:         site.id,
+                stageId:        stage.id,
+                amount:         total,
+                approvedByName: j.approved_by_name ?? null,
               })
             }
-            return { id: j.id, title: j.title, status: j.status, total }
+            return { id: j.id, title: j.title, status: j.status, total, approvedByName: j.approved_by_name ?? null }
           })
 
           const isContractPricing = stage.is_contract_pricing ?? false
