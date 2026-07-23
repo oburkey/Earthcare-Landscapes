@@ -5,6 +5,7 @@ import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { uploadToR2, deleteFromR2 } from '@/lib/r2'
 import { ATTACHMENT_TYPES, type AttachmentType, type OrderStatus } from './order-constants'
+import { CATEGORY_TO_STOCK_FIELD, STOCK_FIELDS, type StockField } from './stock-constants'
 import type { ActionState } from '@/types/actions'
 
 function canManageOrders(role: string): boolean {
@@ -20,6 +21,7 @@ function logDbError(context: string, error: any) {
 
 export type OrderItemPayload = {
   category: string
+  plant_type: string | null
   description: string
   quantity: number
   unit: string
@@ -79,6 +81,7 @@ export async function createOrder(
       .insert(items.map((item, i) => ({
         order_id:    order.id,
         category:    item.category,
+        plant_type:  item.plant_type || null,
         description: item.description?.trim() || '',
         quantity:    item.quantity || 0,
         unit:        item.unit?.trim() || '',
@@ -186,10 +189,10 @@ async function transitionStatus(
 }
 
 // Marks an order delivered, recording the actual delivery date + invoice
-// amount, and optionally adds unambiguous item quantities (Mulch/Edging/
-// Turf/Drippers) to site_stock. Plant categories are NOT auto-added — order
-// line items don't record pot size (140mm vs 200mm), so there's no reliable
-// way to attribute plant quantities to a stock column automatically.
+// amount, and optionally adds delivered quantities to site_stock. The
+// primary category (pot size / material type) on each line item maps
+// directly to a stock column via CATEGORY_TO_STOCK_FIELD — 'Other' has no
+// mapping and is skipped.
 export async function markOrderDelivered(
   _prev: ActionState,
   formData: FormData
@@ -236,37 +239,35 @@ export async function markOrderDelivered(
     if (updateStock) {
       const { data: items, error: itemsFetchError } = await supabase
         .from('material_order_items')
-        .select('category, quantity, unit')
+        .select('category, quantity')
         .eq('order_id', orderId)
       if (itemsFetchError) logDbError('markOrderDelivered fetch material_order_items', itemsFetchError)
 
-      const stockDelta = { mulch_tonnes: 0, edging_metres: 0, turf_rolls: 0, drippers_packs: 0 }
+      const stockDelta: Partial<Record<StockField, number>> = {}
       for (const item of items ?? []) {
-        const unit = (item.unit || '').toLowerCase()
-        const qty  = Number(item.quantity) || 0
-        if (item.category === 'Mulch'    && unit.includes('tonne'))               stockDelta.mulch_tonnes  += qty
-        if (item.category === 'Edging'   && (unit.includes('metre') || unit.includes('meter'))) stockDelta.edging_metres += qty
-        if (item.category === 'Turf'     && unit.includes('roll'))                stockDelta.turf_rolls    += qty
-        if (item.category === 'Drippers' && unit.includes('pack'))                stockDelta.drippers_packs += qty
+        const field = CATEGORY_TO_STOCK_FIELD[item.category]
+        if (!field) continue
+        const qty = Number(item.quantity) || 0
+        if (qty <= 0) continue
+        stockDelta[field] = (stockDelta[field] ?? 0) + qty
       }
 
-      const hasDelta = Object.values(stockDelta).some((v) => v > 0)
-      if (hasDelta) {
+      const deltaFields = Object.keys(stockDelta) as StockField[]
+      if (deltaFields.length > 0) {
         const { data: existing, error: stockFetchError } = await supabase
           .from('site_stock')
-          .select('mulch_tonnes, edging_metres, turf_rolls, drippers_packs')
+          .select(STOCK_FIELDS.join(', '))
           .eq('site_id', order.site_id)
           .maybeSingle()
         if (stockFetchError) logDbError('markOrderDelivered fetch site_stock', stockFetchError)
 
-        const { error: stockUpsertError } = await supabase.from('site_stock').upsert({
-          site_id:          order.site_id,
-          mulch_tonnes:     Number(existing?.mulch_tonnes ?? 0) + stockDelta.mulch_tonnes,
-          edging_metres:    Number(existing?.edging_metres ?? 0) + stockDelta.edging_metres,
-          turf_rolls:       Number(existing?.turf_rolls ?? 0) + stockDelta.turf_rolls,
-          drippers_packs:   Number(existing?.drippers_packs ?? 0) + stockDelta.drippers_packs,
-          last_updated_by:  profile.id,
-        }, { onConflict: 'site_id' })
+        const existingRow = (existing ?? {}) as Partial<Record<StockField, number>>
+        const update: Record<string, unknown> = { site_id: order.site_id, last_updated_by: profile.id }
+        for (const field of deltaFields) {
+          update[field] = Number(existingRow[field] ?? 0) + (stockDelta[field] ?? 0)
+        }
+
+        const { error: stockUpsertError } = await supabase.from('site_stock').upsert(update, { onConflict: 'site_id' })
         if (stockUpsertError) logDbError('markOrderDelivered upsert site_stock', stockUpsertError)
 
         revalidatePath('/materials')

@@ -6,7 +6,7 @@ import {
   uploadOrderAttachment, deleteOrderAttachment,
   type OrderItemPayload,
 } from './orders-actions'
-import { ORDER_ITEM_CATEGORIES } from './order-constants'
+import { ORDER_ITEM_CATEGORIES, PLANT_TYPE_OPTIONS, MATERIAL_UNITS } from './order-constants'
 import type { ActionState } from '@/types/actions'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -16,6 +16,7 @@ export type OrderStatus = 'draft' | 'ordered' | 'on_hold' | 'delivered'
 export type OrderItemRow = {
   id: string
   category: string
+  plantType: string | null
   description: string
   quantity: number
   unit: string
@@ -69,8 +70,13 @@ const STATUS_CLASSES: Record<OrderStatus, string> = {
   delivered: 'bg-green-100 text-green-700',
 }
 
+function defaultPlantType(category: string): string | null {
+  return PLANT_TYPE_OPTIONS[category]?.[0] ?? null
+}
+
 function emptyItem(): OrderItemPayload {
-  return { category: ORDER_ITEM_CATEGORIES[0], description: '', quantity: 0, unit: '', unit_price: null, notes: '' }
+  const category = ORDER_ITEM_CATEGORIES[0]
+  return { category, plant_type: defaultPlantType(category), description: '', quantity: 0, unit: '', unit_price: null, notes: '' }
 }
 
 // ── New order form ────────────────────────────────────────────────────────────
@@ -91,6 +97,15 @@ function NewOrderForm({ sites, suppliers, onDone }: {
 
   function updateItem(i: number, patch: Partial<OrderItemPayload>) {
     setItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, ...patch } : it)))
+  }
+
+  function updateCategory(i: number, category: string) {
+    const options = PLANT_TYPE_OPTIONS[category]
+    setItems((prev) => prev.map((it, idx) => {
+      if (idx !== i) return it
+      const plant_type = options ? (options.includes(it.plant_type ?? '') ? it.plant_type : options[0]) : null
+      return { ...it, category, plant_type }
+    }))
   }
 
   function submitWithStatus(status: 'draft' | 'ordered', e: React.MouseEvent<HTMLButtonElement>) {
@@ -167,58 +182,73 @@ function NewOrderForm({ sites, suppliers, onDone }: {
           </div>
 
           <div className="space-y-2">
-            {items.map((item, i) => (
+            {items.map((item, i) => {
+              const plantTypeOptions = PLANT_TYPE_OPTIONS[item.category]
+              return (
               <div key={i} className="rounded-lg border border-border p-3 space-y-2">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className={`grid grid-cols-2 gap-2 ${plantTypeOptions ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
                   <select
                     value={item.category}
-                    onChange={(e) => updateItem(i, { category: e.target.value })}
+                    onChange={(e) => updateCategory(i, e.target.value)}
                     className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-fg focus:border-green-600 focus:outline-none"
                   >
                     {ORDER_ITEM_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
+                  {plantTypeOptions && (
+                    <select
+                      value={item.plant_type ?? plantTypeOptions[0]}
+                      onChange={(e) => updateItem(i, { plant_type: e.target.value })}
+                      className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-fg focus:border-green-600 focus:outline-none"
+                    >
+                      {plantTypeOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  )}
                   <input
                     type="text" placeholder="Description" value={item.description}
                     onChange={(e) => updateItem(i, { description: e.target.value })}
                     className="col-span-2 sm:col-span-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-fg placeholder:text-fg-muted focus:border-green-600 focus:outline-none"
                   />
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   <input
                     type="number" step="0.01" min="0" placeholder="Qty" value={item.quantity || ''}
                     onChange={(e) => updateItem(i, { quantity: parseFloat(e.target.value) || 0 })}
                     className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-fg placeholder:text-fg-muted focus:border-green-600 focus:outline-none"
                   />
-                  <input
-                    type="text" placeholder="Unit" value={item.unit}
+                  <select
+                    value={item.unit}
                     onChange={(e) => updateItem(i, { unit: e.target.value })}
-                    className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-fg placeholder:text-fg-muted focus:border-green-600 focus:outline-none"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
+                    className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-fg focus:border-green-600 focus:outline-none"
+                  >
+                    <option value="">— Unit —</option>
+                    {MATERIAL_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                  </select>
                   <input
                     type="number" step="0.01" min="0" placeholder="Unit price"
                     value={item.unit_price ?? ''}
                     onChange={(e) => updateItem(i, { unit_price: e.target.value ? parseFloat(e.target.value) : null })}
                     className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-fg placeholder:text-fg-muted focus:border-green-600 focus:outline-none"
                   />
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text" placeholder="Notes" value={item.notes}
-                      onChange={(e) => updateItem(i, { notes: e.target.value })}
-                      className="flex-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-fg placeholder:text-fg-muted focus:border-green-600 focus:outline-none"
-                    />
-                    {items.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => setItems((prev) => prev.filter((_, idx) => idx !== i))}
-                        className="shrink-0 text-xs text-red-500 hover:text-red-700"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text" placeholder="Notes" value={item.notes}
+                    onChange={(e) => updateItem(i, { notes: e.target.value })}
+                    className="flex-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-fg placeholder:text-fg-muted focus:border-green-600 focus:outline-none"
+                  />
+                  {items.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setItems((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="shrink-0 text-xs text-red-500 hover:text-red-700"
+                    >
+                      Remove
+                    </button>
+                  )}
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
         </div>
 
@@ -292,7 +322,7 @@ function DeliverForm({ orderId, onDone }: { orderId: string; onDone: () => void 
           className="h-4 w-4 rounded border-border text-accent-fg focus:ring-green-600"
         />
         <input type="hidden" name="update_stock" value={updateStock ? 'true' : 'false'} />
-        Update site stock with delivered quantities (Mulch, Edging, Turf, Drippers only — plant pot sizes aren&apos;t tracked on order lines)
+        Update site stock with delivered quantities (based on each line item&apos;s category — pot sizes, Mulch, Edging, Turf, Drippers/Retic; &quot;Other&quot; is not tracked)
       </label>
 
       {state?.error && <p className="text-xs text-red-600">{state.error}</p>}
@@ -411,6 +441,7 @@ function OrderCard({ order, canManage, isAdmin }: { order: OrderRow; canManage: 
               <thead>
                 <tr className="text-fg-muted">
                   <th className="text-left font-medium pb-1.5 pr-2">Category</th>
+                  <th className="text-left font-medium pb-1.5 pr-2">Type</th>
                   <th className="text-left font-medium pb-1.5 pr-2">Description</th>
                   <th className="text-right font-medium pb-1.5 pr-2">Qty</th>
                   <th className="text-left font-medium pb-1.5 pr-2">Unit</th>
@@ -422,6 +453,7 @@ function OrderCard({ order, canManage, isAdmin }: { order: OrderRow; canManage: 
                 {order.items.map((item) => (
                   <tr key={item.id} className="border-t border-border-subtle">
                     <td className="py-1.5 pr-2 text-fg-secondary">{item.category}</td>
+                    <td className="py-1.5 pr-2 text-fg-muted">{item.plantType || '—'}</td>
                     <td className="py-1.5 pr-2 text-fg-muted">{item.description || '—'}</td>
                     <td className="py-1.5 pr-2 text-right text-fg-muted">{item.quantity}</td>
                     <td className="py-1.5 pr-2 text-fg-muted">{item.unit || '—'}</td>

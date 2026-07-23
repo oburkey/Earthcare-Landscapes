@@ -3,6 +3,7 @@
 import { useActionState, useState } from 'react'
 import { createConversionSetting, updateConversionSetting, deleteConversionSetting } from './settings-actions'
 import PlantRatiosSettings, { type RatioRow, type SiteOption as PlantRatioSiteOption } from './PlantRatiosSettings'
+import { MATERIAL_UNITS } from './order-constants'
 import type { ActionState } from '@/types/actions'
 
 export type ConversionSettingRow = {
@@ -40,19 +41,23 @@ function ConversionForm({
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-medium text-fg-muted mb-1">Converts from (unit)</label>
-          <input
-            name="unit_from" type="text" required defaultValue={defaults.unit_from ?? ''}
-            placeholder="e.g. tonne"
-            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
-          />
+          <select
+            name="unit_from" required defaultValue={defaults.unit_from ?? ''}
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+          >
+            <option value="" disabled>— Select unit —</option>
+            {MATERIAL_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+          </select>
         </div>
         <div>
           <label className="block text-xs font-medium text-fg-muted mb-1">Converts to (unit)</label>
-          <input
-            name="unit_to" type="text" required defaultValue={defaults.unit_to ?? ''}
-            placeholder="e.g. m²"
-            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
-          />
+          <select
+            name="unit_to" required defaultValue={defaults.unit_to ?? ''}
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+          >
+            <option value="" disabled>— Select unit —</option>
+            {MATERIAL_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+          </select>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">

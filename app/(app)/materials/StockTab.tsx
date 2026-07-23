@@ -9,6 +9,9 @@ export type SiteStockRow = {
   siteId: string
   plants140mm: number
   plants200mm: number
+  plants300mm: number
+  plants35l: number
+  plants90l: number
   mulchTonnes: number
   edgingMetres: number
   turfRolls: number
@@ -20,12 +23,15 @@ export type SiteStockRow = {
 export type SiteOption = { id: string; name: string }
 
 const FIELD_DEFS: { field: StockField; label: string; unit: string; step: string }[] = [
-  { field: 'plants_140mm',   label: '140mm plants', unit: 'plants',  step: '1' },
-  { field: 'plants_200mm',   label: '200mm plants', unit: 'plants',  step: '1' },
-  { field: 'mulch_tonnes',   label: 'Mulch',         unit: 'tonnes', step: '0.1' },
-  { field: 'edging_metres',  label: 'Edging',        unit: 'metres', step: '0.1' },
-  { field: 'turf_rolls',     label: 'Turf',          unit: 'rolls',  step: '1' },
-  { field: 'drippers_packs', label: 'Drippers',      unit: 'packs',  step: '1' },
+  { field: 'plants_140mm',   label: '140mm plants',    unit: 'plants',  step: '1' },
+  { field: 'plants_200mm',   label: '200mm plants',    unit: 'plants',  step: '1' },
+  { field: 'plants_300mm',   label: '300mm plants',    unit: 'plants',  step: '1' },
+  { field: 'plants_35l',     label: '35 Litre plants', unit: 'plants',  step: '1' },
+  { field: 'plants_90l',     label: '90 Litre plants', unit: 'plants',  step: '1' },
+  { field: 'mulch_tonnes',   label: 'Mulch',            unit: 'tonnes', step: '0.1' },
+  { field: 'edging_metres',  label: 'Edging',           unit: 'metres', step: '0.1' },
+  { field: 'turf_rolls',     label: 'Turf',             unit: 'rolls',  step: '1' },
+  { field: 'drippers_packs', label: 'Drippers/Retic',   unit: 'packs',  step: '1' },
 ]
 
 function fieldValue(row: SiteStockRow | undefined, field: StockField): number {
@@ -33,6 +39,9 @@ function fieldValue(row: SiteStockRow | undefined, field: StockField): number {
   switch (field) {
     case 'plants_140mm':   return row.plants140mm
     case 'plants_200mm':   return row.plants200mm
+    case 'plants_300mm':   return row.plants300mm
+    case 'plants_35l':     return row.plants35l
+    case 'plants_90l':     return row.plants90l
     case 'mulch_tonnes':   return row.mulchTonnes
     case 'edging_metres':  return row.edgingMetres
     case 'turf_rolls':     return row.turfRolls

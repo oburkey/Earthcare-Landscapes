@@ -84,7 +84,7 @@ export default async function MaterialsPage() {
       .select(`
         id, site_id, supplier_id, order_date, delivery_date, status, notes, invoice_amount,
         sites(name), contacts(name),
-        material_order_items(id, category, description, quantity, unit, unit_price, notes, order_index),
+        material_order_items(id, category, plant_type, description, quantity, unit, unit_price, notes, order_index),
         material_order_attachments(id, attachment_type, storage_path, file_name)
       `)
       .order('order_date', { ascending: false })
@@ -105,6 +105,7 @@ export default async function MaterialsPage() {
             .map((i) => ({
               id:          i.id as string,
               category:    i.category as string,
+              plantType:   (i.plant_type ?? null) as string | null,
               description: (i.description ?? '') as string,
               quantity:    Number(i.quantity ?? 0),
               unit:        (i.unit ?? '') as string,
@@ -147,7 +148,7 @@ export default async function MaterialsPage() {
   try {
     const { data, error } = await supabase
       .from('site_stock')
-      .select('site_id, plants_140mm, plants_200mm, mulch_tonnes, edging_metres, turf_rolls, drippers_packs, updated_at, profiles(first_name, last_name)')
+      .select('site_id, plants_140mm, plants_200mm, plants_300mm, plants_35l, plants_90l, mulch_tonnes, edging_metres, turf_rolls, drippers_packs, updated_at, profiles(first_name, last_name)')
 
     if (isMissingTable(error)) {
       stockTableExists = false
@@ -160,6 +161,9 @@ export default async function MaterialsPage() {
             siteId:            r.site_id,
             plants140mm:       Number(r.plants_140mm ?? 0),
             plants200mm:       Number(r.plants_200mm ?? 0),
+            plants300mm:       Number(r.plants_300mm ?? 0),
+            plants35l:         Number(r.plants_35l ?? 0),
+            plants90l:         Number(r.plants_90l ?? 0),
             mulchTonnes:       Number(r.mulch_tonnes ?? 0),
             edgingMetres:      Number(r.edging_metres ?? 0),
             turfRolls:         Number(r.turf_rolls ?? 0),

@@ -1,12 +1,32 @@
-// Plain data shared between orders-actions.ts (a 'use server' module, which
-// per Next.js's Server Actions rules may only export async functions — a
-// value export like this array resolves to undefined when imported into a
-// client component across that boundary) and client components like
-// OrdersTab.tsx that need the actual array at runtime.
+// Plain data shared between orders-actions.ts / settings-actions.ts (both
+// 'use server' modules, which per Next.js's Server Actions rules may only
+// export async functions — a value export like these arrays resolves to
+// undefined when imported into a client component across that boundary) and
+// client components like OrdersTab.tsx / SettingsTab.tsx that need the
+// actual arrays at runtime.
 
+// Primary category — pot size / material type. This is what drives the
+// site_stock auto-update on delivery (see CATEGORY_TO_STOCK_FIELD below).
 export const ORDER_ITEM_CATEGORIES = [
-  'Small Shrubs', 'Medium Shrubs', 'Ground Covers', 'Strappy/Grasses',
-  'Hedging', 'Trees', 'Mulch', 'Edging', 'Turf', 'Drippers', 'Other',
+  '140mm', '200mm', '300mm', '35 Litre', '90 Litre',
+  'Mulch', 'Edging', 'Turf', 'Drippers/Retic', 'Other',
+] as const
+
+// Secondary plant type/variety — shown only for the plant-size categories
+// above. Info only: never affects stock. More varieties can be added per
+// size later without touching the primary category list.
+export const PLANT_TYPE_OPTIONS: Record<string, readonly string[]> = {
+  '140mm':    ['Small Shrubs', 'Medium Shrubs', 'Ground Covers', 'Strappy/Grasses', 'Hedging'],
+  '200mm':    ['Small Shrubs', 'Medium Shrubs', 'Ground Covers', 'Strappy/Grasses', 'Hedging'],
+  '300mm':    ['Small Shrubs', 'Medium Shrubs', 'Ground Covers', 'Strappy/Grasses', 'Hedging'],
+  '35 Litre': ['Citrus Tree', 'Feature Tree'],
+  '90 Litre': ['Citrus Tree', 'Feature Tree'],
+}
+
+// Units shared between order line items and material conversion settings
+// ("unit from" / "unit to") so quantities line up when stock auto-updates.
+export const MATERIAL_UNITS = [
+  'plants', 'tonnes', 'rolls', 'packs', 'linear metres (lm)', 'm²', 'items', 'bags', 'pallets',
 ] as const
 
 export const ORDER_STATUSES = ['draft', 'ordered', 'on_hold', 'delivered'] as const
