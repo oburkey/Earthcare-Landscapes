@@ -7,7 +7,8 @@ import {
   type OrderItemPayload,
 } from './orders-actions'
 import { ORDER_ITEM_CATEGORIES, PLANT_TYPE_OPTIONS, MATERIAL_UNITS } from './order-constants'
-import type { ActionState } from '@/types/actions'
+import type { ConversionSettingRow, ConversionLinkRow } from './SettingsTab'
+import type { ActionState, MutationState } from '@/types/actions'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -76,13 +77,15 @@ function defaultPlantType(category: string): string | null {
 
 function emptyItem(): OrderItemPayload {
   const category = ORDER_ITEM_CATEGORIES[0]
-  return { category, plant_type: defaultPlantType(category), description: '', quantity: 0, unit: '', unit_price: null, notes: '' }
+  return { category, plant_type: defaultPlantType(category), description: '', quantity: 0, unit: '', unit_price: null, notes: '', stock_field: null }
 }
 
 // ── New order form ────────────────────────────────────────────────────────────
 
-function NewOrderForm({ sites, suppliers, onDone }: {
-  sites: SiteOption[]; suppliers: SupplierOption[]; onDone: () => void
+function NewOrderForm({ sites, suppliers, conversionSettings, conversionLinks, onDone }: {
+  sites: SiteOption[]; suppliers: SupplierOption[]
+  conversionSettings: ConversionSettingRow[]; conversionLinks: ConversionLinkRow[]
+  onDone: () => void
 }) {
   const [items, setItems] = useState<OrderItemPayload[]>([emptyItem()])
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
@@ -113,6 +116,22 @@ function NewOrderForm({ sites, suppliers, onDone }: {
     if (!form) return
     const hidden = form.querySelector('input[name="status"]') as HTMLInputElement | null
     if (hidden) hidden.value = status
+  }
+
+  // Suggests secondary materials configured against the conversion setting
+  // matching this item's category (e.g. Turf -> Crackerdust/Turf pegs/Turf
+  // sand). Quantity is the primary item's quantity converted to the
+  // setting's usable unit (unit_to) via its conversion_rate, then scaled by
+  // the link's own per-unit_to rate.
+  function suggestedQty(item: OrderItemPayload, setting: ConversionSettingRow, link: ConversionLinkRow): number {
+    return Math.round(item.quantity * setting.conversion_rate * link.rate * 100) / 100
+  }
+
+  function addSuggestedItem(link: ConversionLinkRow, qty: number) {
+    setItems((prev) => [...prev, {
+      category: 'Other', plant_type: null, description: link.name, quantity: qty,
+      unit: link.unit, unit_price: null, notes: '', stock_field: link.stockField,
+    }])
   }
 
   return (
@@ -184,6 +203,10 @@ function NewOrderForm({ sites, suppliers, onDone }: {
           <div className="space-y-2">
             {items.map((item, i) => {
               const plantTypeOptions = PLANT_TYPE_OPTIONS[item.category]
+              const matchingSetting = conversionSettings.find((cs) => cs.name === item.category)
+              const itemLinks = matchingSetting
+                ? conversionLinks.filter((l) => l.parentSettingId === matchingSetting.id)
+                : []
               return (
               <div key={i} className="rounded-lg border border-border p-3 space-y-2">
                 <div className={`grid grid-cols-2 gap-2 ${plantTypeOptions ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
@@ -246,6 +269,28 @@ function NewOrderForm({ sites, suppliers, onDone }: {
                     </button>
                   )}
                 </div>
+                {matchingSetting && itemLinks.length > 0 && item.quantity > 0 && (
+                  <div className="rounded-lg bg-accent-dim p-2 space-y-1.5">
+                    <p className="text-xs text-fg-secondary">
+                      Based on {item.quantity} {item.unit || matchingSetting.unit_from} of {item.category}, you may also need:
+                    </p>
+                    {itemLinks.map((link) => {
+                      const qty = suggestedQty(item, matchingSetting, link)
+                      return (
+                        <div key={link.id} className="flex items-center justify-between gap-2 text-xs">
+                          <span className="text-fg-secondary">{link.name} ({qty} {link.unit})</span>
+                          <button
+                            type="button"
+                            onClick={() => addSuggestedItem(link, qty)}
+                            className="shrink-0 rounded-lg border border-border px-2 py-1 text-xs font-medium text-fg-secondary hover:bg-surface-raised"
+                          >
+                            Add to order
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
               )
             })}
@@ -284,12 +329,17 @@ function NewOrderForm({ sites, suppliers, onDone }: {
 
 // ── Deliver confirmation ──────────────────────────────────────────────────────
 
-function DeliverForm({ orderId, onDone }: { orderId: string; onDone: () => void }) {
+function DeliverForm({ orderId, onDone, onStockWarning }: {
+  orderId: string; onDone: () => void; onStockWarning: (message: string) => void
+}) {
   const [updateStock, setUpdateStock] = useState(true)
-  const [state, formAction, pending] = useActionState<ActionState, FormData>(
+  const [state, formAction, pending] = useActionState<MutationState, FormData>(
     async (prev, formData) => {
       const result = await markOrderDelivered(prev, formData)
-      if (!result) onDone()
+      if (!result?.error) {
+        if (result?.success) onStockWarning(result.success)
+        onDone()
+      }
       return result
     },
     null
@@ -393,11 +443,49 @@ function AttachmentUpload({ orderId }: { orderId: string }) {
   )
 }
 
+// ── Delete order (admin only, inline confirm) ────────────────────────────────
+
+function DeleteOrderControl({ orderId }: { orderId: string }) {
+  const [confirming, setConfirming] = useState(false)
+  const [state, formAction, pending] = useActionState<ActionState, FormData>(deleteOrder, null)
+
+  if (!confirming) {
+    return (
+      <button type="button" onClick={() => setConfirming(true)} className="text-xs text-red-500 hover:text-red-700">
+        Delete order
+      </button>
+    )
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-3">
+        <p className="text-xs text-fg-muted">Are you sure?</p>
+        <form action={formAction}>
+          <input type="hidden" name="order_id" value={orderId} />
+          <button
+            type="submit"
+            disabled={pending}
+            className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            {pending ? 'Deleting…' : 'Confirm delete'}
+          </button>
+        </form>
+        <button type="button" onClick={() => setConfirming(false)} className="text-xs text-fg-muted hover:text-fg-secondary">
+          Cancel
+        </button>
+      </div>
+      {state?.error && <p className="mt-1 text-xs text-red-600">{state.error}</p>}
+    </div>
+  )
+}
+
 // ── Order row ─────────────────────────────────────────────────────────────────
 
 function OrderCard({ order, canManage, isAdmin }: { order: OrderRow; canManage: boolean; isAdmin: boolean }) {
   const [expanded, setExpanded] = useState(false)
   const [delivering, setDelivering] = useState(false)
+  const [stockWarning, setStockWarning] = useState<string | null>(null)
   const itemCount = order.items.length
 
   return (
@@ -428,6 +516,14 @@ function OrderCard({ order, canManage, isAdmin }: { order: OrderRow; canManage: 
 
       {expanded && (
         <div className="border-t border-border-subtle px-5 py-4 space-y-4">
+          {stockWarning && (
+            <div className="flex items-start justify-between gap-2 rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-700">
+              <p>{stockWarning}</p>
+              <button type="button" onClick={() => setStockWarning(null)} className="shrink-0 font-medium hover:underline">
+                Dismiss
+              </button>
+            </div>
+          )}
           {order.notes && <p className="text-sm text-fg-muted italic">{order.notes}</p>}
           {order.deliveryDate && (
             <p className="text-xs text-fg-muted">
@@ -497,7 +593,7 @@ function OrderCard({ order, canManage, isAdmin }: { order: OrderRow; canManage: 
           {canManage && order.status !== 'delivered' && (
             <div className="border-t border-border-subtle pt-3">
               {delivering ? (
-                <DeliverForm orderId={order.id} onDone={() => setDelivering(false)} />
+                <DeliverForm orderId={order.id} onDone={() => setDelivering(false)} onStockWarning={setStockWarning} />
               ) : (
                 <div className="flex flex-wrap items-start gap-2">
                   {order.status === 'draft' && (
@@ -530,14 +626,9 @@ function OrderCard({ order, canManage, isAdmin }: { order: OrderRow; canManage: 
             </div>
           )}
 
-          {order.status === 'delivered' && isAdmin && (
+          {isAdmin && (
             <div className="border-t border-border-subtle pt-3">
-              <form action={async (fd) => { await deleteOrder(null, fd) }}>
-                <input type="hidden" name="order_id" value={order.id} />
-                <button type="submit" className="text-xs text-red-500 hover:text-red-700">
-                  Delete order
-                </button>
-              </form>
+              <DeleteOrderControl orderId={order.id} />
             </div>
           )}
         </div>
@@ -615,13 +706,18 @@ function FilterPanel({ sites, filters, onChange, onClose }: {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function OrdersTab({ orders, sites, suppliers, canManage, isAdmin, tableExists }: {
+export default function OrdersTab({
+  orders, sites, suppliers, canManage, isAdmin, tableExists,
+  conversionSettings, conversionLinks,
+}: {
   orders: OrderRow[]
   sites: SiteOption[]
   suppliers: SupplierOption[]
   canManage: boolean
   isAdmin: boolean
   tableExists: boolean
+  conversionSettings: ConversionSettingRow[]
+  conversionLinks: ConversionLinkRow[]
 }) {
   const [creating, setCreating] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
@@ -670,7 +766,11 @@ export default function OrdersTab({ orders, sites, suppliers, canManage, isAdmin
       )}
 
       {creating && canManage && (
-        <NewOrderForm sites={sites} suppliers={suppliers} onDone={() => setCreating(false)} />
+        <NewOrderForm
+          sites={sites} suppliers={suppliers}
+          conversionSettings={conversionSettings} conversionLinks={conversionLinks}
+          onDone={() => setCreating(false)}
+        />
       )}
 
       {filtered.length === 0 ? (

@@ -1,21 +1,23 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { uploadToR2, deleteFromR2 } from '@/lib/r2'
 import { ATTACHMENT_TYPES, type AttachmentType, type OrderStatus } from './order-constants'
 import { CATEGORY_TO_STOCK_FIELD, STOCK_FIELDS, type StockField } from './stock-constants'
-import type { ActionState } from '@/types/actions'
+import type { ActionState, MutationState } from '@/types/actions'
 
 function canManageOrders(role: string): boolean {
   return role === 'leading_hand' || role === 'supervisor' || role === 'admin'
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function logDbError(context: string, error: any) {
+function logDbError(context: string, error: any, extra?: Record<string, unknown>) {
   console.error(`[materials/orders-actions] ${context}:`, {
     message: error?.message, code: error?.code, details: error?.details, hint: error?.hint,
+    ...extra,
   })
 }
 
@@ -27,6 +29,10 @@ export type OrderItemPayload = {
   unit: string
   unit_price: number | null
   notes: string
+  // Explicit site_stock column override for suggestion-added linked-material
+  // line items (see markOrderDelivered). Null for ordinary category-driven
+  // items, which resolve their stock column from CATEGORY_TO_STOCK_FIELD instead.
+  stock_field: string | null
 }
 
 export async function createOrder(
@@ -87,6 +93,7 @@ export async function createOrder(
         unit:        item.unit?.trim() || '',
         unit_price:  item.unit_price ?? null,
         notes:       item.notes?.trim() || null,
+        stock_field: item.stock_field ?? null,
         order_index: i,
       })))
 
@@ -189,14 +196,15 @@ async function transitionStatus(
 }
 
 // Marks an order delivered, recording the actual delivery date + invoice
-// amount, and optionally adds delivered quantities to site_stock. The
-// primary category (pot size / material type) on each line item maps
-// directly to a stock column via CATEGORY_TO_STOCK_FIELD — 'Other' has no
-// mapping and is skipped.
+// amount, and optionally adds delivered quantities to site_stock. Each line
+// item's stock column is its explicit stock_field override if set (used by
+// linked-material items added from the Orders tab suggestion panel),
+// otherwise the primary category (pot size / material type) mapped via
+// CATEGORY_TO_STOCK_FIELD — 'Other' has no mapping and is skipped.
 export async function markOrderDelivered(
-  _prev: ActionState,
+  _prev: MutationState,
   formData: FormData
-): Promise<ActionState> {
+): Promise<MutationState> {
   const profile = await requireAuth()
   if (!canManageOrders(profile.role)) return { error: 'Only leading hands and above can update orders.' }
 
@@ -239,13 +247,16 @@ export async function markOrderDelivered(
     if (updateStock) {
       const { data: items, error: itemsFetchError } = await supabase
         .from('material_order_items')
-        .select('category, quantity')
+        .select('category, quantity, stock_field')
         .eq('order_id', orderId)
-      if (itemsFetchError) logDbError('markOrderDelivered fetch material_order_items', itemsFetchError)
+      if (itemsFetchError) logDbError('markOrderDelivered fetch material_order_items', itemsFetchError, { orderId })
 
       const stockDelta: Partial<Record<StockField, number>> = {}
       for (const item of items ?? []) {
-        const field = CATEGORY_TO_STOCK_FIELD[item.category]
+        const override = item.stock_field as string | null
+        const field = override && (STOCK_FIELDS as readonly string[]).includes(override)
+          ? (override as StockField)
+          : CATEGORY_TO_STOCK_FIELD[item.category]
         if (!field) continue
         const qty = Number(item.quantity) || 0
         if (qty <= 0) continue
@@ -253,13 +264,33 @@ export async function markOrderDelivered(
       }
 
       const deltaFields = Object.keys(stockDelta) as StockField[]
-      if (deltaFields.length > 0) {
-        const { data: existing, error: stockFetchError } = await supabase
+      if (deltaFields.length === 0) {
+        // Requested but nothing mapped to a stock column (e.g. every line
+        // item was 'Other') — not an error, just informational.
+        console.info('[materials/orders-actions] markOrderDelivered: update_stock requested but no line items mapped to a stock column', { orderId })
+      } else {
+        // site_stock read/write use the admin client so the write is
+        // guaranteed to land once canManageOrders() above has already
+        // authorized the caller (leading_hand+) — canManageOrders already
+        // matches site_stock's own RLS, so this isn't bypassing a stricter
+        // policy, just insurance against any DB-level failure (same
+        // reasoning as the pre-start vehicle-hours update in safety/actions.ts).
+        const adminSupabase = createAdminClient()
+        const { data: existing, error: stockFetchError } = await adminSupabase
           .from('site_stock')
           .select(STOCK_FIELDS.join(', '))
           .eq('site_id', order.site_id)
           .maybeSingle()
-        if (stockFetchError) logDbError('markOrderDelivered fetch site_stock', stockFetchError)
+
+        if (stockFetchError) {
+          // Abort rather than fall back to a zero baseline — treating a
+          // failed read as "site has no existing stock" would upsert only
+          // this delivery's delta and silently wipe whatever stock was
+          // already recorded.
+          logDbError('markOrderDelivered fetch site_stock — aborting stock update', stockFetchError, { siteId: order.site_id, deltaFields, stockDelta })
+          revalidatePath('/materials')
+          return { success: 'Order marked delivered, but stock could not be updated automatically — update the Stock tab manually.' }
+        }
 
         const existingRow = (existing ?? {}) as Partial<Record<StockField, number>>
         const update: Record<string, unknown> = { site_id: order.site_id, last_updated_by: profile.id }
@@ -267,8 +298,12 @@ export async function markOrderDelivered(
           update[field] = Number(existingRow[field] ?? 0) + (stockDelta[field] ?? 0)
         }
 
-        const { error: stockUpsertError } = await supabase.from('site_stock').upsert(update, { onConflict: 'site_id' })
-        if (stockUpsertError) logDbError('markOrderDelivered upsert site_stock', stockUpsertError)
+        const { error: stockUpsertError } = await adminSupabase.from('site_stock').upsert(update, { onConflict: 'site_id' })
+        if (stockUpsertError) {
+          logDbError('markOrderDelivered upsert site_stock', stockUpsertError, { siteId: order.site_id, update })
+          revalidatePath('/materials')
+          return { success: 'Order marked delivered, but stock could not be updated automatically — update the Stock tab manually.' }
+        }
 
         revalidatePath('/materials')
       }

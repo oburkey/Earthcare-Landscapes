@@ -3,6 +3,7 @@
 import { useActionState, useState } from 'react'
 import { createConversionSetting, updateConversionSetting, deleteConversionSetting } from './settings-actions'
 import PlantRatiosSettings, { type RatioRow, type SiteOption as PlantRatioSiteOption } from './PlantRatiosSettings'
+import ConversionLinksSection from './ConversionLinksSection'
 import { MATERIAL_UNITS } from './order-constants'
 import type { ActionState } from '@/types/actions'
 
@@ -14,6 +15,16 @@ export type ConversionSettingRow = {
   conversion_rate: number
   wastage_pct: number
   notes: string | null
+}
+
+export type ConversionLinkRow = {
+  id: string
+  parentSettingId: string
+  name: string
+  rate: number
+  unit: string
+  stockField: string | null
+  orderIndex: number
 }
 
 function ConversionForm({
@@ -111,17 +122,21 @@ function ConversionForm({
 
 export default function SettingsTab({
   settings, isAdmin, tableExists,
+  conversionLinks, conversionLinksTableExists,
   plantRatiosGlobal, plantRatiosOverrides, plantRatiosSites,
 }: {
   settings: ConversionSettingRow[]
   isAdmin: boolean
   tableExists: boolean
+  conversionLinks: ConversionLinkRow[]
+  conversionLinksTableExists: boolean
   plantRatiosGlobal: RatioRow | null
   plantRatiosOverrides: RatioRow[]
   plantRatiosSites: PlantRatioSiteOption[]
 }) {
   const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [expandedSettingId, setExpandedSettingId] = useState<string | null>(null)
 
   async function addAction(prev: ActionState, formData: FormData): Promise<ActionState> {
     const result = await createConversionSetting(prev, formData)
@@ -179,30 +194,52 @@ export default function SettingsTab({
                     </div>
                   )
                 }
+                const settingLinks = conversionLinks.filter((l) => l.parentSettingId === s.id)
                 return (
-                  <div key={s.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-fg-secondary truncate">{s.name}</p>
-                      <p className="text-xs text-fg-muted">
-                        1 {s.unit_from} → {s.conversion_rate} {s.unit_to} · {s.wastage_pct}% wastage
-                      </p>
-                      {s.notes && <p className="mt-0.5 text-xs text-fg-muted italic">{s.notes}</p>}
-                    </div>
-                    {isAdmin && (
-                      <div className="flex gap-1.5 shrink-0">
+                  <div key={s.id} className="rounded-lg border border-border p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-fg-secondary truncate">{s.name}</p>
+                        <p className="text-xs text-fg-muted">
+                          1 {s.unit_from} → {s.conversion_rate} {s.unit_to} · {s.wastage_pct}% wastage
+                        </p>
+                        {s.notes && <p className="mt-0.5 text-xs text-fg-muted italic">{s.notes}</p>}
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
                         <button
                           type="button"
-                          onClick={() => setEditingId(s.id)}
+                          onClick={() => setExpandedSettingId((cur) => (cur === s.id ? null : s.id))}
                           className="rounded px-2 py-1 text-xs text-fg-muted hover:bg-surface-raised"
                         >
-                          Edit
+                          Linked materials{settingLinks.length > 0 ? ` (${settingLinks.length})` : ''}
                         </button>
-                        <form action={async (fd) => { await deleteConversionSetting(null, fd) }}>
-                          <input type="hidden" name="id" value={s.id} />
-                          <button type="submit" className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50">
-                            Delete
-                          </button>
-                        </form>
+                        {isAdmin && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setEditingId(s.id)}
+                              className="rounded px-2 py-1 text-xs text-fg-muted hover:bg-surface-raised"
+                            >
+                              Edit
+                            </button>
+                            <form action={async (fd) => { await deleteConversionSetting(null, fd) }}>
+                              <input type="hidden" name="id" value={s.id} />
+                              <button type="submit" className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50">
+                                Delete
+                              </button>
+                            </form>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    {expandedSettingId === s.id && (
+                      <div className="border-t border-border-subtle pt-2">
+                        <ConversionLinksSection
+                          settingId={s.id}
+                          links={settingLinks}
+                          isAdmin={isAdmin}
+                          tableExists={conversionLinksTableExists}
+                        />
                       </div>
                     )}
                   </div>

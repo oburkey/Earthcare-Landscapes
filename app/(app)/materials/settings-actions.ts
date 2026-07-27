@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
+import { STOCK_FIELDS } from './stock-constants'
 import type { ActionState } from '@/types/actions'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -132,5 +133,131 @@ export async function deleteConversionSetting(
   } catch (err) {
     console.error('[materials/settings-actions] deleteConversionSetting unexpected error:', err)
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred while deleting the conversion rate.' }
+  }
+}
+
+// ── Linked materials (material_conversion_links) ─────────────────────────────
+
+type LinkValues = {
+  parent_setting_id: string
+  name: string
+  rate: number
+  unit: string
+  stock_field: string | null
+}
+
+type ParsedLink =
+  | { ok: false; error: string }
+  | { ok: true; values: LinkValues }
+
+function parseConversionLinkForm(formData: FormData): ParsedLink {
+  const parentSettingId = ((formData.get('parent_setting_id') as string) ?? '').trim()
+  const name            = ((formData.get('name') as string) ?? '').trim()
+  const unit            = ((formData.get('unit') as string) ?? '').trim()
+  const rate            = parseFloat((formData.get('rate') as string) ?? '')
+  const stockFieldRaw    = ((formData.get('stock_field') as string) ?? '').trim()
+  const stockField      = stockFieldRaw || null
+
+  if (!parentSettingId) return { ok: false, error: 'Parent conversion setting is missing.' }
+  if (!name)            return { ok: false, error: 'Name is required.' }
+  if (!unit)            return { ok: false, error: 'Unit is required.' }
+  if (isNaN(rate) || rate <= 0) return { ok: false, error: 'Enter a valid rate.' }
+  if (stockField && !(STOCK_FIELDS as readonly string[]).includes(stockField)) {
+    return { ok: false, error: 'Invalid stock field.' }
+  }
+
+  return {
+    ok: true,
+    values: { parent_setting_id: parentSettingId, name, rate, unit, stock_field: stockField },
+  }
+}
+
+export async function createConversionLink(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Only admins can manage conversion rates.' }
+
+  try {
+    const parsed = parseConversionLinkForm(formData)
+    if (!parsed.ok) return { error: parsed.error }
+
+    const supabase = await createClient()
+
+    const { data: maxRow, error: maxRowError } = await supabase
+      .from('material_conversion_links')
+      .select('order_index')
+      .eq('parent_setting_id', parsed.values.parent_setting_id)
+      .order('order_index', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (maxRowError) logDbError('createConversionLink fetch max order_index', maxRowError)
+    const nextIndex = (maxRow?.order_index ?? 0) + 1
+
+    const { error } = await supabase
+      .from('material_conversion_links')
+      .insert({ ...parsed.values, order_index: nextIndex })
+
+    if (error) { logDbError('createConversionLink insert', error); return { error: error.message } }
+
+    revalidatePath('/materials')
+    return null
+  } catch (err) {
+    console.error('[materials/settings-actions] createConversionLink unexpected error:', err)
+    return { error: err instanceof Error ? err.message : 'An unexpected error occurred while creating the linked material.' }
+  }
+}
+
+export async function updateConversionLink(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Only admins can manage conversion rates.' }
+
+  try {
+    const id = formData.get('id') as string
+    if (!id) return { error: 'Linked material ID is missing.' }
+
+    const parsed = parseConversionLinkForm(formData)
+    if (!parsed.ok) return { error: parsed.error }
+
+    const supabase = await createClient()
+    const { error } = await supabase
+      .from('material_conversion_links')
+      .update(parsed.values)
+      .eq('id', id)
+
+    if (error) { logDbError('updateConversionLink update', error); return { error: error.message } }
+
+    revalidatePath('/materials')
+    return null
+  } catch (err) {
+    console.error('[materials/settings-actions] updateConversionLink unexpected error:', err)
+    return { error: err instanceof Error ? err.message : 'An unexpected error occurred while updating the linked material.' }
+  }
+}
+
+export async function deleteConversionLink(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Only admins can manage conversion rates.' }
+
+  try {
+    const id = formData.get('id') as string
+    if (!id) return { error: 'Linked material ID is missing.' }
+
+    const supabase = await createClient()
+    const { error } = await supabase.from('material_conversion_links').delete().eq('id', id)
+    if (error) { logDbError('deleteConversionLink delete', error); return { error: error.message } }
+
+    revalidatePath('/materials')
+    return null
+  } catch (err) {
+    console.error('[materials/settings-actions] deleteConversionLink unexpected error:', err)
+    return { error: err instanceof Error ? err.message : 'An unexpected error occurred while deleting the linked material.' }
   }
 }

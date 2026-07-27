@@ -6,7 +6,7 @@ import { buildMaterialsPlan, getMaterialsDateRange, type MaterialsLotRow, type M
 import MaterialsTabs from './MaterialsTabs'
 import type { OrderRow, SiteOption as OrdersSiteOption, SupplierOption } from './OrdersTab'
 import type { SiteStockRow, SiteOption as StockSiteOption } from './StockTab'
-import type { ConversionSettingRow } from './SettingsTab'
+import type { ConversionSettingRow, ConversionLinkRow } from './SettingsTab'
 import type { RatioRow, SiteOption as PlantRatioSiteOption } from './PlantRatiosSettings'
 
 export const metadata = { title: 'Materials — Earthcare Landscapes' }
@@ -206,6 +206,35 @@ export default async function MaterialsPage() {
     conversionSettingsTableExists = false
   }
 
+  // ── Linked materials (Settings tab, per conversion rate) ──────────────────
+  // Fetched independently of material_conversion_settings so this table's
+  // absence (migration not yet run) can't regress the base conversion-rates
+  // section — a nested embed would fail the whole combined query instead.
+  let conversionLinks: ConversionLinkRow[] = []
+  let conversionLinksTableExists = true
+  try {
+    const { data, error } = await supabase
+      .from('material_conversion_links')
+      .select('id, parent_setting_id, name, rate, unit, stock_field, order_index')
+      .order('order_index')
+
+    if (isMissingTable(error)) {
+      conversionLinksTableExists = false
+    } else if (data) {
+      conversionLinks = data.map((l) => ({
+        id:               l.id,
+        parentSettingId:  l.parent_setting_id,
+        name:             l.name,
+        rate:             Number(l.rate),
+        unit:             l.unit,
+        stockField:       l.stock_field,
+        orderIndex:       l.order_index,
+      }))
+    }
+  } catch {
+    conversionLinksTableExists = false
+  }
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 space-y-6">
       <div>
@@ -226,6 +255,8 @@ export default async function MaterialsPage() {
         stockTableExists={stockTableExists}
         conversionSettings={conversionSettings}
         conversionSettingsTableExists={conversionSettingsTableExists}
+        conversionLinks={conversionLinks}
+        conversionLinksTableExists={conversionLinksTableExists}
         plantRatiosGlobal={plantRatiosGlobal}
         plantRatiosOverrides={plantRatiosOverrides}
         plantRatiosSites={plantRatiosSites}

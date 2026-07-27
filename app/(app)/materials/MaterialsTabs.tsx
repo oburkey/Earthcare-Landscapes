@@ -4,7 +4,7 @@ import { useState } from 'react'
 import MaterialsView from './MaterialsView'
 import OrdersTab, { type OrderRow, type SiteOption as OrdersSiteOption, type SupplierOption } from './OrdersTab'
 import StockTab, { type SiteStockRow, type SiteOption as StockSiteOption } from './StockTab'
-import SettingsTab, { type ConversionSettingRow } from './SettingsTab'
+import SettingsTab, { type ConversionSettingRow, type ConversionLinkRow } from './SettingsTab'
 import type { RatioRow, SiteOption as PlantRatioSiteOption } from './PlantRatiosSettings'
 import type { MonthMaterialGroup } from './lib'
 
@@ -33,6 +33,8 @@ interface Props {
   // Settings
   conversionSettings: ConversionSettingRow[]
   conversionSettingsTableExists: boolean
+  conversionLinks: ConversionLinkRow[]
+  conversionLinksTableExists: boolean
   plantRatiosGlobal: RatioRow | null
   plantRatiosOverrides: RatioRow[]
   plantRatiosSites: PlantRatioSiteOption[]
@@ -48,6 +50,7 @@ export default function MaterialsTabs({
   orders, ordersSites, suppliers, ordersTableExists,
   stockSites, stockBySite, stockTableExists,
   conversionSettings, conversionSettingsTableExists,
+  conversionLinks, conversionLinksTableExists,
   plantRatiosGlobal, plantRatiosOverrides, plantRatiosSites,
   showPlanning, canManageOrders, canEditStock, isAdmin,
 }: Props) {
@@ -85,6 +88,8 @@ export default function MaterialsTabs({
           canManage={canManageOrders}
           isAdmin={isAdmin}
           tableExists={ordersTableExists}
+          conversionSettings={conversionSettings}
+          conversionLinks={conversionLinks}
         />
       )}
 
@@ -102,6 +107,8 @@ export default function MaterialsTabs({
           settings={conversionSettings}
           isAdmin={isAdmin}
           tableExists={conversionSettingsTableExists}
+          conversionLinks={conversionLinks}
+          conversionLinksTableExists={conversionLinksTableExists}
           plantRatiosGlobal={plantRatiosGlobal}
           plantRatiosOverrides={plantRatiosOverrides}
           plantRatiosSites={plantRatiosSites}

@@ -26,7 +26,7 @@ export const PLANT_TYPE_OPTIONS: Record<string, readonly string[]> = {
 // Units shared between order line items and material conversion settings
 // ("unit from" / "unit to") so quantities line up when stock auto-updates.
 export const MATERIAL_UNITS = [
-  'plants', 'tonnes', 'rolls', 'packs', 'linear metres (lm)', 'm²', 'items', 'bags', 'pallets',
+  'plants', 'tonnes', 'rolls', 'packs', 'linear metres (lm)', 'm²', 'm³', 'items', 'bags', 'pallets',
 ] as const
 
 export const ORDER_STATUSES = ['draft', 'ordered', 'on_hold', 'delivered'] as const
