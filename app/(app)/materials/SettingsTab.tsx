@@ -15,6 +15,7 @@ export type ConversionSettingRow = {
   conversion_rate: number
   wastage_pct: number
   notes: string | null
+  default_unit_price: number | null
 }
 
 export type ConversionLinkRow = {
@@ -86,6 +87,16 @@ function ConversionForm({
             className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
           />
         </div>
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-fg-muted mb-1">
+          Default price ($ per {defaults.unit_from || 'unit_from'})
+        </label>
+        <input
+          name="default_unit_price" type="number" step="0.01" min="0" placeholder="Optional"
+          defaultValue={defaults.default_unit_price ?? ''}
+          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+        />
       </div>
       <div>
         <label className="block text-xs font-medium text-fg-muted mb-1">Notes</label>
@@ -203,6 +214,11 @@ export default function SettingsTab({
                         <p className="text-xs text-fg-muted">
                           1 {s.unit_from} → {s.conversion_rate} {s.unit_to} · {s.wastage_pct}% wastage
                         </p>
+                        {isAdmin && s.default_unit_price != null && (
+                          <p className="text-xs text-fg-muted">
+                            Default price: ${s.default_unit_price.toFixed(2)}/{s.unit_from}
+                          </p>
+                        )}
                         {s.notes && <p className="mt-0.5 text-xs text-fg-muted italic">{s.notes}</p>}
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">

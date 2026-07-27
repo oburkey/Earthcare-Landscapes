@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { PrefetchLink } from '@/app/_components/PrefetchLink'
-import { STATUS_CONFIG, EXTRA_JOB_STATUS_CONFIG, DELAYED_BADGE_CLASS, formatDate, tradeStatusBadge, type TradeStatusSummary } from '@/lib/lotStatus'
+import { STATUS_CONFIG, EXTRA_JOB_STATUS_CONFIG, DELAYED_BADGE_CLASS, formatDate, delayedBadgeLabel, tradeStatusBadge, type TradeStatusSummary } from '@/lib/lotStatus'
 import type { TableLotRow, TableExtraJobRow } from './StageLotsTable'
 import BulkUpdateLotsButton from './BulkUpdateLotsButton'
 
@@ -61,7 +61,7 @@ export default function StageCardView({
                           title={lot.delayReason ?? undefined}
                           className={`rounded-full px-2 py-0.5 text-xs font-medium ${DELAYED_BADGE_CLASS}`}
                         >
-                          Delayed
+                          {delayedBadgeLabel(lot.expectedCompletionDate)}
                         </span>
                       )}
                       {tradeBadge && !lot.buildComplete && (
@@ -142,7 +142,7 @@ export default function StageCardView({
                           title={job.delayReason ?? undefined}
                           className={`rounded-full px-2 py-0.5 text-xs font-medium ${DELAYED_BADGE_CLASS}`}
                         >
-                          Delayed
+                          {delayedBadgeLabel(job.expectedCompletionDate)}
                         </span>
                       )}
                     </div>

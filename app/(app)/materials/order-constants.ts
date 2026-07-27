@@ -34,3 +34,15 @@ export type OrderStatus = typeof ORDER_STATUSES[number]
 
 export const ATTACHMENT_TYPES = ['invoice', 'photo', 'document'] as const
 export type AttachmentType = typeof ATTACHMENT_TYPES[number]
+
+// Looks up the admin-configured default unit price for a category (matched
+// against a conversion setting's name, e.g. 'Mulch', 'Turf'). Used to
+// pre-fill a new order line item's unit price — the user can still override
+// it. Takes a minimal structural shape (not the full ConversionSettingRow
+// type) to avoid a circular import with SettingsTab.tsx.
+export function defaultPriceForCategory(
+  category: string,
+  conversionSettings: readonly { name: string; default_unit_price?: number | null }[]
+): number | null {
+  return conversionSettings.find((cs) => cs.name === category)?.default_unit_price ?? null
+}

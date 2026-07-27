@@ -4,7 +4,7 @@ import { requireAuth } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { getR2SignedUrlSafe } from '@/lib/r2'
 import type { ExtraJobStatus } from '@/types/database'
-import { EXTRA_JOB_STATUS_CONFIG, PHOTO_TYPE_LABELS, formatDate } from '@/lib/lotStatus'
+import { EXTRA_JOB_STATUS_CONFIG, PHOTO_TYPE_LABELS, formatDate, PHOTO_CATEGORY_LABELS, PHOTO_CATEGORY_BADGE_CLASS } from '@/lib/lotStatus'
 import { uploadExtraJobPhoto, setExtraJobDelayed, clearExtraJobDelayed } from './actions'
 import EditExtraJobForm from './EditExtraJobForm'
 import ExtraJobPricing from './ExtraJobPricing'
@@ -49,7 +49,7 @@ export default async function ExtraJobPage({ params }: Props) {
     supabase
       .from('extra_jobs')
       .select(`
-        id, title, description, status, notes, due_date, source_quote_id, delayed, delay_reason,
+        id, title, description, status, notes, due_date, source_quote_id, delayed, delay_reason, expected_completion_date,
         stages!inner(
           id, name,
           sites!inner(id, name)
@@ -59,7 +59,7 @@ export default async function ExtraJobPage({ params }: Props) {
       .single(),
     supabase
       .from('extra_job_photos')
-      .select('id, storage_path, photo_type, created_at')
+      .select('id, storage_path, photo_type, notes, photo_category, created_at')
       .eq('extra_job_id', extraJobId)
       .order('created_at', { ascending: true }),
     supabase
@@ -125,12 +125,14 @@ export default async function ExtraJobPage({ params }: Props) {
   const status = job.status as ExtraJobStatus
   const cfg = EXTRA_JOB_STATUS_CONFIG[status] ?? EXTRA_JOB_STATUS_CONFIG.not_started
 
-  type PhotoWithUrl = { id: string; url: string; photo_type: string }
+  type PhotoWithUrl = { id: string; url: string; photo_type: string; notes: string | null; photo_category: string | null }
   let photos: PhotoWithUrl[] = []
   if (photoRows && photoRows.length > 0) {
     const signed = await Promise.all(
       photoRows.map(async (p) => ({
         id: p.id, url: await getR2SignedUrlSafe(p.storage_path), photo_type: p.photo_type,
+        notes: (p as { notes?: string | null }).notes ?? null,
+        photo_category: (p as { photo_category?: string | null }).photo_category ?? null,
       }))
     )
     photos = signed.filter((p) => p.url)
@@ -169,6 +171,7 @@ export default async function ExtraJobPage({ params }: Props) {
         <DelayControl
           delayed={(job as unknown as { delayed?: boolean }).delayed ?? false}
           delayReason={(job as unknown as { delay_reason?: string | null }).delay_reason ?? null}
+          expectedCompletionDate={(job as unknown as { expected_completion_date?: string | null }).expected_completion_date ?? null}
           canManage={canManage}
           promptLabel="Why is this job delayed?"
           setAction={setExtraJobDelayed}
@@ -236,20 +239,33 @@ export default async function ExtraJobPage({ params }: Props) {
                     </p>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {group.map((photo) => (
-                        <a
-                          key={photo.id}
-                          href={photo.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block aspect-square rounded-lg overflow-hidden bg-surface-raised"
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={photo.url}
-                            alt={`${PHOTO_TYPE_LABELS[type]} photo`}
-                            className="w-full h-full object-cover hover:opacity-90 transition-opacity"
-                          />
-                        </a>
+                        <div key={photo.id} className="space-y-1">
+                          <a
+                            href={photo.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block aspect-square rounded-lg overflow-hidden bg-surface-raised"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={photo.url}
+                              alt={`${PHOTO_TYPE_LABELS[type]} photo`}
+                              className="w-full h-full object-cover hover:opacity-90 transition-opacity"
+                            />
+                          </a>
+                          {(photo.photo_category || photo.notes) && (
+                            <div className="space-y-0.5">
+                              {photo.photo_category && (
+                                <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${PHOTO_CATEGORY_BADGE_CLASS[photo.photo_category] ?? PHOTO_CATEGORY_BADGE_CLASS.general}`}>
+                                  {PHOTO_CATEGORY_LABELS[photo.photo_category] ?? photo.photo_category}
+                                </span>
+                              )}
+                              {photo.notes && (
+                                <p className="text-xs text-fg-muted truncate" title={photo.notes}>{photo.notes}</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       ))}
                     </div>
                   </div>

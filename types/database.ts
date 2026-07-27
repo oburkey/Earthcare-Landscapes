@@ -79,6 +79,7 @@ export interface Lot {
   extras_notes: string | null
   delayed: boolean
   delay_reason: string | null
+  expected_completion_date: string | null
   created_at: string
   updated_at: string
 }
@@ -89,6 +90,8 @@ export interface LotPhoto {
   lot_id: string
   storage_path: string   // path in Supabase Storage bucket
   photo_type: PhotoType
+  photo_category: string | null
+  notes: string | null
   uploaded_by: string    // profile id
   created_at: string
 }
@@ -147,6 +150,7 @@ export interface ExtraJob {
   notes: string | null
   delayed: boolean
   delay_reason: string | null
+  expected_completion_date: string | null
   approved_by_name: string | null
   created_at: string
   updated_at: string
@@ -181,6 +185,8 @@ export interface ExtraJobPhoto {
   extra_job_id: string
   storage_path: string
   photo_type: PhotoType
+  photo_category: string | null
+  notes: string | null
   uploaded_by: string
   created_at: string
 }

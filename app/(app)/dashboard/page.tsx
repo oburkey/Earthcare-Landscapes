@@ -48,7 +48,7 @@ async function fetchOverdueAndExtraJobs(todayStr: string) {
         .neq('status', 'complete'),
       supabase
         .from('extra_jobs')
-        .select('id, title, status, due_date, delayed, delay_reason, stages!inner(id, name, sites!inner(id, name))')
+        .select('id, title, status, due_date, delayed, delay_reason, expected_completion_date, stages!inner(id, name, sites!inner(id, name))')
         .neq('status', 'complete')
         .order('due_date', { ascending: true, nullsFirst: false }),
     ])
@@ -277,6 +277,7 @@ export default async function DashboardPage() {
       status: jobAny.status as ExtraJobStatus,
       delayed: jobAny.delayed ?? false,
       delayReason: jobAny.delay_reason ?? null,
+      expectedCompletionDate: jobAny.expected_completion_date ?? null,
     }
   })
 

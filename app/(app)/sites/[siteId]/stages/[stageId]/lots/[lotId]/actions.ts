@@ -5,7 +5,7 @@ import { requireAuth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { uploadToR2, deleteFromR2 } from '@/lib/r2'
-import { TRADE_OPTIONS } from '@/lib/lotStatus'
+import { TRADE_OPTIONS, PHOTO_CATEGORIES } from '@/lib/lotStatus'
 import { CHECKLIST_SECTIONS, GATING_ITEM_KEYS } from '@/lib/checklist'
 import type { ActionState } from '@/types/actions'
 
@@ -106,13 +106,14 @@ export async function setLotDelayed(
   const siteId  = formData.get('site_id')  as string
   const stageId = formData.get('stage_id') as string
   const reason  = (formData.get('delay_reason') as string)?.trim()
+  const expectedCompletionDate = (formData.get('expected_completion_date') as string) || null
 
   if (!reason) return { error: 'A reason is required.' }
 
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('lots')
-    .update({ delayed: true, delay_reason: reason })
+    .update({ delayed: true, delay_reason: reason, expected_completion_date: expectedCompletionDate })
     .eq('id', lotId)
     .select('id')
 
@@ -137,7 +138,7 @@ export async function clearLotDelayed(
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('lots')
-    .update({ delayed: false, delay_reason: null })
+    .update({ delayed: false, delay_reason: null, expected_completion_date: null })
     .eq('id', lotId)
     .select('id')
 
@@ -206,16 +207,21 @@ export async function uploadLotPhoto(
 ): Promise<ActionState> {
   const profile = await requireAuth()
 
-  const lotId     = formData.get('lot_id') as string
-  const siteId    = formData.get('site_id') as string
-  const stageId   = formData.get('stage_id') as string
-  const photoType = formData.get('photo_type') as string
-  const file      = formData.get('photo') as File
+  const lotId        = formData.get('lot_id') as string
+  const siteId       = formData.get('site_id') as string
+  const stageId      = formData.get('stage_id') as string
+  const photoType    = formData.get('photo_type') as string
+  const photoCategory = (formData.get('photo_category') as string) || null
+  const notes        = (formData.get('notes') as string)?.trim() || null
+  const file         = formData.get('photo') as File
 
   if (!file || file.size === 0) return { error: 'No file selected.' }
   if (file.size > 10 * 1024 * 1024) return { error: 'File too large (max 10 MB).' }
   if (!file.type.startsWith('image/')) return { error: 'File must be an image.' }
   if (!['before', 'during', 'after'].includes(photoType)) return { error: 'Invalid photo type.' }
+  if (photoCategory && !(PHOTO_CATEGORIES as readonly string[]).includes(photoCategory)) {
+    return { error: 'Invalid photo category.' }
+  }
 
   const key = `lot-photos/${lotId}/${crypto.randomUUID()}.jpg`
 
@@ -228,10 +234,12 @@ export async function uploadLotPhoto(
 
   const supabase = await createClient()
   const { error: dbError } = await supabase.from('lot_photos').insert({
-    lot_id:       lotId,
-    storage_path: key,
-    photo_type:   photoType,
-    uploaded_by:  profile.id,
+    lot_id:        lotId,
+    storage_path:  key,
+    photo_type:    photoType,
+    photo_category: photoCategory,
+    notes,
+    uploaded_by:   profile.id,
   })
 
   if (dbError) {

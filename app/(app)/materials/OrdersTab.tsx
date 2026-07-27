@@ -6,7 +6,8 @@ import {
   uploadOrderAttachment, deleteOrderAttachment,
   type OrderItemPayload,
 } from './orders-actions'
-import { ORDER_ITEM_CATEGORIES, PLANT_TYPE_OPTIONS, MATERIAL_UNITS } from './order-constants'
+import { ORDER_ITEM_CATEGORIES, PLANT_TYPE_OPTIONS, MATERIAL_UNITS, defaultPriceForCategory } from './order-constants'
+import { parseBulkPlantText, isParsedLine, type BulkParseResult } from './bulk-parse'
 import type { ConversionSettingRow, ConversionLinkRow } from './SettingsTab'
 import type { ActionState, MutationState } from '@/types/actions'
 
@@ -75,9 +76,13 @@ function defaultPlantType(category: string): string | null {
   return PLANT_TYPE_OPTIONS[category]?.[0] ?? null
 }
 
-function emptyItem(): OrderItemPayload {
+function emptyItem(conversionSettings: ConversionSettingRow[]): OrderItemPayload {
   const category = ORDER_ITEM_CATEGORIES[0]
-  return { category, plant_type: defaultPlantType(category), description: '', quantity: 0, unit: '', unit_price: null, notes: '', stock_field: null }
+  return {
+    category, plant_type: defaultPlantType(category), description: '', quantity: 0, unit: '',
+    unit_price: defaultPriceForCategory(category, conversionSettings), notes: '',
+    stock_field: null, species_name: null,
+  }
 }
 
 // ── New order form ────────────────────────────────────────────────────────────
@@ -87,7 +92,7 @@ function NewOrderForm({ sites, suppliers, conversionSettings, conversionLinks, o
   conversionSettings: ConversionSettingRow[]; conversionLinks: ConversionLinkRow[]
   onDone: () => void
 }) {
-  const [items, setItems] = useState<OrderItemPayload[]>([emptyItem()])
+  const [items, setItems] = useState<OrderItemPayload[]>([emptyItem(conversionSettings)])
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
     async (prev, formData) => {
       formData.set('items', JSON.stringify(items))
@@ -107,7 +112,7 @@ function NewOrderForm({ sites, suppliers, conversionSettings, conversionLinks, o
     setItems((prev) => prev.map((it, idx) => {
       if (idx !== i) return it
       const plant_type = options ? (options.includes(it.plant_type ?? '') ? it.plant_type : options[0]) : null
-      return { ...it, category, plant_type }
+      return { ...it, category, plant_type, unit_price: defaultPriceForCategory(category, conversionSettings) }
     }))
   }
 
@@ -130,8 +135,43 @@ function NewOrderForm({ sites, suppliers, conversionSettings, conversionLinks, o
   function addSuggestedItem(link: ConversionLinkRow, qty: number) {
     setItems((prev) => [...prev, {
       category: 'Other', plant_type: null, description: link.name, quantity: qty,
-      unit: link.unit, unit_price: null, notes: '', stock_field: link.stockField,
+      unit: link.unit, unit_price: null, notes: '', stock_field: link.stockField, species_name: null,
     }])
+  }
+
+  // ── Bulk plant add ────────────────────────────────────────────────────────
+  const [bulkMode, setBulkMode] = useState(false)
+  const [bulkText, setBulkText] = useState('')
+  const [bulkPreview, setBulkPreview] = useState<BulkParseResult[] | null>(null)
+
+  function parseBulk() {
+    setBulkPreview(parseBulkPlantText(bulkText))
+  }
+
+  function removeBulkPreviewRow(idx: number) {
+    setBulkPreview((prev) => (prev ? prev.filter((_, i) => i !== idx) : prev))
+  }
+
+  function addBulkItems() {
+    if (!bulkPreview) return
+    const validRows = bulkPreview.filter(isParsedLine)
+    setItems((prev) => [
+      ...prev,
+      ...validRows.map((row) => ({
+        category: row.category,
+        plant_type: null,
+        description: row.speciesName,
+        quantity: row.quantity,
+        unit: 'plants',
+        unit_price: defaultPriceForCategory(row.category, conversionSettings),
+        notes: '',
+        stock_field: null,
+        species_name: row.speciesName,
+      })),
+    ])
+    setBulkText('')
+    setBulkPreview(null)
+    setBulkMode(false)
   }
 
   return (
@@ -191,14 +231,81 @@ function NewOrderForm({ sites, suppliers, conversionSettings, conversionLinks, o
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <label className="block text-xs font-medium text-fg-muted">Line items</label>
-            <button
-              type="button"
-              onClick={() => setItems((prev) => [...prev, emptyItem()])}
-              className="text-xs font-medium text-accent-fg hover:underline"
-            >
-              + Add item
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setBulkMode((v) => !v)}
+                className="text-xs font-medium text-accent-fg hover:underline"
+              >
+                {bulkMode ? 'Cancel bulk add' : 'Bulk add plants'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setItems((prev) => [...prev, emptyItem(conversionSettings)])}
+                className="text-xs font-medium text-accent-fg hover:underline"
+              >
+                + Add item
+              </button>
+            </div>
           </div>
+
+          {bulkMode && (
+            <div className="rounded-lg border border-dashed border-border p-3 space-y-2 bg-surface-raised">
+              <label className="block text-xs font-medium text-fg-muted">
+                Paste supplier list — one plant per line, e.g. <span className="italic">12 x Callistemon &apos;Four Seasons&apos; in 140mm Pot</span>
+              </label>
+              <textarea
+                value={bulkText}
+                onChange={(e) => setBulkText(e.target.value)}
+                rows={4}
+                placeholder={`12 x Callistemon 'Four Seasons' in 140mm Pot\n6 x Dianella 'Little Rev' in 35 Litre Pot`}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs text-fg placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 resize-none"
+              />
+              <button
+                type="button"
+                onClick={parseBulk}
+                disabled={!bulkText.trim()}
+                className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-secondary hover:bg-surface disabled:opacity-50"
+              >
+                Parse
+              </button>
+
+              {bulkPreview && (
+                <div className="space-y-1.5 pt-1">
+                  {bulkPreview.length === 0 && (
+                    <p className="text-xs text-fg-muted">No lines to parse.</p>
+                  )}
+                  {bulkPreview.map((row, idx) => (
+                    <div key={idx} className="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs">
+                      {isParsedLine(row) ? (
+                        <span className="text-fg-secondary">
+                          {row.quantity} × {row.speciesName} <span className="text-fg-muted">({row.category})</span>
+                        </span>
+                      ) : (
+                        <span className="text-red-600">{row.raw || '(blank)'} — {row.error}</span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => removeBulkPreviewRow(idx)}
+                        className="shrink-0 text-fg-muted hover:text-red-600"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                  {bulkPreview.some(isParsedLine) && (
+                    <button
+                      type="button"
+                      onClick={addBulkItems}
+                      className="rounded-lg bg-green-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-800"
+                    >
+                      Add {bulkPreview.filter(isParsedLine).length} item{bulkPreview.filter(isParsedLine).length !== 1 ? 's' : ''} to order
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="space-y-2">
             {items.map((item, i) => {

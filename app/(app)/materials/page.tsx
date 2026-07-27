@@ -186,20 +186,21 @@ export default async function MaterialsPage() {
   try {
     const { data, error } = await supabase
       .from('material_conversion_settings')
-      .select('id, name, unit_from, unit_to, conversion_rate, wastage_pct, notes')
+      .select('id, name, unit_from, unit_to, conversion_rate, wastage_pct, notes, default_unit_price')
       .order('order_index')
 
     if (isMissingTable(error)) {
       conversionSettingsTableExists = false
     } else if (data) {
       conversionSettings = data.map((s) => ({
-        id:              s.id,
-        name:            s.name,
-        unit_from:       s.unit_from,
-        unit_to:         s.unit_to,
-        conversion_rate: Number(s.conversion_rate),
-        wastage_pct:     Number(s.wastage_pct),
-        notes:           s.notes,
+        id:                 s.id,
+        name:               s.name,
+        unit_from:          s.unit_from,
+        unit_to:            s.unit_to,
+        conversion_rate:    Number(s.conversion_rate),
+        wastage_pct:        Number(s.wastage_pct),
+        notes:              s.notes,
+        default_unit_price: s.default_unit_price != null ? Number(s.default_unit_price) : null,
       }))
     }
   } catch {

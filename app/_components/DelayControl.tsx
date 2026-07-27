@@ -1,12 +1,13 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { DELAYED_BADGE_CLASS } from '@/lib/lotStatus'
+import { DELAYED_BADGE_CLASS, delayedBadgeLabel } from '@/lib/lotStatus'
 import type { ActionState } from '@/types/actions'
 
 interface Props {
   delayed: boolean
   delayReason: string | null
+  expectedCompletionDate: string | null
   canManage: boolean
   promptLabel: string
   setAction: (prev: ActionState, formData: FormData) => Promise<ActionState>
@@ -15,7 +16,7 @@ interface Props {
 }
 
 export default function DelayControl({
-  delayed, delayReason, canManage, promptLabel, setAction, clearAction, hiddenFields,
+  delayed, delayReason, expectedCompletionDate, canManage, promptLabel, setAction, clearAction, hiddenFields,
 }: Props) {
   const [marking, setMarking] = useState(false)
   const [setState, setFormAction, setPending] = useActionState<ActionState, FormData>(setAction, null)
@@ -29,7 +30,7 @@ export default function DelayControl({
             title={delayReason ?? undefined}
             className={`rounded-full px-2.5 py-1 text-xs font-semibold ${DELAYED_BADGE_CLASS}`}
           >
-            Delayed
+            {delayedBadgeLabel(expectedCompletionDate)}
           </span>
           {canManage && (
             <form action={clearFormAction}>
@@ -69,6 +70,14 @@ export default function DelayControl({
           placeholder="e.g. Waiting on turf delivery"
           className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 resize-none"
         />
+        <div>
+          <label className="block text-xs font-medium text-fg-secondary mb-1">Expected completion date (optional)</label>
+          <input
+            name="expected_completion_date"
+            type="date"
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+          />
+        </div>
         {setState?.error && <p className="text-xs text-red-600">{setState.error}</p>}
         <div className="flex items-center gap-3">
           <button

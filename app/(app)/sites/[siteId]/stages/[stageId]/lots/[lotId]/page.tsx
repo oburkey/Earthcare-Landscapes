@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireAuth } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { STATUS_CONFIG, formatDate, PHOTO_TYPE_LABELS, DOC_TYPE_LABELS } from '@/lib/lotStatus'
+import { STATUS_CONFIG, formatDate, PHOTO_TYPE_LABELS, DOC_TYPE_LABELS, PHOTO_CATEGORY_LABELS, PHOTO_CATEGORY_BADGE_CLASS } from '@/lib/lotStatus'
 import type { LotStatus } from '@/types/database'
 import { uploadLotPhoto, setLotDelayed, clearLotDelayed } from './actions'
 import EditLotForm from './EditLotForm'
@@ -66,14 +66,14 @@ export default async function LotPage({ params }: Props) {
       .select(`
         id, lot_number, status, due_date, scheduled_date, completion_date, notes, home_design,
         build_complete, quant_done, invoiced, has_client_extras, extras_notes, contract_price,
-        pending_review, approved_for_invoicing, delayed, delay_reason,
+        pending_review, approved_for_invoicing, delayed, delay_reason, expected_completion_date,
         stages!inner(id, name, is_contract_pricing, default_contract_price, sites!inner(id, name, has_client_extras))
       `)
       .eq('id', lotId)
       .single(),
     supabase
       .from('lot_photos')
-      .select('id, storage_path, photo_type, created_at')
+      .select('id, storage_path, photo_type, notes, photo_category, created_at')
       .eq('lot_id', lotId)
       .order('created_at', { ascending: true }),
     supabase
@@ -152,6 +152,7 @@ export default async function LotPage({ params }: Props) {
   const approvedForInvoicing   = lotAny?.approved_for_invoicing  ?? false
   const delayed                = lotAny?.delayed                ?? false
   const delayReason            = lotAny?.delay_reason            ?? null
+  const expectedCompletionDate = lotAny?.expected_completion_date ?? null
   const homeDesign             = lotAny?.home_design             ?? null
 
   const stage = Array.isArray(lot.stages) ? lot.stages[0] : lot.stages as { id: string; name: string; sites: unknown }
@@ -189,12 +190,14 @@ export default async function LotPage({ params }: Props) {
   })()
 
   // Photos
-  type PhotoWithUrl = { id: string; url: string; photo_type: string }
+  type PhotoWithUrl = { id: string; url: string; photo_type: string; notes: string | null; photo_category: string | null }
   let photos: PhotoWithUrl[] = []
   if (photoRows && photoRows.length > 0) {
     const signed = await Promise.all(
       photoRows.map(async (p) => ({
         id: p.id, url: await getR2SignedUrlSafe(p.storage_path), photo_type: p.photo_type,
+        notes: (p as { notes?: string | null }).notes ?? null,
+        photo_category: (p as { photo_category?: string | null }).photo_category ?? null,
       }))
     )
     photos = signed.filter((p) => p.url)
@@ -319,6 +322,7 @@ export default async function LotPage({ params }: Props) {
         <DelayControl
           delayed={delayed}
           delayReason={delayReason}
+          expectedCompletionDate={expectedCompletionDate}
           canManage={canManage}
           promptLabel="Why is this lot delayed?"
           setAction={setLotDelayed}
@@ -446,12 +450,26 @@ export default async function LotPage({ params }: Props) {
                     </p>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {group.map((photo) => (
-                        <a key={photo.id} href={photo.url} target="_blank" rel="noopener noreferrer"
-                          className="block aspect-square rounded-lg overflow-hidden bg-surface-raised">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={photo.url} alt={`${PHOTO_TYPE_LABELS[type]} photo`}
-                            className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
-                        </a>
+                        <div key={photo.id} className="space-y-1">
+                          <a href={photo.url} target="_blank" rel="noopener noreferrer"
+                            className="block aspect-square rounded-lg overflow-hidden bg-surface-raised">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={photo.url} alt={`${PHOTO_TYPE_LABELS[type]} photo`}
+                              className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
+                          </a>
+                          {(photo.photo_category || photo.notes) && (
+                            <div className="space-y-0.5">
+                              {photo.photo_category && (
+                                <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${PHOTO_CATEGORY_BADGE_CLASS[photo.photo_category] ?? PHOTO_CATEGORY_BADGE_CLASS.general}`}>
+                                  {PHOTO_CATEGORY_LABELS[photo.photo_category] ?? photo.photo_category}
+                                </span>
+                              )}
+                              {photo.notes && (
+                                <p className="text-xs text-fg-muted truncate" title={photo.notes}>{photo.notes}</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       ))}
                     </div>
                   </div>

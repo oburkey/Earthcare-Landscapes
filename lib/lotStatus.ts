@@ -55,6 +55,26 @@ export const PHOTO_TYPE_LABELS: Record<string, string> = {
   after:  'After',
 }
 
+// Photo category — orthogonal to before/during/after (what stage the photo
+// is from) vs what kind of thing it shows. Plain text + CHECK constraint in
+// the DB (not a Postgres enum, unlike photo_type) so the list can evolve.
+export const PHOTO_CATEGORIES = ['hardscape', 'softscape', 'issue', 'general'] as const
+export type PhotoCategory = typeof PHOTO_CATEGORIES[number]
+
+export const PHOTO_CATEGORY_LABELS: Record<string, string> = {
+  hardscape: 'Hardscape',
+  softscape: 'Softscape',
+  issue:     'Issue',
+  general:   'General',
+}
+
+export const PHOTO_CATEGORY_BADGE_CLASS: Record<string, string> = {
+  hardscape: 'bg-stone-100 text-stone-700 dark:bg-stone-800/60 dark:text-stone-300',
+  softscape: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+  issue:     'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+  general:   'bg-surface-raised text-fg-muted',
+}
+
 export const DOC_TYPE_LABELS: Record<string, string> = {
   site_plan:     'Site Plan',
   drawing:       'Drawing',
@@ -69,6 +89,23 @@ export function formatDate(dateStr: string | null | undefined): string {
     'en-AU',
     { day: 'numeric', month: 'short', year: 'numeric' }
   )
+}
+
+// Short form for inline badges (no year), e.g. "15 Aug".
+export function formatDateShort(dateStr: string | null | undefined): string {
+  if (!dateStr) return ''
+  const [y, m, d] = dateStr.split('-')
+  return new Date(Number(y), Number(m) - 1, Number(d)).toLocaleDateString(
+    'en-AU',
+    { day: 'numeric', month: 'short' }
+  )
+}
+
+// Text for every "Delayed" badge across stage table/card view, schedule, and
+// the dashboard — centralised so the expected-completion-date suffix stays
+// consistent wherever a delayed lot/extra job is shown.
+export function delayedBadgeLabel(expectedCompletionDate: string | null | undefined): string {
+  return expectedCompletionDate ? `Delayed — expected ${formatDateShort(expectedCompletionDate)}` : 'Delayed'
 }
 
 // ── Trades completed ──────────────────────────────────────────────────────────

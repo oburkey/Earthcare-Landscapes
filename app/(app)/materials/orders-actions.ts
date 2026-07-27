@@ -33,6 +33,11 @@ export type OrderItemPayload = {
   // line items (see markOrderDelivered). Null for ordinary category-driven
   // items, which resolve their stock column from CATEGORY_TO_STOCK_FIELD instead.
   stock_field: string | null
+  // Species name for items added via the bulk plant-add parser — used only to
+  // grow the plant_species dictionary after the order is created (see
+  // createOrder below). Not a column on material_order_items; null for
+  // manually-entered items.
+  species_name: string | null
 }
 
 export async function createOrder(
@@ -98,6 +103,29 @@ export async function createOrder(
       })))
 
     if (itemsError) { logDbError('createOrder insert material_order_items', itemsError); return { error: itemsError.message } }
+
+    // Grow the plant_species dictionary from any bulk-add items (species_name
+    // set client-side, not a material_order_items column). Uses the admin
+    // client since plant_species RLS is admin-write-only, but this write is
+    // triggered by a leading_hand+ action — same pattern as the pre-start
+    // vehicle-hours update and the site_stock delivery write. Existing
+    // species are never overwritten (ignoreDuplicates); failures here are
+    // non-fatal to order creation.
+    const speciesNames = [...new Set(
+      items.map((i) => i.species_name?.trim()).filter((n): n is string => !!n)
+    )]
+    if (speciesNames.length > 0) {
+      const adminSupabase = createAdminClient()
+      const { error: speciesError } = await adminSupabase
+        .from('plant_species')
+        .upsert(
+          items
+            .filter((i) => i.species_name?.trim())
+            .map((i) => ({ name: i.species_name!.trim(), default_pot_size: i.category })),
+          { onConflict: 'name', ignoreDuplicates: true }
+        )
+      if (speciesError) logDbError('createOrder upsert plant_species', speciesError, { speciesNames })
+    }
 
     revalidatePath('/materials')
     return null

@@ -86,6 +86,7 @@ export default async function StagePage({ params }: Props) {
       status: lot.status,
       delayed: lotAny.delayed ?? false,
       delayReason: lotAny.delay_reason ?? null,
+      expectedCompletionDate: lotAny.expected_completion_date ?? null,
       buildComplete: lotAny.build_complete ?? false,
       tradesCompleted: tradeStatusMap[lot.id]?.trades_completed ?? [],
       invoiced: lotAny.invoiced ?? false,
@@ -103,6 +104,7 @@ export default async function StagePage({ params }: Props) {
       status: job.status,
       delayed: jobAny.delayed ?? false,
       delayReason: jobAny.delay_reason ?? null,
+      expectedCompletionDate: jobAny.expected_completion_date ?? null,
     }
   })
 

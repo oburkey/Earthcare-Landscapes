@@ -60,13 +60,13 @@ async function _stage(db: Db, stageId: string) {
       .select(`
         id, name, site_plan_path, is_contract_pricing, default_contract_price,
         sites!inner(id, name),
-        lots(id, lot_number, home_design, status, due_date, scheduled_date, build_complete, quant_done, invoiced, delayed, delay_reason)
+        lots(id, lot_number, home_design, status, due_date, scheduled_date, build_complete, quant_done, invoiced, delayed, delay_reason, expected_completion_date)
       `)
       .eq('id', stageId)
       .single(),
     db
       .from('extra_jobs')
-      .select('id, title, status, description, due_date, delayed, delay_reason')
+      .select('id, title, status, description, due_date, delayed, delay_reason, expected_completion_date')
       .eq('stage_id', stageId)
       .order('created_at', { ascending: true }),
   ])
@@ -77,7 +77,7 @@ async function _dashboardData(db: Db, fortnightStr: string) {
   const [{ data: lotsRaw }, { data: sitesData }] = await Promise.all([
     db
       .from('lots')
-      .select('id, lot_number, due_date, delayed, delay_reason, stages!inner(id, name, sites!inner(id, name, completed_at))')
+      .select('id, lot_number, due_date, delayed, delay_reason, expected_completion_date, stages!inner(id, name, sites!inner(id, name, completed_at))')
       .neq('status', 'complete')
       .not('due_date', 'is', null)
       .lte('due_date', fortnightStr)
@@ -100,13 +100,13 @@ async function _scheduleData(db: Db) {
   const [{ data: lots }, { data: jobs }] = await Promise.all([
     db
       .from('lots')
-      .select('id, lot_number, status, due_date, delayed, delay_reason, stages!inner(id, name, sites!inner(id, name))')
+      .select('id, lot_number, status, due_date, delayed, delay_reason, expected_completion_date, stages!inner(id, name, sites!inner(id, name))')
       .not('due_date', 'is', null)
       .neq('status', 'complete')
       .order('due_date', { ascending: true }),
     db
       .from('extra_jobs')
-      .select('id, title, status, due_date, delayed, delay_reason, stages!inner(id, name, sites!inner(id, name))')
+      .select('id, title, status, due_date, delayed, delay_reason, expected_completion_date, stages!inner(id, name, sites!inner(id, name))')
       .not('due_date', 'is', null)
       .neq('status', 'complete')
       .order('due_date', { ascending: true }),

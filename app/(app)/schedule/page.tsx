@@ -34,6 +34,7 @@ export default async function SchedulePage() {
       readyForLandscaping: false,
       delayed: (lot as unknown as { delayed?: boolean }).delayed ?? false,
       delayReason: (lot as unknown as { delay_reason?: string | null }).delay_reason ?? null,
+      expectedCompletionDate: (lot as unknown as { expected_completion_date?: string | null }).expected_completion_date ?? null,
     })
   }
 
@@ -52,6 +53,7 @@ export default async function SchedulePage() {
       dueDate: job.due_date as string,
       delayed: (job as unknown as { delayed?: boolean }).delayed ?? false,
       delayReason: (job as unknown as { delay_reason?: string | null }).delay_reason ?? null,
+      expectedCompletionDate: (job as unknown as { expected_completion_date?: string | null }).expected_completion_date ?? null,
     })
   }
 

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { STATUS_CONFIG, EXTRA_JOB_STATUS_CONFIG, DELAYED_BADGE_CLASS, formatDate } from '@/lib/lotStatus'
+import { STATUS_CONFIG, EXTRA_JOB_STATUS_CONFIG, DELAYED_BADGE_CLASS, formatDate, delayedBadgeLabel } from '@/lib/lotStatus'
 import type { LotStatus, ExtraJobStatus } from '@/types/database'
 import InlineCheckbox from './InlineCheckbox'
 import { toggleChecklistItemInline, toggleBuildCompleteInline } from './checklist-inline-actions'
@@ -14,6 +14,7 @@ export type TableLotRow = {
   status: LotStatus
   delayed: boolean
   delayReason: string | null
+  expectedCompletionDate: string | null
   buildComplete: boolean
   tradesCompleted: string[]
   // Used only by the Cards view (StageCardView), carried here so both views
@@ -29,6 +30,7 @@ export type TableExtraJobRow = {
   status: ExtraJobStatus
   delayed: boolean
   delayReason: string | null
+  expectedCompletionDate: string | null
 }
 
 export type ChecklistColumn = { key: string; label: string; shortLabel: string }
@@ -146,7 +148,7 @@ export default function StageLotsTable({
                 <td className="px-2 py-2 whitespace-nowrap">
                   {lot.delayed && (
                     <span title={lot.delayReason ?? undefined} className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${DELAYED_BADGE_CLASS}`}>
-                      Delayed
+                      {delayedBadgeLabel(lot.expectedCompletionDate)}
                     </span>
                   )}
                 </td>
@@ -199,7 +201,7 @@ export default function StageLotsTable({
                 <td className="px-2 py-2 whitespace-nowrap">
                   {job.delayed && (
                     <span title={job.delayReason ?? undefined} className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${DELAYED_BADGE_CLASS}`}>
-                      Delayed
+                      {delayedBadgeLabel(job.expectedCompletionDate)}
                     </span>
                   )}
                 </td>

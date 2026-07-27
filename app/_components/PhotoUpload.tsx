@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { compressImage } from '@/lib/compressImage'
+import { PHOTO_CATEGORIES, PHOTO_CATEGORY_LABELS } from '@/lib/lotStatus'
 import type { UploadAction } from '@/types/actions'
 
 interface Props {
@@ -86,6 +87,20 @@ export default function PhotoUpload({ action, hiddenFields }: Props) {
       </div>
 
       <div>
+        <p className="text-sm font-medium text-fg-secondary mb-2">Category</p>
+        <select
+          name="photo_category"
+          defaultValue="general"
+          disabled={busy}
+          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 disabled:opacity-50"
+        >
+          {PHOTO_CATEGORIES.map((c) => (
+            <option key={c} value={c}>{PHOTO_CATEGORY_LABELS[c]}</option>
+          ))}
+        </select>
+      </div>
+
+      <div>
         <p className="text-sm font-medium text-fg-secondary mb-2">Photo</p>
         <input
           type="file"
@@ -100,6 +115,17 @@ export default function PhotoUpload({ action, hiddenFields }: Props) {
             file:bg-green-700 file:text-white
             hover:file:bg-green-800 file:cursor-pointer
             file:transition-colors disabled:opacity-50"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-fg-secondary mb-2">Note (optional)</label>
+        <input
+          type="text"
+          name="notes"
+          placeholder="Optional caption"
+          disabled={busy}
+          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 disabled:opacity-50"
         />
       </div>
 

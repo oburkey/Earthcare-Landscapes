@@ -20,6 +20,7 @@ type ConversionValues = {
   conversion_rate: number
   wastage_pct: number
   notes: string | null
+  default_unit_price: number | null
 }
 
 type ParsedConversion =
@@ -34,16 +35,24 @@ function parseConversionForm(formData: FormData): ParsedConversion {
   const wastagePctRaw   = ((formData.get('wastage_pct') as string) ?? '').trim()
   const wastagePct      = wastagePctRaw ? parseFloat(wastagePctRaw) : 0
   const notes           = ((formData.get('notes') as string) ?? '').trim() || null
+  const defaultPriceRaw = ((formData.get('default_unit_price') as string) ?? '').trim()
+  const defaultPrice    = defaultPriceRaw ? parseFloat(defaultPriceRaw) : null
 
   if (!name)       return { ok: false, error: 'Name is required.' }
   if (!unitFrom)   return { ok: false, error: 'Converts-from unit is required.' }
   if (!unitTo)     return { ok: false, error: 'Converts-to unit is required.' }
   if (isNaN(conversionRate) || conversionRate <= 0) return { ok: false, error: 'Enter a valid conversion rate.' }
   if (isNaN(wastagePct) || wastagePct < 0) return { ok: false, error: 'Enter a valid wastage percentage.' }
+  if (defaultPrice != null && (isNaN(defaultPrice) || defaultPrice < 0)) {
+    return { ok: false, error: 'Enter a valid default price.' }
+  }
 
   return {
     ok: true,
-    values: { name, unit_from: unitFrom, unit_to: unitTo, conversion_rate: conversionRate, wastage_pct: wastagePct, notes },
+    values: {
+      name, unit_from: unitFrom, unit_to: unitTo, conversion_rate: conversionRate, wastage_pct: wastagePct, notes,
+      default_unit_price: defaultPrice,
+    },
   }
 }
 
