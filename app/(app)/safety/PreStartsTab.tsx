@@ -31,6 +31,17 @@ function isBadAnswer(item: ChecklistItem, val: CheckVal): boolean {
   return isBadAnswerShared(item, val)
 }
 
+// The `today` prop is computed server-side via toISOString(), which is always
+// UTC — on a UTC-hosted server that shows the wrong calendar day for several
+// hours every Australian morning (e.g. a new pre-start defaulting to Sunday
+// instead of Monday). Recompute it anchored to the business's timezone
+// instead; this runs identically during SSR and client hydration (both
+// target the same named zone), so there's no hydration mismatch. Same
+// approach as FortnightCalendar.tsx / ScheduleView.tsx.
+function getSydneyTodayStr(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }).format(new Date())
+}
+
 // Validate a checklist; returns first error string or null
 function validateSection(
   items: readonly ChecklistItem[],
@@ -411,6 +422,7 @@ export default function PreStartsTab({
   tableExists,
   hasMorePreStarts,
 }: Props) {
+  today = getSydneyTodayStr()
   const isSupervisorPlus = role === 'supervisor' || role === 'admin'
   const isAdmin          = role === 'admin'
 
