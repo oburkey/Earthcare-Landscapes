@@ -82,25 +82,25 @@ const QUOTE_STYLES = `
 <style>
 .html2pdf__container * { box-sizing: border-box; margin: 0; padding: 0; }
 .html2pdf__container { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #111; background: white; }
-.html2pdf__container .quote-page { padding: 24px 28px; }
-.html2pdf__container .hdr { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid #111; }
+.html2pdf__container .quote-page { padding: 38px 32px 48px; }
+.html2pdf__container .hdr { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 26px; padding-bottom: 14px; border-bottom: 2px solid #111; }
 .html2pdf__container .hdr-left .label { font-size: 20px; font-weight: bold; letter-spacing: 0.03em; margin-bottom: 8px; }
 .html2pdf__container .hdr-left .site { font-size: 13px; font-weight: bold; margin-bottom: 3px; }
 .html2pdf__container .hdr-left .ref { font-size: 11px; font-weight: bold; color: #222; margin: 2px 0; }
 .html2pdf__container .hdr-left .sub { font-size: 10px; color: #555; margin-top: 2px; }
 .html2pdf__container .hdr-right img { max-width: 130px; max-height: 55px; object-fit: contain; display: block; }
 .html2pdf__container table { width: 100%; border-collapse: collapse; }
-.html2pdf__container thead th { font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: #555; padding: 5px 6px; border-bottom: 2px solid #bbb; text-align: left; white-space: nowrap; }
+.html2pdf__container thead th { font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: #555; padding: 8px; border-bottom: 2px solid #bbb; text-align: left; white-space: nowrap; }
 .html2pdf__container thead th.r { text-align: right; }
-.html2pdf__container td { padding: 4px 6px; border-bottom: 1px solid #eee; vertical-align: top; }
+.html2pdf__container td { padding: 7px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
 .html2pdf__container td.r { text-align: right; white-space: nowrap; }
 .html2pdf__container td.n { color: #888; font-size: 10px; white-space: nowrap; }
-.html2pdf__container tr.sub td { background: #fafafa; font-weight: 600; border-top: 1px solid #ddd; border-bottom: 1px solid #ddd; }
+.html2pdf__container tr.sub td { background: #fafafa; font-weight: 600; padding-top: 8px; padding-bottom: 8px; border-top: 1px solid #ddd; border-bottom: 1px solid #ddd; }
 .html2pdf__container tr.gst td { background: #fafafa; }
-.html2pdf__container tr.grand td { background: #f0f0f0; font-weight: bold; font-size: 12px; border-top: 3px solid #999; padding: 7px 6px; }
-.html2pdf__container .quote-notes { margin-top: 12px; padding: 8px 10px; background: #f9f9f9; border: 1px solid #e8e8e8; font-size: 10px; color: #444; white-space: pre-wrap; line-height: 1.5; }
+.html2pdf__container tr.grand td { background: #f0f0f0; font-weight: bold; font-size: 12px; border-top: 3px solid #999; padding: 11px 8px; }
+.html2pdf__container .quote-notes { margin-top: 18px; padding: 10px 12px; background: #f9f9f9; border: 1px solid #e8e8e8; font-size: 10px; color: #444; white-space: pre-wrap; line-height: 1.5; }
 .html2pdf__container .quote-notes .notes-lbl { font-size: 9px; font-weight: bold; text-transform: uppercase; color: #888; letter-spacing: 0.05em; margin-bottom: 4px; }
-.html2pdf__container .note { margin-top: 14px; font-size: 9px; color: #999; }
+.html2pdf__container .note { margin-top: 20px; font-size: 9px; color: #999; }
 </style>`
 
 export function buildQuoteHtml(
@@ -181,25 +181,25 @@ const COMBINED_STYLES = `
 <style>
 .html2pdf__container * { box-sizing: border-box; margin: 0; padding: 0; }
 .html2pdf__container { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #111; background: white; }
-.html2pdf__container .combined-page { padding: 24px 28px; }
-.html2pdf__container .quote-section { margin-top: 24px; padding-top: 20px; border-top: 1px solid #ddd; }
-.html2pdf__container .doc-hdr { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid #111; }
+.html2pdf__container .combined-page { padding: 38px 32px 48px; }
+.html2pdf__container .quote-section { margin-top: 32px; padding-top: 26px; border-top: 1px solid #ddd; }
+.html2pdf__container .doc-hdr { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 26px; padding-bottom: 14px; border-bottom: 2px solid #111; }
 .html2pdf__container .doc-hdr-left .main-label { font-size: 22px; font-weight: bold; letter-spacing: 0.03em; margin-bottom: 4px; }
 .html2pdf__container .doc-hdr-left .sub { font-size: 10px; color: #555; }
 .html2pdf__container .doc-hdr-right img { max-width: 130px; max-height: 55px; object-fit: contain; display: block; }
-.html2pdf__container .sec-hdr { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #ddd; }
+.html2pdf__container .sec-hdr { margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #ddd; }
 .html2pdf__container .sec-title { font-size: 13px; font-weight: bold; color: #111; margin-bottom: 2px; }
 .html2pdf__container .sec-desc { font-size: 10px; color: #555; }
-.html2pdf__container .sec-notes { margin-top: 8px; padding: 6px 8px; background: #f9f9f9; border: 1px solid #e8e8e8; font-size: 10px; color: #444; white-space: pre-wrap; line-height: 1.5; }
+.html2pdf__container .sec-notes { margin-top: 10px; padding: 8px 10px; background: #f9f9f9; border: 1px solid #e8e8e8; font-size: 10px; color: #444; white-space: pre-wrap; line-height: 1.5; }
 .html2pdf__container table { width: 100%; border-collapse: collapse; }
-.html2pdf__container thead th { font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: #555; padding: 5px 6px; border-bottom: 2px solid #bbb; text-align: left; white-space: nowrap; }
+.html2pdf__container thead th { font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: #555; padding: 8px; border-bottom: 2px solid #bbb; text-align: left; white-space: nowrap; }
 .html2pdf__container thead th.r { text-align: right; }
-.html2pdf__container td { padding: 4px 6px; border-bottom: 1px solid #eee; vertical-align: top; }
+.html2pdf__container td { padding: 7px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
 .html2pdf__container td.r { text-align: right; white-space: nowrap; }
 .html2pdf__container td.n { color: #888; font-size: 10px; white-space: nowrap; }
-.html2pdf__container tr.sub td { background: #fafafa; font-weight: 600; border-top: 1px solid #ddd; border-bottom: 2px solid #ccc; }
-.html2pdf__container tr.grand td { background: #f0f0f0; font-weight: bold; font-size: 12px; border-top: 3px solid #999; padding: 7px 6px; }
-.html2pdf__container .note { margin-top: 14px; font-size: 9px; color: #999; }
+.html2pdf__container tr.sub td { background: #fafafa; font-weight: 600; padding-top: 8px; padding-bottom: 8px; border-top: 1px solid #ddd; border-bottom: 2px solid #ccc; }
+.html2pdf__container tr.grand td { background: #f0f0f0; font-weight: bold; font-size: 12px; border-top: 3px solid #999; padding: 11px 8px; }
+.html2pdf__container .note { margin-top: 20px; font-size: 9px; color: #999; }
 </style>`
 
 function buildCombinedQuotesPdf(selectedQuotes: QuoteRow[], logoSrc: string): string {
