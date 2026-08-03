@@ -4,6 +4,7 @@ import { useActionState, useState } from 'react'
 import { createConversionSetting, updateConversionSetting, deleteConversionSetting } from './settings-actions'
 import PlantRatiosSettings, { type RatioRow, type SiteOption as PlantRatioSiteOption } from './PlantRatiosSettings'
 import ConversionLinksSection from './ConversionLinksSection'
+import MaterialTypesSettings, { type MaterialTypeRow } from './MaterialTypesSettings'
 import { MATERIAL_UNITS } from './order-constants'
 import type { ActionState } from '@/types/actions'
 
@@ -134,6 +135,7 @@ function ConversionForm({
 export default function SettingsTab({
   settings, isAdmin, tableExists,
   conversionLinks, conversionLinksTableExists,
+  materialTypes, materialTypesTableExists,
   plantRatiosGlobal, plantRatiosOverrides, plantRatiosSites,
 }: {
   settings: ConversionSettingRow[]
@@ -141,6 +143,8 @@ export default function SettingsTab({
   tableExists: boolean
   conversionLinks: ConversionLinkRow[]
   conversionLinksTableExists: boolean
+  materialTypes: MaterialTypeRow[]
+  materialTypesTableExists: boolean
   plantRatiosGlobal: RatioRow | null
   plantRatiosOverrides: RatioRow[]
   plantRatiosSites: PlantRatioSiteOption[]
@@ -253,6 +257,7 @@ export default function SettingsTab({
                         <ConversionLinksSection
                           settingId={s.id}
                           links={settingLinks}
+                          materialTypes={materialTypes.filter((m) => m.isActive).map((m) => ({ id: m.id, name: m.name }))}
                           isAdmin={isAdmin}
                           tableExists={conversionLinksTableExists}
                         />
@@ -276,6 +281,24 @@ export default function SettingsTab({
           </>
         )}
       </div>
+
+      {isAdmin && (
+        <div className="space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold text-fg-secondary">Material Types</h2>
+            <p className="mt-0.5 text-xs text-fg-muted">
+              The master list of trackable materials that drives orders, stock, and quant sheet stock deductions.
+            </p>
+          </div>
+          {!materialTypesTableExists ? (
+            <p className="text-sm text-fg-muted">
+              The material types table hasn&apos;t been created yet. Run the SQL migration to enable this section.
+            </p>
+          ) : (
+            <MaterialTypesSettings materialTypes={materialTypes} />
+          )}
+        </div>
+      )}
 
       {isAdmin && (
         <div className="space-y-3">

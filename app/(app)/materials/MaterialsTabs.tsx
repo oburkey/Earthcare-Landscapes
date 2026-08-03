@@ -3,8 +3,9 @@
 import { useState } from 'react'
 import MaterialsView from './MaterialsView'
 import OrdersTab, { type OrderRow, type SiteOption as OrdersSiteOption, type SupplierOption } from './OrdersTab'
-import StockTab, { type SiteStockRow, type SiteOption as StockSiteOption } from './StockTab'
+import StockTab, { type StockItemRow, type MaterialTypeOption, type SiteOption as StockSiteOption } from './StockTab'
 import SettingsTab, { type ConversionSettingRow, type ConversionLinkRow } from './SettingsTab'
+import type { MaterialTypeRow } from './MaterialTypesSettings'
 import type { RatioRow, SiteOption as PlantRatioSiteOption } from './PlantRatiosSettings'
 import type { MonthMaterialGroup } from './lib'
 
@@ -28,13 +29,16 @@ interface Props {
   ordersTableExists: boolean
   // Stock
   stockSites: StockSiteOption[]
-  stockBySite: Record<string, SiteStockRow>
+  stockItemsBySite: Record<string, StockItemRow[]>
+  activeMaterialTypes: MaterialTypeOption[]
   stockTableExists: boolean
   // Settings
   conversionSettings: ConversionSettingRow[]
   conversionSettingsTableExists: boolean
   conversionLinks: ConversionLinkRow[]
   conversionLinksTableExists: boolean
+  materialTypes: MaterialTypeRow[]
+  materialTypesTableExists: boolean
   plantRatiosGlobal: RatioRow | null
   plantRatiosOverrides: RatioRow[]
   plantRatiosSites: PlantRatioSiteOption[]
@@ -48,9 +52,10 @@ interface Props {
 export default function MaterialsTabs({
   months, lotSitePlanUrls,
   orders, ordersSites, suppliers, ordersTableExists,
-  stockSites, stockBySite, stockTableExists,
+  stockSites, stockItemsBySite, activeMaterialTypes, stockTableExists,
   conversionSettings, conversionSettingsTableExists,
   conversionLinks, conversionLinksTableExists,
+  materialTypes, materialTypesTableExists,
   plantRatiosGlobal, plantRatiosOverrides, plantRatiosSites,
   showPlanning, canManageOrders, canEditStock, isAdmin,
 }: Props) {
@@ -96,8 +101,10 @@ export default function MaterialsTabs({
       {active === 'stock' && (
         <StockTab
           sites={stockSites}
-          stockBySite={stockBySite}
+          stockItemsBySite={stockItemsBySite}
+          materialTypes={activeMaterialTypes}
           canEdit={canEditStock}
+          isAdmin={isAdmin}
           tableExists={stockTableExists}
         />
       )}
@@ -109,6 +116,8 @@ export default function MaterialsTabs({
           tableExists={conversionSettingsTableExists}
           conversionLinks={conversionLinks}
           conversionLinksTableExists={conversionLinksTableExists}
+          materialTypes={materialTypes}
+          materialTypesTableExists={materialTypesTableExists}
           plantRatiosGlobal={plantRatiosGlobal}
           plantRatiosOverrides={plantRatiosOverrides}
           plantRatiosSites={plantRatiosSites}

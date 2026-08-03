@@ -5,8 +5,9 @@ import { getR2SignedUrlSafe } from '@/lib/r2'
 import { buildMaterialsPlan, getMaterialsDateRange, type MaterialsLotRow, type MaterialsExtraJobRow, type RatioSettingRow } from './lib'
 import MaterialsTabs from './MaterialsTabs'
 import type { OrderRow, SiteOption as OrdersSiteOption, SupplierOption } from './OrdersTab'
-import type { SiteStockRow, SiteOption as StockSiteOption } from './StockTab'
+import type { StockItemRow, MaterialTypeOption, SiteOption as StockSiteOption } from './StockTab'
 import type { ConversionSettingRow, ConversionLinkRow } from './SettingsTab'
+import type { MaterialTypeRow } from './MaterialTypesSettings'
 import type { RatioRow, SiteOption as PlantRatioSiteOption } from './PlantRatiosSettings'
 
 export const metadata = { title: 'Materials — Earthcare Landscapes' }
@@ -142,38 +143,74 @@ export default async function MaterialsPage() {
     ordersTableExists = false
   }
 
+  // ── Material types (master list — drives orders, stock, quant deductions) ──
+  let materialTypes: MaterialTypeRow[] = []
+  let materialTypesTableExists = true
+  try {
+    const { data, error } = await supabase
+      .from('material_types')
+      .select('id, name, unit, stock_group, quant_item_names, is_active, order_index')
+      .order('stock_group', { ascending: true })
+      .order('order_index', { ascending: true })
+
+    if (isMissingTable(error)) {
+      materialTypesTableExists = false
+    } else if (data) {
+      materialTypes = data.map((m) => ({
+        id:             m.id,
+        name:           m.name,
+        unit:           m.unit,
+        stockGroup:     m.stock_group,
+        quantItemNames: m.quant_item_names ?? [],
+        isActive:       m.is_active,
+        orderIndex:     m.order_index,
+      }))
+    }
+  } catch {
+    materialTypesTableExists = false
+  }
+  const activeMaterialTypes: MaterialTypeOption[] = materialTypes
+    .filter((m) => m.isActive)
+    .map((m) => ({ id: m.id, name: m.name, unit: m.unit, stockGroup: m.stockGroup }))
+
   // ── Stock tab data ─────────────────────────────────────────────────────────
-  let stockBySite: Record<string, SiteStockRow> = {}
+  let stockItemsBySite: Record<string, StockItemRow[]> = {}
   let stockTableExists = true
   try {
     const { data, error } = await supabase
-      .from('site_stock')
-      .select('site_id, plants_140mm, plants_200mm, plants_300mm, plants_35l, plants_90l, mulch_tonnes, edging_metres, turf_rolls, drippers_packs, updated_at, profiles(first_name, last_name)')
+      .from('site_stock_items')
+      .select(`
+        id, site_id, material_type_id, quantity, last_update_source, last_update_lot, updated_at,
+        material_types(name, unit, stock_group),
+        profiles(first_name, last_name)
+      `)
 
     if (isMissingTable(error)) {
       stockTableExists = false
     } else if (data) {
-      stockBySite = Object.fromEntries(
-        data.map((r) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const updater = Array.isArray(r.profiles) ? (r.profiles as any)[0] : (r.profiles as any)
-          const row: SiteStockRow = {
-            siteId:            r.site_id,
-            plants140mm:       Number(r.plants_140mm ?? 0),
-            plants200mm:       Number(r.plants_200mm ?? 0),
-            plants300mm:       Number(r.plants_300mm ?? 0),
-            plants35l:         Number(r.plants_35l ?? 0),
-            plants90l:         Number(r.plants_90l ?? 0),
-            mulchTonnes:       Number(r.mulch_tonnes ?? 0),
-            edgingMetres:      Number(r.edging_metres ?? 0),
-            turfRolls:         Number(r.turf_rolls ?? 0),
-            drippersPacks:     Number(r.drippers_packs ?? 0),
-            lastUpdatedByName: updater ? `${updater.first_name ?? ''} ${updater.last_name ?? ''}`.trim() || null : null,
-            updatedAt:         r.updated_at,
-          }
-          return [r.site_id, row]
-        })
-      )
+      const bySite: Record<string, StockItemRow[]> = {}
+      for (const r of data) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const material = Array.isArray(r.material_types) ? (r.material_types as any)[0] : (r.material_types as any)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const updater = Array.isArray(r.profiles) ? (r.profiles as any)[0] : (r.profiles as any)
+        const row: StockItemRow = {
+          id:                r.id,
+          materialTypeId:    r.material_type_id,
+          name:              material?.name ?? 'Unknown material',
+          unit:              material?.unit ?? '',
+          stockGroup:        material?.stock_group ?? '',
+          quantity:          Number(r.quantity ?? 0),
+          lastUpdatedByName: updater ? `${updater.first_name ?? ''} ${updater.last_name ?? ''}`.trim() || null : null,
+          lastUpdateSource:  r.last_update_source,
+          lastUpdateLot:     r.last_update_lot,
+          updatedAt:         r.updated_at,
+        }
+        const list = bySite[r.site_id] ?? []
+        list.push(row)
+        bySite[r.site_id] = list
+      }
+      stockItemsBySite = bySite
     }
   } catch {
     stockTableExists = false
@@ -252,12 +289,15 @@ export default async function MaterialsPage() {
         suppliers={suppliers}
         ordersTableExists={ordersTableExists}
         stockSites={stockSites}
-        stockBySite={stockBySite}
+        stockItemsBySite={stockItemsBySite}
+        activeMaterialTypes={activeMaterialTypes}
         stockTableExists={stockTableExists}
         conversionSettings={conversionSettings}
         conversionSettingsTableExists={conversionSettingsTableExists}
         conversionLinks={conversionLinks}
         conversionLinksTableExists={conversionLinksTableExists}
+        materialTypes={materialTypes}
+        materialTypesTableExists={materialTypesTableExists}
         plantRatiosGlobal={plantRatiosGlobal}
         plantRatiosOverrides={plantRatiosOverrides}
         plantRatiosSites={plantRatiosSites}

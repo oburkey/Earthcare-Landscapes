@@ -3,18 +3,20 @@
 import { useActionState, useState } from 'react'
 import { createConversionLink, updateConversionLink, deleteConversionLink } from './settings-actions'
 import { MATERIAL_UNITS } from './order-constants'
-import { STOCK_FIELDS } from './stock-constants'
 import type { ConversionLinkRow } from './SettingsTab'
 import type { ActionState } from '@/types/actions'
 
+type MaterialTypeOption = { id: string; name: string }
+
 function LinkForm({
-  action, defaults, submitLabel, onCancel, topSlot,
+  action, defaults, submitLabel, onCancel, topSlot, materialTypes,
 }: {
   action: (prev: ActionState, formData: FormData) => Promise<ActionState>
   defaults: Partial<ConversionLinkRow>
   submitLabel: string
   onCancel?: () => void
   topSlot?: React.ReactNode
+  materialTypes: MaterialTypeOption[]
 }) {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(action, null)
 
@@ -50,13 +52,13 @@ function LinkForm({
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-fg-muted mb-1">Stock field (optional)</label>
+          <label className="block text-xs font-medium text-fg-muted mb-1">Stock material (optional)</label>
           <select
             name="stock_field" defaultValue={defaults.stockField ?? ''}
             className="w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-fg focus:border-green-600 focus:outline-none"
           >
             <option value="">— None —</option>
-            {STOCK_FIELDS.map((f) => <option key={f} value={f}>{f.replace(/_/g, ' ')}</option>)}
+            {materialTypes.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
           </select>
         </div>
       </div>
@@ -85,9 +87,10 @@ function LinkForm({
   )
 }
 
-export default function ConversionLinksSection({ settingId, links, isAdmin, tableExists }: {
+export default function ConversionLinksSection({ settingId, links, materialTypes, isAdmin, tableExists }: {
   settingId: string
   links: ConversionLinkRow[]
+  materialTypes: MaterialTypeOption[]
   isAdmin: boolean
   tableExists: boolean
 }) {
@@ -129,6 +132,7 @@ export default function ConversionLinksSection({ settingId, links, isAdmin, tabl
                 defaults={l}
                 submitLabel="Save"
                 onCancel={() => setEditingId(null)}
+                materialTypes={materialTypes}
                 topSlot={
                   <>
                     <input type="hidden" name="id" value={l.id} />
@@ -144,7 +148,7 @@ export default function ConversionLinksSection({ settingId, links, isAdmin, tabl
             <div className="min-w-0">
               <p className="text-xs font-medium text-fg-secondary truncate">{l.name}</p>
               <p className="text-xs text-fg-muted">
-                {l.rate} {l.unit} per unit{l.stockField ? ` · updates ${l.stockField.replace(/_/g, ' ')}` : ''}
+                {l.rate} {l.unit} per unit{l.stockField ? ` · updates ${l.stockField}` : ''}
               </p>
             </div>
             {isAdmin && (
@@ -185,6 +189,7 @@ export default function ConversionLinksSection({ settingId, links, isAdmin, tabl
             defaults={{}}
             submitLabel="Add"
             onCancel={() => setAdding(false)}
+            materialTypes={materialTypes}
             topSlot={<input type="hidden" name="parent_setting_id" value={settingId} />}
           />
         </div>

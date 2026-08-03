@@ -3,7 +3,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
-import { STOCK_FIELDS } from './stock-constants'
 import type { ActionState } from '@/types/actions'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -171,9 +170,10 @@ function parseConversionLinkForm(formData: FormData): ParsedLink {
   if (!name)            return { ok: false, error: 'Name is required.' }
   if (!unit)            return { ok: false, error: 'Unit is required.' }
   if (isNaN(rate) || rate <= 0) return { ok: false, error: 'Enter a valid rate.' }
-  if (stockField && !(STOCK_FIELDS as readonly string[]).includes(stockField)) {
-    return { ok: false, error: 'Invalid stock field.' }
-  }
+  // stock_field is validated only as non-empty here — the dropdown that
+  // sources it (ConversionLinksSection) already constrains it to a known
+  // material_types.name, and that list is admin-editable so isn't worth
+  // re-fetching here just to whitelist against.
 
   return {
     ok: true,

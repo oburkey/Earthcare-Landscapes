@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
 import { revalidatePath, revalidateTag } from 'next/cache'
+import { getActiveMaterialTypes, computeQuantSheetStockChanges, applyStockDelta } from '@/app/(app)/materials/stock-deduction'
 import type { ActionState } from '@/types/actions'
 
 export type QuoteItemPayload = {
@@ -69,6 +70,18 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
       .single()
     if (error || !data) return { error: error?.message ?? 'Failed to create quote.' }
     quoteId = data.id
+  }
+
+  // For a final quant sheet, snapshot the current (about-to-be-replaced)
+  // items first — this is the "old" side of the stock-deduction diff below,
+  // and must be captured before the delete wipes it.
+  let oldItemsSnapshot: { item_name: string; quantity: number | null }[] = []
+  if (!isEstimated) {
+    const { data } = await supabase
+      .from('lot_quote_items')
+      .select('item_name, quantity')
+      .eq('quote_id', quoteId)
+    oldItemsSnapshot = data ?? []
   }
 
   // Replace all items (delete then insert)
@@ -145,8 +158,43 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
     if (pendingReviewError) return { error: pendingReviewError.message }
   }
 
+  // Final quant sheet -> site stock deduction. Only deducts the DIFFERENCE
+  // from the previous save (oldItemsSnapshot captured above), so re-saving
+  // the same quant sheet repeatedly doesn't double-deduct. Never blocks the
+  // quant sheet save itself — any failure here is logged and swallowed.
+  if (!isEstimated) {
+    try {
+      const materialTypes = await getActiveMaterialTypes(supabase)
+      const { data: newItems } = await supabase
+        .from('lot_quote_items')
+        .select('item_name, quantity')
+        .eq('quote_id', quoteId)
+      const stockChanges = computeQuantSheetStockChanges(materialTypes, oldItemsSnapshot, newItems ?? [])
+
+      if (stockChanges.size > 0) {
+        const { data: lotRow } = await supabase
+          .from('lots')
+          .select('lot_number')
+          .eq('id', lotId)
+          .single()
+
+        for (const [materialTypeId, quantityChange] of stockChanges) {
+          await applyStockDelta({
+            siteId, materialTypeId, quantityChange,
+            source: 'quant_deduction',
+            updatedBy: profile.id,
+            lotNumber: lotRow?.lot_number ?? null,
+          })
+        }
+      }
+    } catch (err) {
+      console.error('[lots/quote-actions] saveLotQuote stock deduction failed (non-blocking):', err)
+    }
+  }
+
   revalidatePath(`/sites/${siteId}/stages/${stageId}/lots/${lotId}`)
   revalidatePath(`/sites/${siteId}/stages/${stageId}`)
+  revalidatePath('/materials')
   revalidateTag('stages')
   return null
 }

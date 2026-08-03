@@ -6,7 +6,8 @@ import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { uploadToR2, deleteFromR2 } from '@/lib/r2'
 import { ATTACHMENT_TYPES, type AttachmentType, type OrderStatus } from './order-constants'
-import { CATEGORY_TO_STOCK_FIELD, STOCK_FIELDS, type StockField } from './stock-constants'
+import { ORDER_CATEGORY_TO_MATERIAL_NAME } from './stock-constants'
+import { getActiveMaterialTypes, applyStockDelta } from './stock-deduction'
 import type { ActionState, MutationState } from '@/types/actions'
 
 function canManageOrders(role: string): boolean {
@@ -279,61 +280,47 @@ export async function markOrderDelivered(
         .eq('order_id', orderId)
       if (itemsFetchError) logDbError('markOrderDelivered fetch material_order_items', itemsFetchError, { orderId })
 
-      const stockDelta: Partial<Record<StockField, number>> = {}
+      // stock_field on a line item (set when it was added from a linked-
+      // materials suggestion) now holds a material_types.name directly,
+      // rather than an old fixed-column name — matched the same way as the
+      // category fallback below.
+      const materialTypes = await getActiveMaterialTypes(supabase)
+      const materialByName = new Map(materialTypes.map((m) => [m.name, m]))
+
+      const stockDelta = new Map<string, number>()
       for (const item of items ?? []) {
-        const override = item.stock_field as string | null
-        const field = override && (STOCK_FIELDS as readonly string[]).includes(override)
-          ? (override as StockField)
-          : CATEGORY_TO_STOCK_FIELD[item.category]
-        if (!field) continue
         const qty = Number(item.quantity) || 0
         if (qty <= 0) continue
-        stockDelta[field] = (stockDelta[field] ?? 0) + qty
+        const overrideName = item.stock_field as string | null
+        const material = (overrideName ? materialByName.get(overrideName) : undefined)
+          ?? materialByName.get(ORDER_CATEGORY_TO_MATERIAL_NAME[item.category] ?? '')
+        if (!material) continue
+        stockDelta.set(material.id, (stockDelta.get(material.id) ?? 0) + qty)
       }
 
-      const deltaFields = Object.keys(stockDelta) as StockField[]
-      if (deltaFields.length === 0) {
-        // Requested but nothing mapped to a stock column (e.g. every line
-        // item was 'Other') — not an error, just informational.
-        console.info('[materials/orders-actions] markOrderDelivered: update_stock requested but no line items mapped to a stock column', { orderId })
+      if (stockDelta.size === 0) {
+        // Requested but nothing mapped to a known material type (e.g. every
+        // line item was 'Other') — not an error, just informational.
+        console.info('[materials/orders-actions] markOrderDelivered: update_stock requested but no line items mapped to a material type', { orderId })
       } else {
-        // site_stock read/write use the admin client so the write is
-        // guaranteed to land once canManageOrders() above has already
-        // authorized the caller (leading_hand+) — canManageOrders already
-        // matches site_stock's own RLS, so this isn't bypassing a stricter
-        // policy, just insurance against any DB-level failure (same
-        // reasoning as the pre-start vehicle-hours update in safety/actions.ts).
-        const adminSupabase = createAdminClient()
-        const { data: existing, error: stockFetchError } = await adminSupabase
-          .from('site_stock')
-          .select(STOCK_FIELDS.join(', '))
-          .eq('site_id', order.site_id)
-          .maybeSingle()
-
-        if (stockFetchError) {
-          // Abort rather than fall back to a zero baseline — treating a
-          // failed read as "site has no existing stock" would upsert only
-          // this delivery's delta and silently wipe whatever stock was
-          // already recorded.
-          logDbError('markOrderDelivered fetch site_stock — aborting stock update', stockFetchError, { siteId: order.site_id, deltaFields, stockDelta })
-          revalidatePath('/materials')
-          return { success: 'Order marked delivered, but stock could not be updated automatically — update the Stock tab manually.' }
-        }
-
-        const existingRow = (existing ?? {}) as Partial<Record<StockField, number>>
-        const update: Record<string, unknown> = { site_id: order.site_id, last_updated_by: profile.id }
-        for (const field of deltaFields) {
-          update[field] = Number(existingRow[field] ?? 0) + (stockDelta[field] ?? 0)
-        }
-
-        const { error: stockUpsertError } = await adminSupabase.from('site_stock').upsert(update, { onConflict: 'site_id' })
-        if (stockUpsertError) {
-          logDbError('markOrderDelivered upsert site_stock', stockUpsertError, { siteId: order.site_id, update })
-          revalidatePath('/materials')
-          return { success: 'Order marked delivered, but stock could not be updated automatically — update the Stock tab manually.' }
+        // Each material's fetch/upsert is independent (applyStockDelta uses
+        // the admin client internally, same reasoning as the pre-start
+        // vehicle-hours update — this isn't bypassing a stricter policy,
+        // just insurance against any DB-level failure) — a failure on one
+        // material no longer aborts the whole delivery's stock update.
+        let anyFailed = false
+        for (const [materialTypeId, qty] of stockDelta) {
+          const result = await applyStockDelta({
+            siteId: order.site_id, materialTypeId, quantityChange: qty,
+            source: 'order_delivery', updatedBy: profile.id,
+          })
+          if (!result.ok) anyFailed = true
         }
 
         revalidatePath('/materials')
+        if (anyFailed) {
+          return { success: 'Order marked delivered, but stock could not be updated automatically for one or more items — update the Stock tab manually.' }
+        }
       }
     }
 
