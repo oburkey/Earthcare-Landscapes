@@ -144,13 +144,17 @@ export function computeQuantSheetStockChanges(
     }
   }
 
-  // Retic — Poly Pipe: fixed 1 roll deducted every time a final quant sheet
-  // is saved, regardless of quantities — not diffed against the previous
-  // save like everything else here (this one intentionally applies on every
-  // save, per business rule: ~1 roll per house).
+  // Retic — Poly Pipe: fixed 1 roll, deducted only on the FIRST final quant
+  // sheet save for a lot (no previous saved final quantities) — same "only
+  // deduct the difference" principle as everything else here, just a
+  // one-time step instead of a formula-driven diff. Re-saving an already-
+  // saved final quant sheet deducts 0, not another roll.
   const polyPipe = materialTypes.find((m) => m.name === 'Poly Pipe')
   if (polyPipe) {
-    changes.set(polyPipe.id, (changes.get(polyPipe.id) ?? 0) - 1)
+    const hadPreviousFinalData = oldItems.some((i) => i.quantity !== null)
+    if (!hadPreviousFinalData) {
+      changes.set(polyPipe.id, (changes.get(polyPipe.id) ?? 0) - 1)
+    }
   }
 
   return changes
