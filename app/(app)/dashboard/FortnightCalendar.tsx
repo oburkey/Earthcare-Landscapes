@@ -29,9 +29,10 @@ function toYmd(d: Date): string {
 
 // This can render server-side (e.g. Vercel, which runs in UTC) — deriving "today"
 // from the server's local clock would show the wrong calendar day for several
-// hours every Australian morning. Anchor explicitly to the business's timezone.
-function todayInSydney(): Date {
-  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' })
+// hours every Australian morning. Anchor explicitly to the business's timezone
+// (Australia/Perth).
+function todayInPerth(): Date {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Perth' })
     .format(new Date())
   const [y, m, d] = parts.split('-').map(Number)
   return new Date(y, m - 1, d)
@@ -50,7 +51,7 @@ export default function FortnightCalendar({
   events?: DashboardCalendarEvent[]
 }) {
   const router = useRouter()
-  const today = todayInSydney()
+  const today = todayInPerth()
   const todayStr = toYmd(today)
 
   // Build 14 days starting from this Monday

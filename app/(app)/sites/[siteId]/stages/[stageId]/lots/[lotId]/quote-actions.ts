@@ -43,6 +43,8 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
 
   let quoteId: string
 
+  const now = new Date().toISOString()
+
   if (existing) {
     const { error } = await supabase
       .from('lot_quotes')
@@ -50,7 +52,9 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
         status,
         notes: notes || null,
         quoted_by: profile.id,
-        quoted_at: new Date().toISOString(),
+        quoted_at: now,
+        last_edited_by: profile.id,
+        last_edited_at: now,
       })
       .eq('id', existing.id)
     if (error) return { error: error.message }
@@ -64,7 +68,9 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
         status,
         notes: notes || null,
         quoted_by: profile.id,
-        quoted_at: new Date().toISOString(),
+        quoted_at: now,
+        last_edited_by: profile.id,
+        last_edited_at: now,
       })
       .select('id')
       .single()

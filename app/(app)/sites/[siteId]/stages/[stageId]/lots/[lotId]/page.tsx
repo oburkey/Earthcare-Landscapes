@@ -65,7 +65,7 @@ export default async function LotPage({ params }: Props) {
       .from('lots')
       .select(`
         id, lot_number, status, due_date, scheduled_date, completion_date, notes, home_design,
-        build_complete, quant_done, invoiced, has_client_extras, extras_notes, contract_price,
+        build_complete, invoiced, has_client_extras, extras_notes, contract_price,
         pending_review, approved_for_invoicing, delayed, delay_reason, expected_completion_date,
         stages!inner(id, name, is_contract_pricing, default_contract_price, sites!inner(id, name, has_client_extras))
       `)
@@ -100,7 +100,8 @@ export default async function LotPage({ params }: Props) {
       ? supabase
           .from('lot_quotes')
           .select(`
-            id, is_estimated, status, notes,
+            id, is_estimated, status, notes, last_edited_at,
+            profiles!last_edited_by (first_name, last_name),
             lot_quote_items (template_item_id, quantity, unit_price_snapshot)
           `)
           .eq('lot_id', lotId)
@@ -143,7 +144,6 @@ export default async function LotPage({ params }: Props) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const lotAny          = lot as any
   const buildComplete          = lotAny?.build_complete          ?? false
-  const quantDone              = lotAny?.quant_done              ?? false
   const invoiced               = lotAny?.invoiced                ?? false
   const lotClientExtras        = lotAny?.has_client_extras       ?? true
   const extrasNotes            = lotAny?.extras_notes            ?? null
@@ -285,10 +285,15 @@ export default async function LotPage({ params }: Props) {
 
   function shapeQuote(q: typeof estimatedQuote) {
     if (!q) return null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const editor = Array.isArray(q.profiles) ? (q.profiles as any)[0] : (q.profiles as any)
+    const lastEditedByName = editor ? `${editor.first_name ?? ''} ${editor.last_name ?? ''}`.trim() || null : null
     return {
       id:     q.id,
       status: q.status as 'draft' | 'submitted' | 'approved',
       notes:  q.notes,
+      lastEditedByName,
+      lastEditedAt: q.last_edited_at as string | null,
       items:  (q.lot_quote_items ?? []).map((i) => ({
         template_item_id:    i.template_item_id as string,
         quantity:            i.quantity as number | null,
@@ -330,14 +335,13 @@ export default async function LotPage({ params }: Props) {
           hiddenFields={{ lot_id: lotId, site_id: siteId, stage_id: stageId }}
         />
 
-        {/* Status toggles — supervisor+ sees Build Complete & Quant Done; admin also sees Invoiced */}
+        {/* Status toggles — supervisor+ sees Build Complete; admin also sees Invoiced */}
         {canSupervise && (
           <LotStatusToggles
             lotId={lotId}
             siteId={siteId}
             stageId={stageId}
             buildComplete={buildComplete}
-            quantDone={quantDone}
             invoiced={invoiced}
             hasClientExtras={lotClientExtras}
             siteHasClientExtras={siteClientExtras}

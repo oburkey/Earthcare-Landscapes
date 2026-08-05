@@ -4,14 +4,13 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toggleLotFlag } from './actions'
 
-type Flag = 'build_complete' | 'quant_done' | 'invoiced' | 'has_client_extras' | 'pending_review' | 'approved_for_invoicing'
+type Flag = 'build_complete' | 'invoiced' | 'has_client_extras' | 'pending_review' | 'approved_for_invoicing'
 
 interface Props {
   lotId: string
   siteId: string
   stageId: string
   buildComplete: boolean
-  quantDone: boolean
   invoiced: boolean
   hasClientExtras: boolean
   siteHasClientExtras: boolean
@@ -24,7 +23,6 @@ interface Props {
 export default function LotStatusToggles({
   lotId, siteId, stageId,
   buildComplete: initBuild,
-  quantDone: initQuant,
   invoiced: initInvoiced,
   hasClientExtras: initClientExtras,
   siteHasClientExtras,
@@ -35,7 +33,6 @@ export default function LotStatusToggles({
 }: Props) {
   const router = useRouter()
   const [buildComplete,        setBuildComplete]        = useState(initBuild)
-  const [quantDone,            setQuantDone]            = useState(initQuant)
   const [invoiced,             setInvoiced]             = useState(initInvoiced)
   const [hasClientExtras,      setHasClientExtras]      = useState(initClientExtras)
   const [pendingReview,        setPendingReview]        = useState(initPendingReview)
@@ -74,24 +71,14 @@ export default function LotStatusToggles({
     <div className="space-y-1.5">
       <div className="flex flex-wrap gap-2">
         {canSupervise && (
-          <>
-            <button
-              type="button"
-              disabled={isPending}
-              onClick={() => toggle('build_complete', buildComplete, setBuildComplete)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors disabled:opacity-60 ${pill(buildComplete)}`}
-            >
-              Build Complete
-            </button>
-            <button
-              type="button"
-              disabled={isPending}
-              onClick={() => toggle('quant_done', quantDone, setQuantDone)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors disabled:opacity-60 ${pill(quantDone)}`}
-            >
-              Quant Done
-            </button>
-          </>
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => toggle('build_complete', buildComplete, setBuildComplete)}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors disabled:opacity-60 ${pill(buildComplete)}`}
+          >
+            Build Complete
+          </button>
         )}
         {isAdmin && (
           <>

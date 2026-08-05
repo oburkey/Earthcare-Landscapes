@@ -55,11 +55,15 @@ interface Props {
   // Gates Overview/Checklist table views — see the comment on
   // canUseStageTableViews in page.tsx to change who this applies to.
   canUseTableViews: boolean
+  // Gates the "last edited" quant-sheet indicator column in the table view —
+  // supervisor+ (admin included, since supervisor is already the higher of
+  // the two roles this needs to cover).
+  canSeeLastEdited: boolean
 }
 
 export default function StageViewSwitcher({
   lots, extraJobs, tradeStatusMap, checklistMap, siteId, stageId,
-  canAddLot, canManageExtraJobs, canTickChecklist, canToggleBuildComplete, canUseTableViews,
+  canAddLot, canManageExtraJobs, canTickChecklist, canToggleBuildComplete, canUseTableViews, canSeeLastEdited,
 }: Props) {
   // Lazy initializer (same pattern as ScheduleView's view-preference state) —
   // localStorage isn't available during SSR, so fall back to the default there.
@@ -117,6 +121,7 @@ export default function StageViewSwitcher({
           stageId={stageId}
           canAddLot={canAddLot}
           canManageExtraJobs={canManageExtraJobs}
+          canSeeLastEdited={canSeeLastEdited}
         />
       ) : (
         <StageLotsTable
@@ -129,6 +134,7 @@ export default function StageViewSwitcher({
           stageId={stageId}
           canTickChecklist={canTickChecklist}
           canToggleBuildComplete={canToggleBuildComplete}
+          canSeeLastEdited={canSeeLastEdited}
         />
       )}
     </div>

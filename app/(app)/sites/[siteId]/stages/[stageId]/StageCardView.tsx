@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { PrefetchLink } from '@/app/_components/PrefetchLink'
 import { STATUS_CONFIG, EXTRA_JOB_STATUS_CONFIG, DELAYED_BADGE_CLASS, formatDate, delayedBadgeLabel, tradeStatusBadge, type TradeStatusSummary } from '@/lib/lotStatus'
-import type { TableLotRow, TableExtraJobRow } from './StageLotsTable'
+import { formatRelativeTime, type TableLotRow, type TableExtraJobRow } from './StageLotsTable'
 import BulkUpdateLotsButton from './BulkUpdateLotsButton'
 
 interface Props {
@@ -12,12 +12,15 @@ interface Props {
   stageId: string
   canAddLot: boolean
   canManageExtraJobs: boolean
+  // Gates the "last edited" quant-sheet indicator on each card — same rule
+  // as StageLotsTable's canSeeLastEdited (supervisor+, admin included).
+  canSeeLastEdited: boolean
 }
 
 // Original card view, extracted unchanged from the stage page so it can sit
 // alongside the new Overview/Checklist table views as the third toggle option.
 export default function StageCardView({
-  lots, extraJobs, tradeStatusMap, siteId, stageId, canAddLot, canManageExtraJobs,
+  lots, extraJobs, tradeStatusMap, siteId, stageId, canAddLot, canManageExtraJobs, canSeeLastEdited,
 }: Props) {
   return (
     <div className="space-y-5">
@@ -82,6 +85,11 @@ export default function StageCardView({
                     {lot.dueDate && (
                       <p className="mt-1 text-xs text-fg-muted">
                         Due {formatDate(lot.dueDate)}
+                      </p>
+                    )}
+                    {canSeeLastEdited && lot.lastEditedAt && lot.lastEditedByInitials && (
+                      <p className="mt-1 text-xs text-fg-muted">
+                        {lot.lastEditedByInitials} · {formatRelativeTime(lot.lastEditedAt)}
                       </p>
                     )}
                   </div>

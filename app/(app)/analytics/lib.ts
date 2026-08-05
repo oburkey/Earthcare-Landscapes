@@ -172,9 +172,15 @@ export type MaterialsSection = {
   }
 }
 
-// Lightweight site/stage list for the materials-accuracy filter sidebar —
-// independent of whether a site/stage currently has any lots.
-export type MaterialsSiteOption = { id: string; name: string; stages: { id: string; name: string }[] }
+// Lightweight site/stage/lot list for the materials-accuracy filter sidebar —
+// independent of whether a site/stage currently has any lots. `lots` is
+// scoped to the same date-filtered lotCalcs that materialsByLot is built
+// from, so every lot listed here has a corresponding materialsByLot entry.
+export type MaterialsSiteOption = {
+  id: string
+  name: string
+  stages: { id: string; name: string; lots: { id: string; lotNumber: string }[] }[]
+}
 
 export type AnalyticsData = {
   rangeLabel: string
@@ -189,6 +195,7 @@ export type AnalyticsData = {
   materials: MaterialsSection
   materialsBySite: Record<string, MaterialsSection>
   materialsByStage: Record<string, MaterialsSection>
+  materialsByLot: Record<string, MaterialsSection>
   materialsSiteIndex: MaterialsSiteOption[]
   sites: SiteAnalytics[]
 }
@@ -597,32 +604,11 @@ export function buildAnalyticsData(input: {
     count: completedLots.filter((l) => monthKey(l.build_completed_at) === key).length,
   }))
 
-  // ── Section 2: materials & quote accuracy ──────────────────────────────────
-  const globalRatios = resolveRatios(null, plantRatioSettings)
-  const materials = buildMaterialsSection(lotCalcs, revenueMonths, globalRatios.front, globalRatios.rear)
-
-  // Per-site / per-stage breakdowns for the materials-accuracy filter sidebar —
-  // built from the same date-filtered lotCalcs as the global view above, so
-  // switching the filter doesn't change what date range is being looked at.
-  const materialsBySite: Record<string, MaterialsSection> = {}
-  const materialsByStage: Record<string, MaterialsSection> = {}
-  const materialsSiteIndex: MaterialsSiteOption[] = sites.map((site) => {
-    const siteStages = stages.filter((s) => s.site_id === site.id).sort((a, b) => a.order - b.order)
-    const siteRatios = resolveRatios(site.id, plantRatioSettings)
-
-    const siteLotCalcs = lotCalcs.filter((l) => siteStages.some((s) => s.id === l.stageId))
-    materialsBySite[site.id] = buildMaterialsSection(siteLotCalcs, revenueMonths, siteRatios.front, siteRatios.rear)
-
-    for (const stage of siteStages) {
-      const stageLotCalcs = lotCalcs.filter((l) => l.stageId === stage.id)
-      materialsByStage[stage.id] = buildMaterialsSection(stageLotCalcs, revenueMonths, siteRatios.front, siteRatios.rear)
-    }
-
-    return { id: site.id, name: site.name, stages: siteStages.map((s) => ({ id: s.id, name: s.name })) }
-  })
-
-  // ── Sections 3 & 4: site → stage → lot drill-down ───────────────────────────
-  // Uses allLots/allQuotes when provided so the drill-down ignores the date range filter.
+  // Computed early so Section 2 (materials & quote accuracy) can be built
+  // from the exact same unfiltered lot set as Sections 3 & 4 (drill-down) —
+  // see drillLotCalcs below. Revenue (Section 1, above) intentionally stays
+  // on the date-filtered lotCalcs; only materials/accuracy needs to match
+  // the drill-down's lot set.
   const subcontractorByLot = new Map<string, SubcontractorCostLine[]>()
   for (const c of subcontractorCosts ?? []) {
     const arr = subcontractorByLot.get(c.lot_id) ?? []
@@ -633,6 +619,48 @@ export function buildAnalyticsData(input: {
     ? buildLotCalcs(allLots, allQuotes ?? quotes, stageDefaultPriceById, subcontractorByLot)
     : lotCalcs
 
+  // ── Section 2: materials & quote accuracy ──────────────────────────────────
+  // Built from drillLotCalcs (all lots, unfiltered by date range) so this
+  // section always shows the same set of lots as the drill-down below —
+  // otherwise a lot with a due_date outside the selected date range would
+  // silently disappear from accuracy figures while still being visible when
+  // drilling into its site/stage.
+  const globalRatios = resolveRatios(null, plantRatioSettings)
+  const materials = buildMaterialsSection(drillLotCalcs, revenueMonths, globalRatios.front, globalRatios.rear)
+
+  // Per-site / per-stage / per-lot breakdowns for the materials-accuracy
+  // filter sidebar — same drillLotCalcs as above/the drill-down, so
+  // switching the filter never hides a lot the drill-down would show.
+  const materialsBySite: Record<string, MaterialsSection> = {}
+  const materialsByStage: Record<string, MaterialsSection> = {}
+  const materialsByLot: Record<string, MaterialsSection> = {}
+  const materialsSiteIndex: MaterialsSiteOption[] = sites.map((site) => {
+    const siteStages = stages.filter((s) => s.site_id === site.id).sort((a, b) => a.order - b.order)
+    const siteRatios = resolveRatios(site.id, plantRatioSettings)
+
+    const siteLotCalcs = drillLotCalcs.filter((l) => siteStages.some((s) => s.id === l.stageId))
+    materialsBySite[site.id] = buildMaterialsSection(siteLotCalcs, revenueMonths, siteRatios.front, siteRatios.rear)
+
+    const stageOptions = siteStages.map((stage) => {
+      const stageLotCalcs = drillLotCalcs.filter((l) => l.stageId === stage.id)
+      materialsByStage[stage.id] = buildMaterialsSection(stageLotCalcs, revenueMonths, siteRatios.front, siteRatios.rear)
+
+      for (const lot of stageLotCalcs) {
+        materialsByLot[lot.id] = buildMaterialsSection([lot], revenueMonths, siteRatios.front, siteRatios.rear)
+      }
+
+      const lotOptions = [...stageLotCalcs]
+        .sort((a, b) => a.lotNumber.localeCompare(b.lotNumber, undefined, { numeric: true }))
+        .map((l) => ({ id: l.id, lotNumber: l.lotNumber }))
+
+      return { id: stage.id, name: stage.name, lots: lotOptions }
+    })
+
+    return { id: site.id, name: site.name, stages: stageOptions }
+  })
+
+  // ── Sections 3 & 4: site → stage → lot drill-down ───────────────────────────
+  // Uses allLots/allQuotes when provided so the drill-down ignores the date range filter.
   const lotsByStage = new Map<string, LotCalc[]>()
   for (const lot of drillLotCalcs) {
     const arr = lotsByStage.get(lot.stageId) ?? []
@@ -698,6 +726,7 @@ export function buildAnalyticsData(input: {
     materials,
     materialsBySite,
     materialsByStage,
+    materialsByLot,
     materialsSiteIndex,
     sites: siteAnalytics,
   }

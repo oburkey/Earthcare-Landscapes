@@ -9,7 +9,7 @@ import { TRADE_OPTIONS, PHOTO_CATEGORIES } from '@/lib/lotStatus'
 import { CHECKLIST_SECTIONS, GATING_ITEM_KEYS } from '@/lib/checklist'
 import type { ActionState } from '@/types/actions'
 
-const SUPERVISOR_FLAGS = ['build_complete', 'quant_done'] as const
+const SUPERVISOR_FLAGS = ['build_complete'] as const
 const ADMIN_FLAGS      = ['invoiced', 'has_client_extras', 'pending_review', 'approved_for_invoicing'] as const
 type LotFlag = typeof SUPERVISOR_FLAGS[number] | typeof ADMIN_FLAGS[number]
 

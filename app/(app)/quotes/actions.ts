@@ -4,6 +4,62 @@ import { requireAuth } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath, revalidateTag } from 'next/cache'
 
+type SavedSectionItem = {
+  description: string
+  qty: number
+  unit: string
+  rate: number
+  orderIndex: number
+}
+
+type SavedSection = {
+  name: string
+  orderIndex: number
+  items: SavedSectionItem[]
+}
+
+// Replaces all of a quote's sections + items with the given set — same
+// delete-then-reinsert pattern used for lot_quote_items in
+// sites/[siteId]/stages/[stageId]/lots/[lotId]/quote-actions.ts.
+async function replaceSections(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  quoteId: string,
+  sections: SavedSection[]
+): Promise<{ error: string } | null> {
+  const { error: deleteError } = await supabase
+    .from('quote_sections')
+    .delete()
+    .eq('quote_id', quoteId)
+  if (deleteError) return { error: deleteError.message }
+
+  for (const section of sections) {
+    const { data: sectionRow, error: sectionError } = await supabase
+      .from('quote_sections')
+      .insert({ quote_id: quoteId, name: section.name, order_index: section.orderIndex })
+      .select('id')
+      .single()
+    if (sectionError || !sectionRow) return { error: sectionError?.message ?? 'Failed to save section.' }
+
+    if (section.items.length > 0) {
+      const { error: itemsError } = await supabase
+        .from('quote_line_items')
+        .insert(
+          section.items.map((item) => ({
+            section_id:  sectionRow.id,
+            description: item.description,
+            qty:         item.qty,
+            unit:        item.unit,
+            rate:        item.rate,
+            order_index: item.orderIndex,
+          }))
+        )
+      if (itemsError) return { error: itemsError.message }
+    }
+  }
+
+  return null
+}
+
 export async function saveQuote(
   formData: FormData
 ): Promise<{ error: string } | { id: string } | null> {
@@ -18,14 +74,14 @@ export async function saveQuote(
   const reference   = ((formData.get('reference') as string) ?? '').trim()
   const description = ((formData.get('description') as string) ?? '').trim()
   const status      = formData.get('status') as string
-  const rawItems    = formData.get('line_items') as string
+  const rawSections = formData.get('sections') as string
   const notes       = ((formData.get('notes') as string) ?? '').trim()
 
-  let lineItems: unknown
+  let sections: SavedSection[]
   try {
-    lineItems = JSON.parse(rawItems || '[]')
+    sections = JSON.parse(rawSections || '[]')
   } catch {
-    return { error: 'Invalid line items data.' }
+    return { error: 'Invalid section data.' }
   }
 
   const supabase = await createClient()
@@ -39,12 +95,15 @@ export async function saveQuote(
         reference,
         description,
         status,
-        line_items:  lineItems,
         notes,
         updated_at:  new Date().toISOString(),
       })
       .eq('id', id)
     if (error) return { error: error.message }
+
+    const sectionsError = await replaceSections(supabase, id, sections)
+    if (sectionsError) return sectionsError
+
     revalidatePath('/quotes')
     return null
   }
@@ -57,7 +116,6 @@ export async function saveQuote(
       reference,
       description,
       status,
-      line_items: lineItems,
       notes,
       created_by: profile.id,
     })
@@ -65,6 +123,10 @@ export async function saveQuote(
     .single()
 
   if (error) return { error: error.message }
+
+  const sectionsError = await replaceSections(supabase, data.id, sections)
+  if (sectionsError) return sectionsError
+
   revalidatePath('/quotes')
   return { id: data.id }
 }
@@ -126,7 +188,7 @@ export async function convertQuoteToExtraJob(
 
   const { data: quote, error: quoteError } = await supabase
     .from('quotes')
-    .select('description, reference, line_items')
+    .select('description, reference, quote_sections(order_index, quote_line_items(description, qty, unit, rate, order_index))')
     .eq('id', quoteId)
     .single()
 
@@ -157,7 +219,16 @@ export async function convertQuoteToExtraJob(
   if (jobError || !job) return { error: jobError?.message ?? 'Failed to create extra job.' }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const lineItems: any[] = Array.isArray(quote.line_items) ? quote.line_items : []
+  const sections = ((quote.quote_sections as any[]) ?? [])
+    .slice()
+    .sort((a, b) => a.order_index - b.order_index)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const lineItems: any[] = sections.flatMap((section) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((section.quote_line_items as any[]) ?? [])
+      .slice()
+      .sort((a, b) => a.order_index - b.order_index)
+  )
   if (lineItems.length > 0) {
     const items = lineItems.map((item, i) => ({
       extra_job_id: job.id,

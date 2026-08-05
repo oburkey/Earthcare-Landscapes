@@ -60,7 +60,8 @@ async function _stage(db: Db, stageId: string) {
       .select(`
         id, name, site_plan_path, is_contract_pricing, default_contract_price,
         sites!inner(id, name),
-        lots(id, lot_number, home_design, status, due_date, scheduled_date, build_complete, quant_done, invoiced, delayed, delay_reason, expected_completion_date)
+        lots(id, lot_number, home_design, status, due_date, scheduled_date, build_complete, quant_done, invoiced, delayed, delay_reason, expected_completion_date,
+          lot_quotes(is_estimated, last_edited_at, profiles!last_edited_by(first_name, last_name)))
       `)
       .eq('id', stageId)
       .single(),

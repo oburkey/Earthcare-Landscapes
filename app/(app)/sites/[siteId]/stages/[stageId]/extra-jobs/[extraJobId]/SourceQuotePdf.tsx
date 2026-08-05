@@ -1,8 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { buildQuoteHtml, downloadPDF, type LineItem } from '@/app/(app)/quotes/QuotesView'
+import { buildQuoteHtml, downloadPDF } from '@/app/(app)/quotes/QuotesView'
 import { LOGO_DATA_URL } from '@/lib/pdfAssets'
+
+type SourceQuoteLineItem = { description: string; qty: number; unit: string; rate: number }
 
 export default function SourceQuotePdf({
   siteName,
@@ -15,7 +17,7 @@ export default function SourceQuotePdf({
   siteName: string | null
   reference: string
   description: string
-  lineItems: LineItem[]
+  lineItems: SourceQuoteLineItem[]
   notes: string
   isAdmin: boolean
 }) {
@@ -48,7 +50,8 @@ export default function SourceQuotePdf({
 
   function handleDownload() {
     const filename = `Quote-${reference || 'source'}.pdf`
-    const html = buildQuoteHtml(siteName, reference, description, lineItems, notes, LOGO_DATA_URL)
+    const sections = [{ name: '', orderIndex: 0, items: lineItems.map((li, i) => ({ ...li, orderIndex: i })) }]
+    const html = buildQuoteHtml(siteName, reference, description, sections, notes, LOGO_DATA_URL, false)
     setGenerating(true)
     setError(null)
     downloadPDF(html, filename, (msg) => setError(msg), () => setGenerating(false))

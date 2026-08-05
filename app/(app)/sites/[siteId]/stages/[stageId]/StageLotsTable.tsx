@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { STATUS_CONFIG, EXTRA_JOB_STATUS_CONFIG, DELAYED_BADGE_CLASS, formatDate, delayedBadgeLabel } from '@/lib/lotStatus'
+import { STATUS_CONFIG, EXTRA_JOB_STATUS_CONFIG, DELAYED_BADGE_CLASS, formatDate, formatDateShort, delayedBadgeLabel } from '@/lib/lotStatus'
 import type { LotStatus, ExtraJobStatus } from '@/types/database'
 import InlineCheckbox from './InlineCheckbox'
 import { toggleChecklistItemInline, toggleBuildCompleteInline } from './checklist-inline-actions'
@@ -21,6 +21,11 @@ export type TableLotRow = {
   // can share one row shape built once in page.tsx.
   invoiced: boolean
   quantDone: boolean
+  // Who last saved this lot's FINAL quant sheet, and when — from
+  // lot_quotes.last_edited_by/last_edited_at (is_estimated = false).
+  // Admin/supervisor-only column, see canSeeLastEdited.
+  lastEditedAt: string | null
+  lastEditedByInitials: string | null
 }
 
 export type TableExtraJobRow = {
@@ -86,6 +91,7 @@ interface Props {
   stageId: string
   canTickChecklist: boolean
   canToggleBuildComplete: boolean
+  canSeeLastEdited: boolean
 }
 
 function TradeMark({ done }: { done: boolean }) {
@@ -96,8 +102,25 @@ function TradeMark({ done }: { done: boolean }) {
   )
 }
 
+// No existing relative-time helper elsewhere in this codebase — exported so
+// StageCardView.tsx can show the same last-edited indicator on lot cards.
+// Falls back to a short date beyond a week, reusing lib/lotStatus.ts's
+// existing formatDateShort.
+export function formatRelativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime()
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return 'just now'
+  if (diffMin < 60) return `${diffMin}m ago`
+  const diffHr = Math.floor(diffMin / 60)
+  if (diffHr < 24) return `${diffHr}h ago`
+  const diffDay = Math.floor(diffHr / 24)
+  if (diffDay < 7) return `${diffDay}d ago`
+  return formatDateShort(iso.slice(0, 10))
+}
+
 export default function StageLotsTable({
-  lots, extraJobs, checklistMap, checklistColumns, view, siteId, stageId, canTickChecklist, canToggleBuildComplete,
+  lots, extraJobs, checklistMap, checklistColumns, view, siteId, stageId,
+  canTickChecklist, canToggleBuildComplete, canSeeLastEdited,
 }: Props) {
   const displayColumns = view === 'checklist' ? applyChecklistViewOverrides(checklistColumns) : checklistColumns
 
@@ -127,6 +150,9 @@ export default function StageLotsTable({
               </th>
             ))}
             <th className="text-center font-medium px-2 py-2 whitespace-nowrap">Build Complete</th>
+            {canSeeLastEdited && (
+              <th className="text-left font-medium px-2 py-2 whitespace-nowrap">Last edited</th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -174,13 +200,20 @@ export default function StageLotsTable({
                     hiddenFields={{ lot_id: lot.id, site_id: siteId, stage_id: stageId }}
                   />
                 </td>
+                {canSeeLastEdited && (
+                  <td className="px-2 py-2 whitespace-nowrap text-fg-muted">
+                    {lot.lastEditedAt && lot.lastEditedByInitials
+                      ? `${lot.lastEditedByInitials} · ${formatRelativeTime(lot.lastEditedAt)}`
+                      : null}
+                  </td>
+                )}
               </tr>
             )
           })}
 
           {extraJobs.length > 0 && (
             <tr className="border-b border-border bg-surface-raised">
-              <td colSpan={8 + displayColumns.length} className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-fg-muted">
+              <td colSpan={(canSeeLastEdited ? 9 : 8) + displayColumns.length} className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-fg-muted">
                 Extra jobs
               </td>
             </tr>
@@ -207,6 +240,7 @@ export default function StageLotsTable({
                 </td>
                 <td className="px-2 py-2 text-center text-fg-muted" colSpan={2 + displayColumns.length}>—</td>
                 <td className="px-2 py-2 text-center text-fg-muted">—</td>
+                {canSeeLastEdited && <td className="px-2 py-2 text-center text-fg-muted">—</td>}
               </tr>
             )
           })}

@@ -29,6 +29,13 @@ async function uploadStagePlanAction(formData: FormData) {
   return uploadStagePlan(null, formData)
 }
 
+function initialsOf(first: string | null | undefined, last: string | null | undefined): string | null {
+  const f = (first ?? '').trim().charAt(0)
+  const l = (last ?? '').trim().charAt(0)
+  const initials = `${f}${l}`.toUpperCase()
+  return initials || null
+}
+
 export default async function StagePage({ params }: Props) {
   const { siteId, stageId } = await params
   const profile = await requireAuth()
@@ -78,6 +85,11 @@ export default async function StagePage({ params }: Props) {
   const lotsForTable: TableLotRow[] = lots.map((lot) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const lotAny = lot as any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const finalQuote = ((lotAny.lot_quotes ?? []) as any[]).find((q) => q.is_estimated === false)
+    const editor = finalQuote
+      ? (Array.isArray(finalQuote.profiles) ? finalQuote.profiles[0] : finalQuote.profiles)
+      : null
     return {
       id: lot.id,
       lotNumber: lot.lot_number,
@@ -91,6 +103,8 @@ export default async function StagePage({ params }: Props) {
       tradesCompleted: tradeStatusMap[lot.id]?.trades_completed ?? [],
       invoiced: lotAny.invoiced ?? false,
       quantDone: lotAny.quant_done ?? false,
+      lastEditedAt: finalQuote?.last_edited_at ?? null,
+      lastEditedByInitials: editor ? initialsOf(editor.first_name, editor.last_name) : null,
     }
   })
 
@@ -229,6 +243,7 @@ export default async function StagePage({ params }: Props) {
           canTickChecklist={canAddLot}
           canToggleBuildComplete={canManageStage}
           canUseTableViews={canUseStageTableViews}
+          canSeeLastEdited={canManageStage}
         />
 
         {/* ── Materials Summary ────────────────────────────────────────────── */}

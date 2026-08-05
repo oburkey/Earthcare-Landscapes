@@ -38,7 +38,6 @@ export type LotRow = {
   lotNumber: string
   homeDesign: string | null
   buildComplete: boolean
-  quantDone: boolean
   invoiced: boolean
   pendingReview: boolean
   approvedForInvoicing: boolean
@@ -266,7 +265,6 @@ function stageSummaryBody(
     return `<tr>
       <td>Lot ${lot.lotNumber}${lot.contractPrice != null ? ' <span style="color:#7c3aed;font-size:9px;font-weight:600">CONTRACT</span>' : ''}</td>
       <td class="c">${lot.buildComplete ? '✓' : '—'}</td>
-      <td class="c">${lot.quantDone ? '✓' : '—'}</td>
       <td class="r">${lot.contractPrice != null ? '—' : fmt(lot.standardAmount)}</td>
       <td class="r">${lot.contractPrice != null ? '—' : (lot.clientExtrasAmount > 0 ? fmt(lot.clientExtrasAmount) : '—')}</td>
       <td class="r" style="font-weight:600">${fmt(total)}</td>
@@ -291,7 +289,6 @@ function stageSummaryBody(
       <tr>
         <th>Lot</th>
         <th class="c">Build Complete</th>
-        <th class="c">Quant Done</th>
         <th class="r">Final Amount</th>
         <th class="r">Client Extras</th>
         <th class="r">Total (ex GST)</th>
@@ -301,7 +298,7 @@ function stageSummaryBody(
     <tbody>
       ${rows}
       <tr class="tot">
-        <td colspan="3">Stage Total</td>
+        <td colspan="2">Stage Total</td>
         <td class="r">${fmt(totStd)}</td>
         <td class="r">${totExtra > 0 ? fmt(totExtra) : '—'}</td>
         <td class="r">${fmt(totAmt)}</td>
@@ -909,7 +906,6 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                               <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 pr-6 whitespace-nowrap">Lot</th>
                               <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 pr-6 whitespace-nowrap">Home Design</th>
                               <th className="text-center text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Build Complete</th>
-                              <th className="text-center text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Quant Done</th>
                               <th className="text-right text-xs font-semibold text-fg-muted uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Estimate</th>
                               <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Final Amount</th>
                               <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Client Extras</th>
@@ -953,9 +949,6 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                                   </td>
                                   <td className="py-2.5 px-3 text-center">
                                     {lot.buildComplete ? <span className="text-green-600 font-semibold">✓</span> : <span className="text-fg-muted">—</span>}
-                                  </td>
-                                  <td className="py-2.5 px-3 text-center">
-                                    {lot.quantDone ? <span className="text-green-600 font-semibold">✓</span> : <span className="text-fg-muted">—</span>}
                                   </td>
                                   <td className="py-2.5 px-3 text-right tabular-nums text-fg-muted">
                                     {lot.estimateTotal != null ? fmt(lot.estimateTotal) : <span className="text-fg-muted">—</span>}

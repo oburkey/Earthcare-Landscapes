@@ -1,12 +1,22 @@
+'use client'
+
+import { useState } from 'react'
 import RevenueOverviewSection from './components/RevenueOverviewSection'
 import RevenueChart from './components/RevenueChart'
 import LotsCompletedChart from './components/LotsCompletedChart'
-import MaterialsAccuracyPanel from './components/MaterialsAccuracyPanel'
+import MaterialsAccuracyPanel, { type Selection } from './components/MaterialsAccuracyPanel'
 import DrillDownSection from './components/DrillDownSection'
 import ComparisonSection from './components/ComparisonSection'
 import type { AnalyticsData } from './lib'
 
 export default function AnalyticsView({ data }: { data: AnalyticsData }) {
+  // Lifted here (rather than owned by MaterialsAccuracyPanel) so a
+  // site/stage selection in the accuracy filter can also drive
+  // DrillDownSection's auto-expand below — both read from the same state.
+  const [selection, setSelection] = useState<Selection>({ type: 'all' })
+  const focusSiteId  = selection.type === 'all' ? null : selection.siteId
+  const focusStageId = selection.type === 'stage' || selection.type === 'lot' ? selection.stageId : null
+
   return (
     <div className="space-y-8">
       <section className="space-y-4">
@@ -30,13 +40,16 @@ export default function AnalyticsView({ data }: { data: AnalyticsData }) {
           global={data.materials}
           bySite={data.materialsBySite}
           byStage={data.materialsByStage}
+          byLot={data.materialsByLot}
           siteIndex={data.materialsSiteIndex}
+          selection={selection}
+          onSelectionChange={setSelection}
         />
       </section>
 
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-fg">Site drill-down</h2>
-        <DrillDownSection sites={data.sites} />
+        <DrillDownSection sites={data.sites} focusSiteId={focusSiteId} focusStageId={focusStageId} />
       </section>
 
       <section className="space-y-4">

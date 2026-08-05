@@ -100,19 +100,27 @@ export default async function ExtraJobPage({ params }: Props) {
     try {
       const { data: sq } = await supabase
         .from('quotes')
-        .select('reference, description, line_items, notes, sites(name)')
+        .select('reference, description, notes, sites(name), quote_sections(order_index, quote_line_items(description, qty, unit, rate, order_index))')
         .eq('id', sourceQuoteId)
         .single()
       if (sq) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const sqAny = sq as any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const flatItems = ((sqAny.quote_sections ?? []) as any[])
+          .slice()
+          .sort((a, b) => a.order_index - b.order_index)
+          .flatMap((s) =>
+            ((s.quote_line_items ?? []) as { description: string; qty: number; unit: string; rate: number; order_index: number }[])
+              .slice()
+              .sort((a, b) => a.order_index - b.order_index)
+          )
         sourceQuote = {
           siteName:    sqAny.sites?.name ?? null,
           reference:   sqAny.reference ?? '',
           description: sqAny.description ?? '',
-          lineItems:   (Array.isArray(sqAny.line_items) ? sqAny.line_items : []).map(
-            (li: { description: string; qty: number; unit: string; rate: number }) =>
-              isAdmin ? li : { description: li.description, qty: li.qty, unit: li.unit, rate: 0 }
+          lineItems:   flatItems.map((li) =>
+            isAdmin ? li : { description: li.description, qty: li.qty, unit: li.unit, rate: 0 }
           ),
           notes:       sqAny.notes ?? '',
         }

@@ -138,8 +138,7 @@ function NlvLotRow({ lot }: { lot: LotDrillDownRow }) {
   )
 }
 
-function StageRow({ stage }: { stage: StageAnalytics }) {
-  const [expanded, setExpanded] = useState(false)
+function StageRow({ stage, expanded, onToggle }: { stage: StageAnalytics; expanded: boolean; onToggle: () => void }) {
   const { summary } = stage
   const nlv = summary.nlv
 
@@ -147,7 +146,7 @@ function StageRow({ stage }: { stage: StageAnalytics }) {
     <div className="rounded-lg border border-border bg-surface">
       <button
         type="button"
-        onClick={() => setExpanded((v) => !v)}
+        onClick={onToggle}
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
       >
         <div>
@@ -217,8 +216,42 @@ function StageRow({ stage }: { stage: StageAnalytics }) {
   )
 }
 
-export default function DrillDownSection({ sites }: { sites: SiteAnalytics[] }) {
+export default function DrillDownSection({
+  sites, focusSiteId, focusStageId,
+}: {
+  sites: SiteAnalytics[]
+  // When set (from the materials-accuracy filter above), auto-selects that
+  // site and auto-expands that stage here — without collapsing anything the
+  // user already opened manually.
+  focusSiteId?: string | null
+  focusStageId?: string | null
+}) {
   const [activeSiteId, setActiveSiteId] = useState<string | null>(sites[0]?.id ?? null)
+  const [expandedStageIds, setExpandedStageIds] = useState<Set<string>>(new Set())
+
+  // Adjust state during render (not in an effect) when focusSiteId/focusStageId
+  // change — the standard React pattern for syncing state to a changed prop.
+  const [prevFocusSiteId, setPrevFocusSiteId] = useState(focusSiteId)
+  if (focusSiteId !== prevFocusSiteId) {
+    setPrevFocusSiteId(focusSiteId)
+    if (focusSiteId) setActiveSiteId(focusSiteId)
+  }
+
+  const [prevFocusStageId, setPrevFocusStageId] = useState(focusStageId)
+  if (focusStageId !== prevFocusStageId) {
+    setPrevFocusStageId(focusStageId)
+    if (focusStageId) {
+      setExpandedStageIds((prev) => (prev.has(focusStageId) ? prev : new Set(prev).add(focusStageId)))
+    }
+  }
+
+  function toggleStage(stageId: string) {
+    setExpandedStageIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(stageId)) next.delete(stageId); else next.add(stageId)
+      return next
+    })
+  }
 
   if (sites.length === 0) {
     return (
@@ -267,7 +300,12 @@ export default function DrillDownSection({ sites }: { sites: SiteAnalytics[] }) 
 
       <div className="space-y-2">
         {activeSite.stages.map((stage) => (
-          <StageRow key={stage.id} stage={stage} />
+          <StageRow
+            key={stage.id}
+            stage={stage}
+            expanded={expandedStageIds.has(stage.id)}
+            onToggle={() => toggleStage(stage.id)}
+          />
         ))}
       </div>
     </div>

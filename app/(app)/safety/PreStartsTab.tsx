@@ -38,8 +38,8 @@ function isBadAnswer(item: ChecklistItem, val: CheckVal): boolean {
 // instead; this runs identically during SSR and client hydration (both
 // target the same named zone), so there's no hydration mismatch. Same
 // approach as FortnightCalendar.tsx / ScheduleView.tsx.
-function getSydneyTodayStr(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }).format(new Date())
+function getPerthTodayStr(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Perth' }).format(new Date())
 }
 
 // Validate a checklist; returns first error string or null
@@ -282,10 +282,24 @@ async function downloadPreStartsPdf(
 
 // ── UI helpers ────────────────────────────────────────────────────────────────
 
-function fmtDate(d: string) {
-  return new Date(d + 'T00:00:00').toLocaleDateString('en-AU', {
-    weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
+// "Mon 21 Jul · 6:47am" — weekday/day/month come from the plain `date`
+// field (a YYYY-MM-DD string with no time-of-day, so it's built the same
+// timezone-safe way lib/lotStatus.ts's formatDate/formatDateShort already
+// do: split the components and construct a local Date directly, no
+// timezone conversion needed since there's no time-of-day to cross a
+// boundary with). Time-of-day comes from `createdAt` (the real submission
+// timestamp), anchored explicitly to Australia/Perth regardless of the
+// viewer's local timezone — same Intl.DateTimeFormat pattern as
+// getPerthTodayStr below.
+function fmtDateTime(d: string, createdAt: string) {
+  const [y, m, day] = d.split('-').map(Number)
+  const datePart = new Date(y, m - 1, day).toLocaleDateString('en-AU', {
+    weekday: 'short', day: 'numeric', month: 'short',
   })
+  const timePart = new Intl.DateTimeFormat('en-AU', {
+    timeZone: 'Australia/Perth', hour: 'numeric', minute: '2-digit', hour12: true,
+  }).format(new Date(createdAt)).toLowerCase().replace(' ', '')
+  return `${datePart} · ${timePart}`
 }
 
 function checkLabel(val: string, inverted = false) {
@@ -422,7 +436,7 @@ export default function PreStartsTab({
   tableExists,
   hasMorePreStarts,
 }: Props) {
-  today = getSydneyTodayStr()
+  today = getPerthTodayStr()
   const isSupervisorPlus = role === 'supervisor' || role === 'admin'
   const isAdmin          = role === 'admin'
 
@@ -808,7 +822,7 @@ export default function PreStartsTab({
             Pre-starts
           </button>
           <span className="text-fg-muted">/</span>
-          <h2 className="text-lg font-semibold text-fg">{fmtDate(ps.date)}</h2>
+          <h2 className="text-lg font-semibold text-fg">{fmtDateTime(ps.date, ps.createdAt)}</h2>
         </div>
 
         <div className="rounded-xl border border-border bg-surface p-5 space-y-5">
@@ -816,7 +830,7 @@ export default function PreStartsTab({
           {/* General info */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <Field label="Site"         value={ps.siteName} />
-            <Field label="Date"         value={fmtDate(ps.date)} />
+            <Field label="Date"         value={fmtDateTime(ps.date, ps.createdAt)} />
             <Field label="Submitted By" value={ps.submitterName} />
             <div className="col-span-2 sm:col-span-3">
               <p className="text-xs font-semibold text-fg-secondary uppercase tracking-wide mb-1">Crew Present</p>
@@ -1490,7 +1504,7 @@ export default function PreStartsTab({
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-semibold text-fg text-sm">{ps.siteName}</span>
-                      <span className="text-xs text-fg-muted">{fmtDate(ps.date)}</span>
+                      <span className="text-xs text-fg-muted">{fmtDateTime(ps.date, ps.createdAt)}</span>
                       {hasHazards && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">Hazard</span>}
                       {issueFlags.map(f => (
                         <span key={f} className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/40 dark:text-red-300">{f} ✗</span>

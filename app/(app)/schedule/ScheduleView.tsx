@@ -75,10 +75,11 @@ function pad(n: number): string {
 // The `today` prop is computed server-side via toISOString(), which is always
 // UTC — on a UTC-hosted server that shows the wrong calendar day for several
 // hours every Australian morning. Recompute it anchored to the business's
-// timezone instead; this runs identically during SSR and client hydration
-// (both target the same named zone), so there's no hydration mismatch.
-function getSydneyTodayStr(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }).format(new Date())
+// timezone (Australia/Perth) instead; this runs identically during SSR and
+// client hydration (both target the same named zone), so there's no
+// hydration mismatch.
+function getPerthTodayStr(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Perth' }).format(new Date())
 }
 
 function ymd(year: number, month: number, day: number): string {
@@ -706,7 +707,7 @@ interface Props {
 }
 
 export default function ScheduleView({ lotItems, jobItems, events, sites, today, userId, isAdmin, canCreateEvents }: Props) {
-  today = getSydneyTodayStr()
+  today = getPerthTodayStr()
 
   // Deep-link support (e.g. clicking a day on the dashboard's fortnight
   // calendar): ?view=2weeks&date=YYYY-MM-DD opens straight to that date.

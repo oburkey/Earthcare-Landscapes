@@ -28,7 +28,7 @@ export default async function InvoicesPage() {
       .select(`
         id, name, client_contact, completed_at, has_client_extras,
         stages(id, name, order, completed_at, is_contract_pricing, default_contract_price,
-          lots(id, lot_number, home_design, build_complete, quant_done, invoiced, pending_review, approved_for_invoicing, has_client_extras, contract_price),
+          lots(id, lot_number, home_design, build_complete, invoiced, pending_review, approved_for_invoicing, has_client_extras, contract_price),
           extra_jobs(id, title, status, approved_by_name, source_quote_id, pending_review, approved_for_invoicing, invoiced)
         )
       `)
@@ -43,7 +43,7 @@ export default async function InvoicesPage() {
         .select(`
           id, name, client_contact, completed_at, has_client_extras,
           stages(id, name, order, is_contract_pricing, default_contract_price,
-            lots(id, lot_number, build_complete, quant_done, invoiced, has_client_extras, contract_price),
+            lots(id, lot_number, build_complete, invoiced, has_client_extras, contract_price),
             extra_jobs(id, title, status)
           )
         `)
@@ -350,7 +350,6 @@ export default async function InvoicesPage() {
                 lotNumber:            lot.lot_number,
                 homeDesign:           lot.home_design           ?? null,
                 buildComplete:        lot.build_complete        ?? false,
-                quantDone:            lot.quant_done            ?? false,
                 invoiced:             lot.invoiced              ?? false,
                 pendingReview:        lot.pending_review        ?? false,
                 approvedForInvoicing: lot.approved_for_invoicing ?? false,

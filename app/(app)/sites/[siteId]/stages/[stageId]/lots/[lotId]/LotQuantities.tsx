@@ -30,6 +30,8 @@ type QuoteData = {
   id: string
   status: 'draft' | 'submitted' | 'approved'
   notes: string | null
+  lastEditedByName: string | null
+  lastEditedAt: string | null
   items: { template_item_id: string; quantity: number | null; unit_price_snapshot: number | null }[]
 } | null
 
@@ -105,6 +107,22 @@ function initVariantSel(
     })
   }
   return sel
+}
+
+// Formats an ISO timestamp as "5 Aug 2026 at 2:30 pm", anchored to
+// Australia/Perth regardless of the viewer's local timezone — same
+// Intl.DateTimeFormat + explicit timeZone approach used by the Perth
+// "today" helpers in ScheduleView.tsx / FortnightCalendar.tsx /
+// PreStartsTab.tsx, so this renders identically during SSR and client
+// hydration (no mismatch).
+function formatPerthDateTime(iso: string): string {
+  const date = new Intl.DateTimeFormat('en-AU', {
+    timeZone: 'Australia/Perth', day: 'numeric', month: 'short', year: 'numeric',
+  }).format(new Date(iso))
+  const time = new Intl.DateTimeFormat('en-AU', {
+    timeZone: 'Australia/Perth', hour: 'numeric', minute: '2-digit', hour12: true,
+  }).format(new Date(iso)).toLowerCase()
+  return `${date} at ${time}`
 }
 
 function commonPrefix(strings: string[]): string {
@@ -315,6 +333,13 @@ export default function LotQuantities({
 
   return (
     <div className="space-y-4">
+
+      {/* Last edited — admin only, always visible regardless of expand state */}
+      {isAdmin && activeQuote?.lastEditedAt && (
+        <p className="text-xs text-fg-muted">
+          Last edited by {activeQuote.lastEditedByName ?? 'Unknown'} · {formatPerthDateTime(activeQuote.lastEditedAt)}
+        </p>
+      )}
 
       {/* Outer show/hide toggle */}
       <button

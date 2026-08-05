@@ -24,18 +24,20 @@ export default async function QuotesPage() {
   let quotes: QuoteRow[] = []
   let tableExists = true
 
+  const SECTIONS_SELECT = 'quote_sections(id, name, order_index, quote_line_items(id, description, qty, unit, rate, order_index))'
+
   try {
     // Try full query with stage_id (requires migration_quote_conversion.sql)
     let { data, error } = await supabase
       .from('quotes')
-      .select('id, site_id, stage_id, reference, description, status, line_items, notes, created_at, sites(name), stages(name)')
+      .select(`id, site_id, stage_id, reference, description, status, notes, created_at, sites(name), stages(name), ${SECTIONS_SELECT}`)
       .order('created_at', { ascending: false })
 
     // Fall back to simpler query if stage_id column doesn't exist yet
     if (error && error.code !== '42P01' && !error.message?.includes('does not exist')) {
       const fallback = await supabase
         .from('quotes')
-        .select('id, site_id, reference, description, status, line_items, notes, created_at, sites(name)')
+        .select(`id, site_id, reference, description, status, notes, created_at, sites(name), ${SECTIONS_SELECT}`)
         .order('created_at', { ascending: false })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       data = fallback.data as any
@@ -57,7 +59,26 @@ export default async function QuotesPage() {
         reference:   q.reference ?? '',
         description: q.description ?? '',
         status:      q.status ?? 'draft',
-        lineItems:   Array.isArray(q.line_items) ? q.line_items : [],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        sections: ((q.quote_sections ?? []) as any[])
+          .slice()
+          .sort((a, b) => a.order_index - b.order_index)
+          .map((s) => ({
+            id:         s.id,
+            name:       s.name,
+            orderIndex: s.order_index,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            items: ((s.quote_line_items ?? []) as any[])
+              .slice()
+              .sort((a, b) => a.order_index - b.order_index)
+              .map((i) => ({
+                description: i.description ?? '',
+                qty:         Number(i.qty ?? 0),
+                unit:        i.unit ?? '',
+                rate:        Number(i.rate ?? 0),
+                orderIndex:  i.order_index,
+              })),
+          })),
         notes:       q.notes ?? '',
         createdAt:   q.created_at,
       }))

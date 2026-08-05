@@ -6,11 +6,19 @@ import { LOGO_DATA_URL } from '@/lib/pdfAssets'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type LineItem = {
+export type QuoteLineItem = {
   description: string
   qty: number
   unit: string
   rate: number
+  orderIndex: number
+}
+
+export type QuoteSection = {
+  id?: string
+  name: string
+  orderIndex: number
+  items: QuoteLineItem[]
 }
 
 export type QuoteRow = {
@@ -22,7 +30,7 @@ export type QuoteRow = {
   reference: string
   description: string
   status: 'draft' | 'sent' | 'accepted'
-  lineItems: LineItem[]
+  sections: QuoteSection[]
   notes: string
   createdAt: string
 }
@@ -49,8 +57,16 @@ function fmt(n: number): string {
   return '$' + n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-function calcSubtotal(items: LineItem[]): number {
+function calcItemsTotal(items: QuoteLineItem[]): number {
   return items.reduce((sum, item) => sum + (item.qty || 0) * (item.rate || 0), 0)
+}
+
+function calcSectionSubtotal(section: QuoteSection): number {
+  return calcItemsTotal(section.items)
+}
+
+function calcGrandTotal(sections: QuoteSection[]): number {
+  return sections.reduce((sum, s) => sum + calcSectionSubtotal(s), 0)
 }
 
 function statusLabel(s: string): string {
@@ -72,8 +88,18 @@ function slug(...parts: (string | null | undefined)[]): string {
     .join('-') || 'Quote'
 }
 
-function emptyLine(): LineItem {
-  return { description: '', qty: 1, unit: 'hr', rate: 0 }
+function emptyLine(orderIndex: number): QuoteLineItem {
+  return { description: '', qty: 1, unit: 'hr', rate: 0, orderIndex }
+}
+
+function emptySection(orderIndex: number): QuoteSection {
+  return { name: '', orderIndex, items: [emptyLine(0)] }
+}
+
+// Renumbers orderIndex to match array position — called after any
+// add/remove/reorder so persisted order always matches display order.
+function reindex<T extends { orderIndex: number }>(arr: T[]): T[] {
+  return arr.map((item, i) => ({ ...item, orderIndex: i }))
 }
 
 // ── PDF ───────────────────────────────────────────────────────────────────────
@@ -95,28 +121,34 @@ const QUOTE_STYLES = `
 .html2pdf__container td { padding: 7px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
 .html2pdf__container td.r { text-align: right; white-space: nowrap; }
 .html2pdf__container td.n { color: #888; font-size: 10px; white-space: nowrap; }
-.html2pdf__container tr.sub td { background: #fafafa; font-weight: 600; padding-top: 8px; padding-bottom: 8px; border-top: 1px solid #ddd; border-bottom: 1px solid #ddd; }
-.html2pdf__container tr.gst td { background: #fafafa; }
+.html2pdf__container tr.sec td { background: #f5f5f5; font-weight: 600; padding-top: 8px; padding-bottom: 8px; border-top: 1px solid #ddd; border-bottom: 1px solid #ddd; }
+.html2pdf__container tr.subtotal td { background: #fafafa; font-weight: 600; padding-top: 8px; padding-bottom: 8px; border-top: 1px solid #ddd; border-bottom: 1px solid #ddd; }
+.html2pdf__container tr.subtotal .gst-breakdown { font-weight: 500; font-size: 9px; color: #555; white-space: nowrap; }
 .html2pdf__container tr.grand td { background: #f0f0f0; font-weight: bold; font-size: 12px; border-top: 3px solid #999; padding: 11px 8px; }
+.html2pdf__container tr.grand .gst-breakdown { font-size: 10px; color: #555; font-weight: 500; white-space: nowrap; }
 .html2pdf__container .quote-notes { margin-top: 18px; padding: 10px 12px; background: #f9f9f9; border: 1px solid #e8e8e8; font-size: 10px; color: #444; white-space: pre-wrap; line-height: 1.5; }
 .html2pdf__container .quote-notes .notes-lbl { font-size: 9px; font-weight: bold; text-transform: uppercase; color: #888; letter-spacing: 0.05em; margin-bottom: 4px; }
 .html2pdf__container .note { margin-top: 20px; font-size: 9px; color: #999; }
 </style>`
 
-export function buildQuoteHtml(
-  siteName: string | null,
-  reference: string,
-  description: string,
-  lineItems: LineItem[],
-  notes: string,
-  logoSrc: string
-): string {
-  const date = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
-  const subtotal = calcSubtotal(lineItems)
-  const gst   = subtotal * 0.1
-  const total = subtotal + gst
+// Renders an amount cell for a subtotal / grand-total row — a plain figure
+// when GST is excluded, or a compact "Ex GST / GST / Inc GST" inline
+// breakdown (still one cell, not a separate row) when included.
+function gstAwareAmountCell(exGst: number, includeGst: boolean): string {
+  if (!includeGst) return fmt(exGst)
+  const gst = exGst * 0.1
+  const incGst = exGst + gst
+  return `<span class="gst-breakdown">Ex GST ${fmt(exGst)} · GST ${fmt(gst)} · Inc GST ${fmt(incGst)}</span>`
+}
 
-  const rows = lineItems.map((item, i) => {
+// Section header is only rendered when the section has an explicit name —
+// unnamed sections show their items with no header row. The subtotal row
+// sits after the last item (not inline with the header) and only appears
+// when the quote has 2+ sections (a single section's subtotal would just
+// duplicate the grand total).
+function quoteSectionRows(section: QuoteSection, includeGst: boolean, showSubtotal: boolean): string {
+  const subtotal = calcSectionSubtotal(section)
+  const rows = section.items.map((item, i) => {
     const lineTotal = (item.qty || 0) * (item.rate || 0)
     return `
       <tr>
@@ -128,6 +160,30 @@ export function buildQuoteHtml(
         <td class="r">${lineTotal > 0 ? fmt(lineTotal) : '—'}</td>
       </tr>`
   }).join('')
+  const header = section.name.trim() ? `<tr class="sec"><td colspan="6">${section.name}</td></tr>` : ''
+  const subtotalRow = showSubtotal
+    ? `<tr class="subtotal"><td colspan="5">Subtotal</td><td class="r">${gstAwareAmountCell(subtotal, includeGst)}</td></tr>`
+    : ''
+  return `
+    ${header}
+    ${rows || '<tr><td colspan="6" style="color:#aaa;font-style:italic;padding:6px">No line items</td></tr>'}
+    ${subtotalRow}`
+}
+
+export function buildQuoteHtml(
+  siteName: string | null,
+  reference: string,
+  description: string,
+  sections: QuoteSection[],
+  notes: string,
+  logoSrc: string,
+  includeGst: boolean
+): string {
+  const date = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
+  const grandTotal = calcGrandTotal(sections)
+  const showSectionSubtotals = sections.length >= 2
+
+  const rows = sections.map((s) => quoteSectionRows(s, includeGst, showSectionSubtotals)).join('')
 
   return `${QUOTE_STYLES}
 <div class="quote-page">
@@ -151,27 +207,18 @@ export function buildQuoteHtml(
         <th class="r">Qty</th>
         <th>Unit</th>
         <th class="r">Rate</th>
-        <th class="r">Total (ex GST)</th>
+        <th class="r">Total</th>
       </tr>
     </thead>
     <tbody>
-      ${rows || '<tr><td colspan="6" style="color:#aaa;font-style:italic;padding:6px">No line items</td></tr>'}
-      <tr class="sub">
-        <td colspan="5">Subtotal (ex GST)</td>
-        <td class="r">${fmt(subtotal)}</td>
-      </tr>
-      <tr class="gst">
-        <td colspan="5">GST (10%)</td>
-        <td class="r">${fmt(gst)}</td>
-      </tr>
+      ${rows || '<tr><td colspan="6" style="color:#aaa;font-style:italic;padding:6px">No sections</td></tr>'}
       <tr class="grand">
-        <td colspan="5">Total (inc GST)</td>
-        <td class="r">${fmt(total)}</td>
+        <td colspan="5">Total (ex GST)</td>
+        <td class="r">${gstAwareAmountCell(grandTotal, includeGst)}</td>
       </tr>
     </tbody>
   </table>
   ${notes ? `<div class="quote-notes"><div class="notes-lbl">Notes / Conditions</div>${notes.replace(/\n/g, '<br>')}</div>` : ''}
-  <div class="note">Rates and line totals are exclusive of GST unless otherwise noted.</div>
 </div>`
 }
 
@@ -197,30 +244,42 @@ const COMBINED_STYLES = `
 .html2pdf__container td { padding: 7px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
 .html2pdf__container td.r { text-align: right; white-space: nowrap; }
 .html2pdf__container td.n { color: #888; font-size: 10px; white-space: nowrap; }
-.html2pdf__container tr.sub td { background: #fafafa; font-weight: 600; padding-top: 8px; padding-bottom: 8px; border-top: 1px solid #ddd; border-bottom: 2px solid #ccc; }
+.html2pdf__container tr.sec td { background: #f5f5f5; font-weight: 600; padding-top: 8px; padding-bottom: 8px; border-top: 1px solid #ddd; border-bottom: 1px solid #ddd; }
+.html2pdf__container tr.subtotal td { background: #fafafa; font-weight: 600; padding-top: 8px; padding-bottom: 8px; border-top: 1px solid #ddd; border-bottom: 1px solid #ddd; }
 .html2pdf__container tr.grand td { background: #f0f0f0; font-weight: bold; font-size: 12px; border-top: 3px solid #999; padding: 11px 8px; }
-.html2pdf__container .note { margin-top: 20px; font-size: 9px; color: #999; }
 </style>`
 
 function buildCombinedQuotesPdf(selectedQuotes: QuoteRow[], logoSrc: string): string {
   const date = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
   let grandTotal = 0
 
-  const sections = selectedQuotes.map((q, idx) => {
-    const subtotal = calcSubtotal(q.lineItems)
-    grandTotal += subtotal
+  const quoteBlocks = selectedQuotes.map((q, idx) => {
+    const quoteTotal = calcGrandTotal(q.sections)
+    grandTotal += quoteTotal
+    const showSectionSubtotals = q.sections.length >= 2
 
-    const rows = q.lineItems.map((item, i) => {
-      const lineTotal = (item.qty || 0) * (item.rate || 0)
+    const sectionRows = q.sections.map((section) => {
+      const subtotal = calcSectionSubtotal(section)
+      const rows = section.items.map((item, i) => {
+        const lineTotal = (item.qty || 0) * (item.rate || 0)
+        return `
+          <tr>
+            <td class="n">${i + 1}</td>
+            <td>${item.description || ''}</td>
+            <td class="r">${item.qty != null ? item.qty : ''}</td>
+            <td>${item.unit || ''}</td>
+            <td class="r">${item.rate > 0 ? fmt(item.rate) : '—'}</td>
+            <td class="r">${lineTotal > 0 ? fmt(lineTotal) : '—'}</td>
+          </tr>`
+      }).join('')
+      const header = section.name.trim() ? `<tr class="sec"><td colspan="6">${section.name}</td></tr>` : ''
+      const subtotalRow = showSectionSubtotals
+        ? `<tr class="subtotal"><td colspan="5">Subtotal</td><td class="r">${fmt(subtotal)}</td></tr>`
+        : ''
       return `
-        <tr>
-          <td class="n">${i + 1}</td>
-          <td>${item.description || ''}</td>
-          <td class="r">${item.qty != null ? item.qty : ''}</td>
-          <td>${item.unit || ''}</td>
-          <td class="r">${item.rate > 0 ? fmt(item.rate) : '—'}</td>
-          <td class="r">${lineTotal > 0 ? fmt(lineTotal) : '—'}</td>
-        </tr>`
+        ${header}
+        ${rows}
+        ${subtotalRow}`
     }).join('')
 
     const sectionTitle = [q.siteName, q.reference].filter(Boolean).join(' — ')
@@ -245,14 +304,14 @@ function buildCombinedQuotesPdf(selectedQuotes: QuoteRow[], logoSrc: string): st
           <tr>
             <th>#</th><th>Description</th>
             <th class="r">Qty</th><th>Unit</th>
-            <th class="r">Rate</th><th class="r">Total (ex GST)</th>
+            <th class="r">Rate</th><th class="r">Total</th>
           </tr>
         </thead>
         <tbody>
-          ${rows || '<tr><td colspan="6" style="color:#aaa;font-style:italic;padding:6px">No line items</td></tr>'}
-          <tr class="sub">
-            <td colspan="5">Subtotal (ex GST)</td>
-            <td class="r">${fmt(subtotal)}</td>
+          ${sectionRows || '<tr><td colspan="6" style="color:#aaa;font-style:italic;padding:6px">No sections</td></tr>'}
+          <tr class="subtotal">
+            <td colspan="5">Quote total</td>
+            <td class="r">${fmt(quoteTotal)}</td>
           </tr>
         </tbody>
       </table>
@@ -262,16 +321,15 @@ function buildCombinedQuotesPdf(selectedQuotes: QuoteRow[], logoSrc: string): st
 
   return `${COMBINED_STYLES}
 <div class="combined-page">
-  ${sections}
+  ${quoteBlocks}
   <table style="margin-top:16px">
     <tbody>
       <tr class="grand">
-        <td colspan="5">Grand Total (ex GST)</td>
+        <td colspan="5">Total (ex GST)</td>
         <td class="r">${fmt(grandTotal)}</td>
       </tr>
     </tbody>
   </table>
-  <div class="note">Rates and line totals are exclusive of GST unless otherwise noted.</div>
 </div>`
 }
 
@@ -331,11 +389,12 @@ export default function QuotesView({
   const [reference, setReference]     = useState('')
   const [description, setDescription] = useState('')
   const [status, setStatus]           = useState<'draft' | 'sent' | 'accepted'>('draft')
-  const [lineItems, setLineItems]     = useState<LineItem[]>([emptyLine()])
+  const [sections, setSections]       = useState<QuoteSection[]>([emptySection(0)])
   const [notes, setNotes]             = useState('')
   const [formStages, setFormStages]   = useState<{ id: string; name: string }[]>([])
   const [loadingFormStages, setLoadingFormStages] = useState(false)
   const [convertValidation, setConvertValidation] = useState(false)
+  const [includeGst, setIncludeGst]   = useState(false)
 
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set())
   const [saving, setSaving]             = useState(false)
@@ -371,8 +430,10 @@ export default function QuotesView({
 
   function openNew() {
     setSiteId(''); setStageId(''); setReference(''); setDescription('')
-    setStatus('draft'); setLineItems([{ description: 'Administration & Preliminary', qty: 1, unit: 'item', rate: 500 }]); setNotes('')
-    setFormStages([]); setConvertValidation(false)
+    setStatus('draft')
+    setSections([{ name: '', orderIndex: 0, items: [{ description: 'Administration & Preliminary', qty: 1, unit: 'item', rate: 500, orderIndex: 0 }] }])
+    setNotes('')
+    setFormStages([]); setConvertValidation(false); setIncludeGst(false)
     setActionError(null); setView('new')
   }
 
@@ -382,9 +443,10 @@ export default function QuotesView({
     setReference(q.reference)
     setDescription(q.description)
     setStatus(q.status)
-    setLineItems(q.lineItems.length > 0 ? q.lineItems : [emptyLine()])
+    setSections(q.sections.length > 0 ? q.sections : [emptySection(0)])
     setNotes(q.notes)
     setConvertValidation(false)
+    setIncludeGst(false)
     setActionError(null)
     setView(q.id)
     if (q.siteId) {
@@ -398,22 +460,52 @@ export default function QuotesView({
     setView('list'); setActionError(null)
   }
 
-  // ── Line item helpers ──────────────────────────────────────────────────────
+  // ── Section / line item helpers ─────────────────────────────────────────────
 
-  function addLine() {
-    setLineItems((prev) => [...prev, emptyLine()])
+  function addSection() {
+    setSections((prev) => reindex([...prev, emptySection(0)]))
   }
 
-  function removeLine(i: number) {
-    setLineItems((prev) => prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev)
+  function removeSection(sectionIdx: number) {
+    setSections((prev) => {
+      if (prev.length <= 1) return prev
+      if (!confirm('Remove this section and its line items?')) return prev
+      return reindex(prev.filter((_, idx) => idx !== sectionIdx))
+    })
   }
 
-  function updateLine<K extends keyof LineItem>(i: number, key: K, value: LineItem[K]) {
-    setLineItems((prev) => prev.map((item, idx) => idx === i ? { ...item, [key]: value } : item))
+  function renameSection(sectionIdx: number, name: string) {
+    setSections((prev) => prev.map((s, idx) => idx === sectionIdx ? { ...s, name } : s))
+  }
+
+  function addLine(sectionIdx: number) {
+    setSections((prev) => prev.map((s, idx) =>
+      idx === sectionIdx ? { ...s, items: reindex([...s.items, emptyLine(0)]) } : s
+    ))
+  }
+
+  function removeLine(sectionIdx: number, itemIdx: number) {
+    setSections((prev) => prev.map((s, idx) => {
+      if (idx !== sectionIdx || s.items.length <= 1) return s
+      return { ...s, items: reindex(s.items.filter((_, i) => i !== itemIdx)) }
+    }))
+  }
+
+  function updateLine<K extends keyof QuoteLineItem>(sectionIdx: number, itemIdx: number, key: K, value: QuoteLineItem[K]) {
+    setSections((prev) => prev.map((s, idx) => {
+      if (idx !== sectionIdx) return s
+      return { ...s, items: s.items.map((item, i) => i === itemIdx ? { ...item, [key]: value } : item) }
+    }))
   }
 
   function addPreset(desc: string, rate: number) {
-    setLineItems((prev) => [...prev, { description: desc, qty: 1, unit: 'hr', rate }])
+    setSections((prev) => {
+      if (prev.length === 0) return prev
+      const lastIdx = prev.length - 1
+      return prev.map((s, idx) =>
+        idx === lastIdx ? { ...s, items: reindex([...s.items, { description: desc, qty: 1, unit: 'hr', rate, orderIndex: 0 }]) } : s
+      )
+    })
   }
 
   // ── Save ───────────────────────────────────────────────────────────────────
@@ -429,7 +521,7 @@ export default function QuotesView({
     fd.set('reference', reference)
     fd.set('description', description)
     fd.set('status', status)
-    fd.set('line_items', JSON.stringify(lineItems))
+    fd.set('sections', JSON.stringify(sections))
     fd.set('notes', notes)
 
     const result = await saveQuote(fd)
@@ -446,14 +538,14 @@ export default function QuotesView({
     if (view === 'new') {
       const newId = ('id' in (result ?? {})) ? (result as { id: string }).id : crypto.randomUUID()
       setQuotes((prev) => [
-        { id: newId, siteId: siteId || null, siteName: resolvedSiteName, stageId: stageId || null, stageName: resolvedStageName, reference, description, status, lineItems, notes, createdAt: new Date().toISOString() },
+        { id: newId, siteId: siteId || null, siteName: resolvedSiteName, stageId: stageId || null, stageName: resolvedStageName, reference, description, status, sections, notes, createdAt: new Date().toISOString() },
         ...prev,
       ])
     } else {
       setQuotes((prev) =>
         prev.map((q) =>
           q.id === view
-            ? { ...q, siteId: siteId || null, siteName: resolvedSiteName, stageId: stageId || null, stageName: resolvedStageName, reference, description, status, lineItems, notes }
+            ? { ...q, siteId: siteId || null, siteName: resolvedSiteName, stageId: stageId || null, stageName: resolvedStageName, reference, description, status, sections, notes }
             : q
         )
       )
@@ -596,16 +688,14 @@ export default function QuotesView({
   function handleDownloadPDF() {
     const resolvedSiteName = sites.find((s) => s.id === siteId)?.name ?? null
     const filename = slug(resolvedSiteName, reference || 'Quote') + '.pdf'
-    const html = buildQuoteHtml(resolvedSiteName, reference, description, lineItems, notes, LOGO_DATA_URL)
+    const html = buildQuoteHtml(resolvedSiteName, reference, description, sections, notes, LOGO_DATA_URL, includeGst)
     setPdfGenerating(true)
     downloadPDF(html, filename, setActionError, () => setPdfGenerating(false))
   }
 
   // ── Totals ─────────────────────────────────────────────────────────────────
 
-  const subtotal = calcSubtotal(lineItems)
-  const gst   = subtotal * 0.1
-  const total = subtotal + gst
+  const grandTotal = calcGrandTotal(sections)
 
   // ── Builder view ───────────────────────────────────────────────────────────
 
@@ -711,10 +801,10 @@ export default function QuotesView({
             />
           </div>
 
-          {/* Line items */}
-          <div className="space-y-2">
+          {/* Sections */}
+          <div className="space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Line Items</label>
+              <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Sections</label>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -733,92 +823,143 @@ export default function QuotesView({
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 pr-3 min-w-[180px]">Description</th>
-                    <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-2 w-20">Qty</th>
-                    <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-2 w-20">Unit</th>
-                    <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-2 w-24">Rate</th>
-                    <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-2 w-28">Total</th>
-                    <th className="pb-2 w-8"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lineItems.map((item, i) => {
-                    const lineTotal = (item.qty || 0) * (item.rate || 0)
-                    return (
-                      <tr key={i} className="border-b border-border-subtle">
-                        <td className="py-1.5 pr-3">
-                          <input
-                            type="text"
-                            value={item.description}
-                            onChange={(e) => updateLine(i, 'description', e.target.value)}
-                            placeholder="Description"
-                            className="w-full rounded border border-border bg-surface px-2 py-1 text-sm text-fg placeholder:text-fg-muted focus:border-border focus:outline-none"
-                          />
-                        </td>
-                        <td className="py-1.5 px-2">
-                          <input
-                            type="number"
-                            value={item.qty}
-                            min={0}
-                            step="any"
-                            onChange={(e) => updateLine(i, 'qty', parseFloat(e.target.value) || 0)}
-                            className="w-full rounded border border-border bg-surface px-2 py-1 text-sm text-fg text-right focus:border-border focus:outline-none"
-                          />
-                        </td>
-                        <td className="py-1.5 px-2">
-                          <input
-                            type="text"
-                            value={item.unit}
-                            onChange={(e) => updateLine(i, 'unit', e.target.value)}
-                            placeholder="hr"
-                            className="w-full rounded border border-border bg-surface px-2 py-1 text-sm text-fg placeholder:text-fg-muted focus:border-border focus:outline-none"
-                          />
-                        </td>
-                        <td className="py-1.5 px-2">
-                          <input
-                            type="number"
-                            value={item.rate}
-                            min={0}
-                            step="any"
-                            onChange={(e) => updateLine(i, 'rate', parseFloat(e.target.value) || 0)}
-                            className="w-full rounded border border-border bg-surface px-2 py-1 text-sm text-fg text-right focus:border-border focus:outline-none"
-                          />
-                        </td>
-                        <td className="py-1.5 px-2 text-right text-sm tabular-nums text-fg-secondary">
-                          {fmt(lineTotal)}
-                        </td>
-                        <td className="py-1.5 pl-2">
-                          <button
-                            type="button"
-                            onClick={() => removeLine(i)}
-                            disabled={lineItems.length === 1}
-                            className="text-fg-muted hover:text-red-500 disabled:hover:text-fg-muted transition-colors"
-                          >
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+            {sections.map((section, sIdx) => {
+              const sectionSubtotal = calcSectionSubtotal(section)
+              const showSubtotal = sections.length >= 2
+              return (
+                <div key={sIdx} className="rounded-lg border border-border-subtle overflow-hidden">
+                  {/* Section header — name only */}
+                  <div className="flex items-center gap-2 bg-surface-raised px-3 py-2">
+                    <input
+                      type="text"
+                      value={section.name}
+                      onChange={(e) => renameSection(sIdx, e.target.value)}
+                      placeholder="Section name (optional)"
+                      className="flex-1 rounded border border-border bg-surface px-2 py-1 text-sm font-medium text-fg placeholder:text-fg-muted focus:border-border focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeSection(sIdx)}
+                      disabled={sections.length === 1}
+                      className="shrink-0 text-fg-muted hover:text-red-500 disabled:opacity-40 disabled:hover:text-fg-muted transition-colors"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <div className="p-3 space-y-2">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm border-collapse">
+                        <thead>
+                          <tr className="border-b border-border">
+                            <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 pr-3 min-w-[180px]">Description</th>
+                            <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-2 w-20">Qty</th>
+                            <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-2 w-20">Unit</th>
+                            <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-2 w-24">Rate</th>
+                            <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-2 w-28">Total</th>
+                            <th className="pb-2 w-8"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {section.items.map((item, i) => {
+                            const lineTotal = (item.qty || 0) * (item.rate || 0)
+                            return (
+                              <tr key={i} className="border-b border-border-subtle">
+                                <td className="py-1.5 pr-3">
+                                  <input
+                                    type="text"
+                                    value={item.description}
+                                    onChange={(e) => updateLine(sIdx, i, 'description', e.target.value)}
+                                    placeholder="Description"
+                                    className="w-full rounded border border-border bg-surface px-2 py-1 text-sm text-fg placeholder:text-fg-muted focus:border-border focus:outline-none"
+                                  />
+                                </td>
+                                <td className="py-1.5 px-2">
+                                  <input
+                                    type="number"
+                                    value={item.qty}
+                                    min={0}
+                                    step="any"
+                                    onChange={(e) => updateLine(sIdx, i, 'qty', parseFloat(e.target.value) || 0)}
+                                    className="w-full rounded border border-border bg-surface px-2 py-1 text-sm text-fg text-right focus:border-border focus:outline-none"
+                                  />
+                                </td>
+                                <td className="py-1.5 px-2">
+                                  <input
+                                    type="text"
+                                    value={item.unit}
+                                    onChange={(e) => updateLine(sIdx, i, 'unit', e.target.value)}
+                                    placeholder="hr"
+                                    className="w-full rounded border border-border bg-surface px-2 py-1 text-sm text-fg placeholder:text-fg-muted focus:border-border focus:outline-none"
+                                  />
+                                </td>
+                                <td className="py-1.5 px-2">
+                                  <input
+                                    type="number"
+                                    value={item.rate}
+                                    min={0}
+                                    step="any"
+                                    onChange={(e) => updateLine(sIdx, i, 'rate', parseFloat(e.target.value) || 0)}
+                                    className="w-full rounded border border-border bg-surface px-2 py-1 text-sm text-fg text-right focus:border-border focus:outline-none"
+                                  />
+                                </td>
+                                <td className="py-1.5 px-2 text-right text-sm tabular-nums text-fg-secondary">
+                                  {fmt(lineTotal)}
+                                </td>
+                                <td className="py-1.5 pl-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => removeLine(sIdx, i)}
+                                    disabled={section.items.length === 1}
+                                    className="text-fg-muted hover:text-red-500 disabled:hover:text-fg-muted transition-colors"
+                                  >
+                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {showSubtotal && (
+                      <div className="flex justify-end border-t border-border-subtle pt-2">
+                        <div className="flex items-center gap-3 text-sm">
+                          <span className="text-fg-muted">Subtotal</span>
+                          <span className="font-semibold tabular-nums text-fg-secondary">{fmt(sectionSubtotal)}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => addLine(sIdx)}
+                      className="flex items-center gap-1 text-sm font-medium text-accent-fg hover:text-green-900 transition-colors"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                      </svg>
+                      Add line
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
 
             <button
               type="button"
-              onClick={addLine}
+              onClick={addSection}
               className="flex items-center gap-1 text-sm font-medium text-accent-fg hover:text-green-900 transition-colors"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
               </svg>
-              Add line
+              Add section
             </button>
           </div>
 
@@ -837,17 +978,9 @@ export default function QuotesView({
           {/* Totals */}
           <div className="flex justify-end border-t border-border-subtle pt-4">
             <div className="w-64 space-y-1.5 text-sm">
-              <div className="flex justify-between text-fg-muted">
-                <span>Subtotal (ex GST)</span>
-                <span className="tabular-nums">{fmt(subtotal)}</span>
-              </div>
-              <div className="flex justify-between text-fg-muted">
-                <span>GST (10%)</span>
-                <span className="tabular-nums">{fmt(gst)}</span>
-              </div>
-              <div className="flex justify-between font-semibold text-fg border-t border-border pt-1.5">
-                <span>Total (inc GST)</span>
-                <span className="tabular-nums">{fmt(total)}</span>
+              <div className="flex justify-between font-semibold text-fg">
+                <span>Total (ex GST)</span>
+                <span className="tabular-nums">{fmt(grandTotal)}</span>
               </div>
             </div>
           </div>
@@ -915,6 +1048,15 @@ export default function QuotesView({
             {pdfGenerating ? <Spinner /> : <PdfIcon />}
             {pdfGenerating ? 'Generating…' : 'Download PDF'}
           </button>
+          <label className="flex items-center gap-1.5 text-sm text-fg-muted cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={includeGst}
+              onChange={(e) => setIncludeGst(e.target.checked)}
+              className="h-4 w-4 rounded border-border text-accent-fg focus:ring-green-600 cursor-pointer"
+            />
+            Include GST
+          </label>
           {!isNew && status === 'accepted' && !optimisticConversions[view] && canEdit && (
             <button
               type="button"
@@ -1002,7 +1144,7 @@ export default function QuotesView({
       ) : (
         <div className="rounded-xl border border-border bg-surface overflow-hidden divide-y divide-border-subtle">
           {filtered.map((q) => {
-            const rowSubtotal = calcSubtotal(q.lineItems)
+            const rowSubtotal = calcGrandTotal(q.sections)
             const date = new Date(q.createdAt).toLocaleDateString('en-AU', {
               day: 'numeric', month: 'short', year: 'numeric',
             })
