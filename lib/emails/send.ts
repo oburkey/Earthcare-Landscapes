@@ -8,9 +8,13 @@ import { createAdminClient } from '@/lib/supabase/admin'
 const resend = new Resend(process.env.RESEND_API_KEY)
 const FROM   = process.env.RESEND_FROM ?? 'Earthcare Landscapes <noreply@earthcare.net.au>'
 
-export async function getScheduleEmailRecipients(): Promise<string[]> {
+export async function getScheduleEmailRecipients(reportType: 'weekly' | 'monthly'): Promise<string[]> {
   const db = createAdminClient()
-  const { data } = await db.from('email_recipients').select('email').order('email', { ascending: true })
+  const { data } = await db
+    .from('email_recipients')
+    .select('email')
+    .in('email_type', [reportType, 'both'])
+    .order('email', { ascending: true })
   return (data ?? []).map((r: { email: string }) => r.email)
 }
 

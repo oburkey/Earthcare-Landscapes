@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const recipients = await getScheduleEmailRecipients()
+    const recipients = await getScheduleEmailRecipients('weekly')
     const data = await fetchWeeklyEmailData()
     const html = renderWeeklyEmailHtml(data)
 

@@ -9,6 +9,7 @@ import {
 import type { MutationState } from '@/types/actions'
 
 export type RecipientRow = { id: string; email: string }
+type ListType = 'weekly' | 'monthly'
 
 const INPUT = 'block w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600'
 const BUTTON_PRIMARY = 'rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 active:bg-green-900 disabled:opacity-50'
@@ -16,7 +17,7 @@ const BUTTON_SECONDARY = 'rounded-lg border border-border px-4 py-2 text-sm font
 
 // ── Recipients ──────────────────────────────────────────────────────────────
 
-function AddRecipientForm({ onAdded }: { onAdded: () => void }) {
+function AddRecipientForm({ list, onAdded }: { list: ListType; onAdded: () => void }) {
   const [state, action, pending] = useActionState<MutationState, FormData>(addEmailRecipient, null)
 
   useEffect(() => {
@@ -25,6 +26,7 @@ function AddRecipientForm({ onAdded }: { onAdded: () => void }) {
 
   return (
     <form action={action} className="flex items-start gap-2">
+      <input type="hidden" name="list" value={list} />
       <div className="flex-1">
         <input
           name="email"
@@ -42,7 +44,7 @@ function AddRecipientForm({ onAdded }: { onAdded: () => void }) {
   )
 }
 
-function RecipientRowItem({ recipient }: { recipient: RecipientRow }) {
+function RecipientRowItem({ recipient, list }: { recipient: RecipientRow; list: ListType }) {
   const [state, action, pending] = useActionState<MutationState, FormData>(removeEmailRecipient, null)
 
   return (
@@ -50,6 +52,7 @@ function RecipientRowItem({ recipient }: { recipient: RecipientRow }) {
       <span className="text-sm text-fg">{recipient.email}</span>
       <form action={action}>
         <input type="hidden" name="id" value={recipient.id} />
+        <input type="hidden" name="list" value={list} />
         <button
           type="submit"
           disabled={pending}
@@ -63,19 +66,19 @@ function RecipientRowItem({ recipient }: { recipient: RecipientRow }) {
   )
 }
 
-function RecipientsSection({ recipients }: { recipients: RecipientRow[] }) {
+function RecipientsSection({ list, recipients }: { list: ListType; recipients: RecipientRow[] }) {
   const [formKey, setFormKey] = useState(0)
 
   return (
     <div className="rounded-xl border border-border bg-surface overflow-hidden">
       <div className="px-4 py-3 border-b border-border bg-surface-raised">
-        <AddRecipientForm key={formKey} onAdded={() => setFormKey((k) => k + 1)} />
+        <AddRecipientForm key={formKey} list={list} onAdded={() => setFormKey((k) => k + 1)} />
       </div>
       {recipients.length === 0 ? (
         <p className="px-4 py-8 text-center text-sm text-fg-muted">No recipients yet — add an email above.</p>
       ) : (
         <ul>
-          {recipients.map((r) => <RecipientRowItem key={r.id} recipient={r} />)}
+          {recipients.map((r) => <RecipientRowItem key={r.id} recipient={r} list={list} />)}
         </ul>
       )}
     </div>
@@ -165,15 +168,28 @@ function PreviewSection() {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function ScheduleEmailsSettings({ recipients }: { recipients: RecipientRow[] }) {
+export default function ScheduleEmailsSettings({
+  weeklyRecipients, monthlyRecipients,
+}: {
+  weeklyRecipients: RecipientRow[]
+  monthlyRecipients: RecipientRow[]
+}) {
   return (
     <div className="space-y-8">
       <section className="space-y-3">
         <div>
-          <h2 className="text-base font-semibold text-fg">Recipients</h2>
-          <p className="text-sm text-fg-muted">Everyone on this list receives both the weekly and monthly reports.</p>
+          <h2 className="text-base font-semibold text-fg">Weekly schedule email recipients</h2>
+          <p className="text-sm text-fg-muted">Sent Friday mornings. An email can also be on the monthly list below.</p>
         </div>
-        <RecipientsSection recipients={recipients} />
+        <RecipientsSection list="weekly" recipients={weeklyRecipients} />
+      </section>
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-base font-semibold text-fg">Monthly report email recipients</h2>
+          <p className="text-sm text-fg-muted">Sent on the 1st of the month. An email can also be on the weekly list above.</p>
+        </div>
+        <RecipientsSection list="monthly" recipients={monthlyRecipients} />
       </section>
 
       <section className="space-y-3">

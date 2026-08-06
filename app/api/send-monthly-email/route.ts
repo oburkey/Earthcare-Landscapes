@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const recipients = await getScheduleEmailRecipients()
+    const recipients = await getScheduleEmailRecipients('monthly')
     const data = await fetchMonthlyEmailData()
     const html = renderMonthlyEmailHtml(data)
 
