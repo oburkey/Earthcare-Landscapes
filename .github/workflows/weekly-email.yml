@@ -1,0 +1,16 @@
+name: Weekly Schedule Email
+
+on:
+  schedule:
+    - cron: '0 23 * * 4'  # Thursday 23:00 UTC = Friday 7:00am Perth
+  workflow_dispatch:  # allows manual trigger for testing
+
+jobs:
+  send-email:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send weekly email
+        run: |
+          curl -sf -X POST "${{ secrets.APP_URL }}/api/send-weekly-email" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json"

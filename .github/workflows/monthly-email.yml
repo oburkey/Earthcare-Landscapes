@@ -1,0 +1,20 @@
+name: Monthly Report Email
+
+on:
+  schedule:
+    # Runs daily at 23:00 UTC (7:00am Perth). Cron can't express "the 1st in
+    # Perth time" directly — a fixed UTC hour on day 1 lands on the 2nd in
+    # AWST (UTC+8). The API route checks the Perth date and no-ops (returns
+    # {skipped: true}) on every day that isn't actually the 1st there.
+    - cron: '0 23 * * *'
+  workflow_dispatch:
+
+jobs:
+  send-email:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send monthly email
+        run: |
+          curl -sf -X POST "${{ secrets.APP_URL }}/api/send-monthly-email" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json"
