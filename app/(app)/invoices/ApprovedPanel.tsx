@@ -41,6 +41,7 @@ function fmt(n: number): string {
 
 async function downloadZip(
   lots: ApprovedLot[],
+  jobs: ApprovedExtraJob[],
   onError: (msg: string) => void,
   onDone: () => void
 ) {
@@ -50,6 +51,12 @@ async function downloadZip(
     for (const lot of lots) {
       const blob = await generateClaimPdfBlob(lot)
       zip.file(pdfFilename(lot), blob)
+    }
+    for (const job of jobs) {
+      const result = await getClaimExtraJobData(job.id)
+      if (!result.data) continue
+      const blob = await generateExtraJobPdfBlob(result.data)
+      zip.file(extraJobPdfFilename(result.data), blob)
     }
     const zipBlob = await zip.generateAsync({ type: 'blob' })
     const url = URL.createObjectURL(zipBlob)
@@ -397,14 +404,14 @@ export default function ApprovedPanel({
                 {invoicingStep === 'snapshots' ? 'Generating PDFs…' : invoicingStep === 'saving' ? 'Marking…' : 'Mark as Invoiced'}
               </button>
 
-              {selectedLots.length > 0 && (
+              {(selectedLots.length > 0 || selectedJobs.length > 0) && (
                 <button
                   type="button"
                   disabled={generating}
                   onClick={() => {
                     setGenerating(true)
                     setError(null)
-                    downloadZip(selectedLots, setError, () => setGenerating(false))
+                    downloadZip(selectedLots, selectedJobs, setError, () => setGenerating(false))
                   }}
                   className="flex items-center gap-1.5 rounded-lg border border-green-300 dark:border-green-700 px-4 py-2 text-sm font-medium text-accent-fg hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
