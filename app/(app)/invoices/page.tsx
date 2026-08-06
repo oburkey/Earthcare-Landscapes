@@ -29,7 +29,7 @@ export default async function InvoicesPage() {
         id, name, client_contact, completed_at, has_client_extras,
         stages(id, name, order, completed_at, is_contract_pricing, default_contract_price,
           lots(id, lot_number, home_design, build_complete, invoiced, pending_review, approved_for_invoicing, has_client_extras, contract_price),
-          extra_jobs(id, title, status, approved_by_name, source_quote_id, pending_review, approved_for_invoicing, invoiced)
+          extra_jobs(id, title, status, approved_by_name, finance_notes, source_quote_id, pending_review, approved_for_invoicing, invoiced)
         )
       `)
       .order('name')
@@ -387,6 +387,7 @@ export default async function InvoicesPage() {
             return {
               id: j.id, title: j.title, status: j.status, total, quotedAmount,
               approvedByName: j.approved_by_name ?? null,
+              financeNotes:   j.finance_notes ?? null,
               pendingReview, approvedForInvoicing, invoiced,
             }
           })
@@ -431,7 +432,7 @@ export default async function InvoicesPage() {
   // ── Invoice history ───────────────────────────────────────────────────────
   // Build lookup maps for resolving IDs in history
   const lotById = new Map<string, { id: string; lotNumber: string; siteName: string; stageName: string }>()
-  const extraJobById = new Map<string, { title: string; siteName: string }>()
+  const extraJobById = new Map<string, { id: string; title: string; siteName: string }>()
   const progressClaimById = new Map<string, { claimNumber: number; stageName: string; siteName: string; amount: number }>()
   for (const site of activeSites) {
     for (const stage of (site.stages ?? [])) {
@@ -439,7 +440,7 @@ export default async function InvoicesPage() {
         lotById.set(lot.id, { id: lot.id, lotNumber: lot.lot_number, siteName: site.name, stageName: stage.name })
       }
       for (const job of (stage.extra_jobs ?? [])) {
-        extraJobById.set(job.id, { title: job.title, siteName: site.name })
+        extraJobById.set(job.id, { id: job.id, title: job.title, siteName: site.name })
       }
     }
   }
@@ -481,7 +482,7 @@ export default async function InvoicesPage() {
       extraJobCount:       extraJobIds.length,
       progressClaimCount:  progressClaimIds.length,
       lotDetails:          lotIds.map((id) => lotById.get(id) ?? { id, lotNumber: id.slice(0, 8), siteName: '—', stageName: '—' }),
-      extraJobDetails:     extraJobIds.map((id) => extraJobById.get(id) ?? { title: id.slice(0, 8), siteName: '—' }),
+      extraJobDetails:     extraJobIds.map((id) => extraJobById.get(id) ?? { id, title: id.slice(0, 8), siteName: '—' }),
       progressClaimDetails: progressClaimIds.map((id) => progressClaimById.get(id) ?? { claimNumber: 0, stageName: '—', siteName: '—', amount: 0 }),
       snapshotPaths:       (r.snapshot_paths ?? {}) as Record<string, string>,
     }

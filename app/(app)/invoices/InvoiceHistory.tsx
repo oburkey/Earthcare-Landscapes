@@ -2,8 +2,15 @@
 
 import { useState, useTransition } from 'react'
 import { useActionState } from 'react'
-import { deleteInvoiceRun, getInvoiceSnapshotDataUrl, getClaimLotDataForSnapshot } from './actions'
-import { generateClaimPdfBlob, downloadDataUrl, downloadBlob, pdfFilename } from './pdfClient'
+import {
+  deleteInvoiceRun, getInvoiceSnapshotDataUrl,
+  getClaimLotDataForSnapshot, getClaimExtraJobData,
+} from './actions'
+import {
+  generateClaimPdfBlob, pdfFilename,
+  generateExtraJobPdfBlob, extraJobPdfFilename,
+  downloadDataUrl, downloadBlob,
+} from './pdfClient'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -17,7 +24,7 @@ export type InvoiceRun = {
   extraJobCount: number
   progressClaimCount: number
   lotDetails: Array<{ id: string; lotNumber: string; siteName: string; stageName: string }>
-  extraJobDetails: Array<{ title: string; siteName: string }>
+  extraJobDetails: Array<{ id: string; title: string; siteName: string }>
   progressClaimDetails: Array<{ claimNumber: number; stageName: string; siteName: string; amount: number }>
   snapshotPaths: Record<string, string>
 }
@@ -91,14 +98,19 @@ function DeleteRunButton({ run }: { run: InvoiceRun }) {
   )
 }
 
-// ── Download PDF (per lot) ─────────────────────────────────────────────────────
+// ── Download PDF (per lot / extra job) ────────────────────────────────────────
 
+type RegenerateResult = { blob: Blob; filename: string } | { error: string }
+
+// Generic historical-snapshot download button: if a snapshot path exists,
+// fetch it from R2 as-is; otherwise fall back to regenerating from current
+// data (with a note, since that's no longer the historical version).
 function DownloadSnapshotButton({
-  lotId, lotNumber, snapshotPath,
+  snapshotPath, historicalFilename, regenerate,
 }: {
-  lotId: string
-  lotNumber: string
   snapshotPath: string | undefined
+  historicalFilename: string
+  regenerate: () => Promise<RegenerateResult>
 }) {
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -114,19 +126,18 @@ function DownloadSnapshotButton({
           setError(result.error ?? 'Snapshot not found.')
           return
         }
-        await downloadDataUrl(result.dataUrl, `Lot-${lotNumber}-Claim.pdf`)
+        await downloadDataUrl(result.dataUrl, historicalFilename)
         return
       }
 
       // No snapshot on file (invoiced before this feature existed) — rebuild
-      // from current pricing instead.
-      const result = await getClaimLotDataForSnapshot(lotId)
-      if (result.error || !result.data) {
-        setError(result.error ?? 'Unable to generate PDF.')
+      // from current data instead.
+      const result = await regenerate()
+      if ('error' in result) {
+        setError(result.error)
         return
       }
-      const blob = await generateClaimPdfBlob(result.data)
-      downloadBlob(blob, pdfFilename(result.data))
+      downloadBlob(result.blob, result.filename)
       setNote('Historical PDF not available — showing current data')
     })
   }
@@ -145,6 +156,20 @@ function DownloadSnapshotButton({
       {note && <span className="text-xs text-amber-600 dark:text-amber-400">{note}</span>}
     </span>
   )
+}
+
+async function regenerateLotPdf(lotId: string): Promise<RegenerateResult> {
+  const result = await getClaimLotDataForSnapshot(lotId)
+  if (result.error || !result.data) return { error: result.error ?? 'Unable to generate PDF.' }
+  const blob = await generateClaimPdfBlob(result.data)
+  return { blob, filename: pdfFilename(result.data) }
+}
+
+async function regenerateExtraJobPdf(extraJobId: string): Promise<RegenerateResult> {
+  const result = await getClaimExtraJobData(extraJobId)
+  if (result.error || !result.data) return { error: result.error ?? 'Unable to generate PDF.' }
+  const blob = await generateExtraJobPdfBlob(result.data)
+  return { blob, filename: extraJobPdfFilename(result.data) }
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -215,9 +240,9 @@ export default function InvoiceHistory({ runs }: { runs: InvoiceRun[] }) {
                                 <span className="text-fg-muted"> · {lot.siteName} · {lot.stageName}</span>
                               </p>
                               <DownloadSnapshotButton
-                                lotId={lot.id}
-                                lotNumber={lot.lotNumber}
                                 snapshotPath={run.snapshotPaths[lot.id]}
+                                historicalFilename={`Lot-${lot.lotNumber}-Claim.pdf`}
+                                regenerate={() => regenerateLotPdf(lot.id)}
                               />
                             </div>
                           ))}
@@ -230,10 +255,17 @@ export default function InvoiceHistory({ runs }: { runs: InvoiceRun[] }) {
                         <p className="text-xs font-semibold text-fg-muted uppercase tracking-wide mb-1.5">Extra Jobs</p>
                         <div className="space-y-1">
                           {run.extraJobDetails.map((job, i) => (
-                            <p key={i} className="text-sm text-fg-secondary">
-                              {job.title}
-                              <span className="text-fg-muted"> · {job.siteName}</span>
-                            </p>
+                            <div key={i} className="flex items-center justify-between gap-3">
+                              <p className="text-sm text-fg-secondary">
+                                {job.title}
+                                <span className="text-fg-muted"> · {job.siteName}</span>
+                              </p>
+                              <DownloadSnapshotButton
+                                snapshotPath={run.snapshotPaths[job.id]}
+                                historicalFilename={`ExtraJob-${job.title}-Claim.pdf`}
+                                regenerate={() => regenerateExtraJobPdf(job.id)}
+                              />
+                            </div>
                           ))}
                         </div>
                       </div>

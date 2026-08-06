@@ -4,8 +4,9 @@ import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { uploadToR2, getR2FileAsDataUrl } from '@/lib/r2'
+import { getExtraJobsPricing } from '@/app/(app)/sites/[siteId]/stages/[stageId]/extra-jobs/[extraJobId]/pricing-actions'
 import type { ActionState } from '@/types/actions'
-import type { ClaimLotData } from './pdfClient'
+import type { ClaimLotData, ClaimExtraJobData } from './pdfClient'
 import type { LotSection } from './InvoicesView'
 
 // Free text, not a profiles lookup — approval sometimes comes from an
@@ -27,6 +28,30 @@ export async function updateExtraJobApprovedBy(
   const { error } = await supabase
     .from('extra_jobs')
     .update({ approved_by_name: approvedByName })
+    .eq('id', extraJobId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/invoices')
+  return null
+}
+
+export async function updateExtraJobFinanceNotes(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Only admins can edit finance notes.' }
+
+  const extraJobId = formData.get('extra_job_id') as string
+  if (!extraJobId) return { error: 'Extra job ID is missing.' }
+
+  const financeNotes = (formData.get('finance_notes') as string)?.trim() || null
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('extra_jobs')
+    .update({ finance_notes: financeNotes })
     .eq('id', extraJobId)
 
   if (error) return { error: error.message }
@@ -339,23 +364,26 @@ export async function deleteInvoiceRun(
 
 const SNAPSHOT_PREFIX = 'invoice-snapshots/'
 
+// entityKey is `lot.id` for a lot snapshot, or `extrajob_{extra_job_id}` for
+// an extra job snapshot — kept generic so both share one upload path/action.
 export async function uploadInvoiceSnapshot(
   formData: FormData
 ): Promise<{ path?: string; error?: string }> {
   const profile = await requireAuth()
   if (profile.role !== 'admin') return { error: 'Only admins can upload invoice snapshots.' }
 
-  const lotId     = formData.get('lot_id') as string
+  const entityKey = formData.get('entity_key') as string
   const timestamp = formData.get('timestamp') as string
   const file      = formData.get('file') as File
 
-  if (!lotId || !timestamp) return { error: 'Missing lot ID or timestamp.' }
+  if (!entityKey || !timestamp) return { error: 'Missing entity key or timestamp.' }
   if (!file || file.size === 0) return { error: 'No file provided.' }
   if (file.size > 20 * 1024 * 1024) return { error: 'File too large (max 20 MB).' }
   if (file.type !== 'application/pdf') return { error: 'File must be a PDF.' }
 
   const safeTimestamp = timestamp.replace(/[^a-zA-Z0-9-]/g, '')
-  const key = `${SNAPSHOT_PREFIX}${safeTimestamp}/${lotId}.pdf`
+  const safeEntityKey = entityKey.replace(/[^a-zA-Z0-9_-]/g, '')
+  const key = `${SNAPSHOT_PREFIX}${safeTimestamp}/${safeEntityKey}.pdf`
 
   try {
     const buffer = Buffer.from(await file.arrayBuffer())
@@ -519,6 +547,58 @@ export async function getClaimLotDataForSnapshot(
     contractPrice:      effectiveContractPrice,
     showClientExtras,
     sections:           amounts.sections,
+  }
+
+  return { data }
+}
+
+// Fetches everything needed for an extra job's claim sheet PDF — used both by
+// the "Download PDF" button on the invoices page and (when no snapshot
+// exists) Invoice History's fallback regeneration.
+export async function getClaimExtraJobData(
+  extraJobId: string
+): Promise<{ data?: ClaimExtraJobData; error?: string }> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Only admins can view invoice snapshots.' }
+
+  const supabase = await createClient()
+
+  const { data: job, error: jobError } = await supabase
+    .from('extra_jobs')
+    .select(`
+      id, title, description, notes, finance_notes,
+      stages!inner(id, name, sites!inner(id, name))
+    `)
+    .eq('id', extraJobId)
+    .single()
+  if (jobError || !job) return { error: jobError?.message ?? 'Extra job not found.' }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const stage = job.stages as any
+  const site = stage.sites
+
+  const [pricing] = await getExtraJobsPricing([extraJobId])
+
+  const items = (pricing?.items ?? [])
+    .filter((i) => i.unit_price != null)
+    .map((i) => ({
+      name:     i.item_name,
+      quantity: i.quantity,
+      unit:     i.unit,
+      rate:     i.unit_price as number,
+      total:    i.quantity * (i.unit_price as number),
+    }))
+
+  const data: ClaimExtraJobData = {
+    id:           job.id,
+    title:        job.title,
+    siteName:     site.name,
+    stageName:    stage.name,
+    description:  job.description ?? null,
+    notes:        job.notes ?? null,
+    financeNotes: job.finance_notes ?? null,
+    items,
+    total: pricing?.total ?? 0,
   }
 
   return { data }

@@ -23,6 +23,26 @@ export type ClaimLotData = {
   sections: LotSection[]
 }
 
+export type ClaimExtraJobItem = {
+  name: string
+  quantity: number
+  unit: string
+  rate: number
+  total: number
+}
+
+export type ClaimExtraJobData = {
+  id: string
+  title: string
+  siteName: string
+  stageName: string
+  description: string | null
+  notes: string | null
+  financeNotes: string | null
+  items: ClaimExtraJobItem[]
+  total: number
+}
+
 function fmt(n: number): string {
   return '$' + n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
@@ -130,6 +150,63 @@ export function pdfFilename(lot: ClaimLotData): string {
   return `Lot-${clean(lot.lotNumber)}-${clean(lot.siteName)}-${clean(lot.stageName)}.pdf`
 }
 
+// Extra job claim sheet — same header/table/note styling as the lot claim
+// sheet (CLAIM_STYLES is generic, not lot-specific), branching the same way
+// lotClaimHtml does: itemized line items when pricing has been entered,
+// otherwise a single "Agreed Amount" row.
+export function extraJobClaimHtml(job: ClaimExtraJobData): string {
+  const date = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
+
+  const tableContent = job.items.length > 0
+    ? `${job.items.map((item, i) => `
+        <tr>
+          <td class="r" style="color:#888;font-size:10px">${i + 1}</td>
+          <td>${item.name}</td>
+          <td class="r">${fmtQty(item.quantity)}</td>
+          <td class="u">${item.unit}</td>
+          <td class="r">${item.rate > 0 ? fmt(item.rate) : '—'}</td>
+          <td class="r">${item.rate > 0 ? fmt(item.total) : '—'}</td>
+        </tr>`).join('')}
+      <tr class="grand"><td colspan="5">Grand Total (ex GST)</td><td class="r">${fmt(job.total)}</td></tr>`
+    : `
+      <tr><td></td><td>Agreed Amount</td><td class="r">1</td><td class="u">Job</td><td class="r">${fmt(job.total)}</td><td class="r">${fmt(job.total)}</td></tr>
+      <tr class="grand"><td colspan="5">Grand Total (ex GST)</td><td class="r">${fmt(job.total)}</td></tr>`
+
+  const notesBlock = [
+    job.description ? `<div class="sub"><strong>Description:</strong> ${job.description}</div>` : '',
+    job.notes ? `<div class="sub"><strong>Notes:</strong> ${job.notes}</div>` : '',
+    job.financeNotes ? `<div class="sub"><strong>Finance notes:</strong> ${job.financeNotes}</div>` : '',
+  ].filter(Boolean).join('')
+
+  return `
+<div class="invoice-page">
+  <div class="hdr">
+    <div class="hdr-left">
+      <h1>${job.siteName} — ${job.title}</h1>
+      <div class="lbl">Extra Job</div>
+      <div class="sub">Stage: ${job.stageName}</div>
+      <div class="sub">${date}</div>
+      ${notesBlock}
+    </div>
+    <div class="hdr-right">${LOGO_DATA_URL ? `<img src="${LOGO_DATA_URL}" alt="Earthcare Landscapes" />` : ''}</div>
+  </div>
+  <table>
+    <thead><tr>
+      <th>Code</th><th>Description</th>
+      <th class="r">Qty</th><th>Unit</th>
+      <th class="r">Rate</th><th class="r">Total (ex GST)</th>
+    </tr></thead>
+    <tbody>${tableContent}</tbody>
+  </table>
+  <div class="note">All amounts are exclusive of GST. GST of 10% applies.</div>
+</div>`
+}
+
+export function extraJobPdfFilename(job: ClaimExtraJobData): string {
+  const clean = (s: string) => s.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '')
+  return `ExtraJob-${clean(job.title)}-${clean(job.siteName)}-${clean(job.stageName)}.pdf`
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function stampPageNumbers(pdf: any) {
   const pageCount  = pdf.internal.getNumberOfPages()
@@ -143,12 +220,12 @@ function stampPageNumbers(pdf: any) {
   }
 }
 
-// Renders a single lot's claim sheet to a PDF Blob via html2pdf.js. Must be
-// called from the browser (dynamic-imports html2pdf.js, which needs a DOM).
-export async function generateClaimPdfBlob(lot: ClaimLotData): Promise<Blob> {
+// Shared html2pdf.js plumbing — renders a styled HTML fragment to a PDF Blob.
+// Must be called from the browser (dynamic-imports html2pdf.js, which needs a DOM).
+async function renderHtmlToPdfBlob(html: string): Promise<Blob> {
   const { default: html2pdf } = await import('html2pdf.js')
   const el = document.createElement('div')
-  el.innerHTML = CLAIM_STYLES + lotClaimHtml(lot)
+  el.innerHTML = html
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const pdf = await (html2pdf() as any)
     .set({
@@ -162,6 +239,16 @@ export async function generateClaimPdfBlob(lot: ClaimLotData): Promise<Blob> {
     .get('pdf')
   stampPageNumbers(pdf)
   return pdf.output('blob')
+}
+
+// Renders a single lot's claim sheet to a PDF Blob via html2pdf.js.
+export async function generateClaimPdfBlob(lot: ClaimLotData): Promise<Blob> {
+  return renderHtmlToPdfBlob(CLAIM_STYLES + lotClaimHtml(lot))
+}
+
+// Renders a single extra job's claim sheet to a PDF Blob via html2pdf.js.
+export async function generateExtraJobPdfBlob(job: ClaimExtraJobData): Promise<Blob> {
+  return renderHtmlToPdfBlob(CLAIM_STYLES + extraJobClaimHtml(job))
 }
 
 // Triggers a browser download for an already-fetched Blob.

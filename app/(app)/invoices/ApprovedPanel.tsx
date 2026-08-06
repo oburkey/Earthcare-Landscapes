@@ -2,8 +2,8 @@
 
 import { useState, useTransition, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { markAsInvoiced, uploadInvoiceSnapshot } from './actions'
-import { generateClaimPdfBlob, pdfFilename, type ClaimLotData } from './pdfClient'
+import { markAsInvoiced, uploadInvoiceSnapshot, getClaimExtraJobData } from './actions'
+import { generateClaimPdfBlob, pdfFilename, generateExtraJobPdfBlob, extraJobPdfFilename, type ClaimLotData } from './pdfClient'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -67,14 +67,28 @@ async function downloadZip(
   }
 }
 
-// Generates a claim sheet PDF for each lot being invoiced and uploads it to
-// R2 under invoice-snapshots/{timestamp}/{lot_id}.pdf, so invoice history can
-// later show exactly what was claimed at the moment of invoicing (the quant
-// sheet behind a lot can keep changing after that). Best-effort: a failed
-// snapshot doesn't block marking the lot as invoiced — the core business
-// action must not be gated on a nice-to-have PDF archive.
+// Uploads an already-generated PDF blob to R2 under
+// invoice-snapshots/{timestamp}/{entityKey}.pdf. entityKey is the lot ID for
+// lots, or `extrajob_{extra_job_id}` for extra jobs — kept generic so both
+// share the one upload action.
+async function uploadSnapshot(entityKey: string, timestamp: string, blob: Blob, filename: string): Promise<string | null> {
+  const fd = new FormData()
+  fd.set('entity_key', entityKey)
+  fd.set('timestamp', timestamp)
+  fd.set('file', new File([blob], filename, { type: 'application/pdf' }))
+  const result = await uploadInvoiceSnapshot(fd)
+  return result.path ?? null
+}
+
+// Generates a claim sheet PDF for each lot/extra job being invoiced and
+// uploads it to R2, so invoice history can later show exactly what was
+// claimed at the moment of invoicing (the underlying pricing can keep
+// changing after that). Best-effort: a failed snapshot doesn't block marking
+// items as invoiced — the core business action must not be gated on a
+// nice-to-have PDF archive.
 async function uploadInvoiceSnapshots(
-  lots: ApprovedLot[]
+  lots: ApprovedLot[],
+  jobs: ApprovedExtraJob[]
 ): Promise<{ paths: Record<string, string>; failedCount: number }> {
   const timestamp = Date.now().toString()
   const paths: Record<string, string> = {}
@@ -83,12 +97,21 @@ async function uploadInvoiceSnapshots(
   for (const lot of lots) {
     try {
       const blob = await generateClaimPdfBlob(lot)
-      const fd = new FormData()
-      fd.set('lot_id', lot.id)
-      fd.set('timestamp', timestamp)
-      fd.set('file', new File([blob], pdfFilename(lot), { type: 'application/pdf' }))
-      const result = await uploadInvoiceSnapshot(fd)
-      if (result.path) paths[lot.id] = result.path
+      const path = await uploadSnapshot(lot.id, timestamp, blob, pdfFilename(lot))
+      if (path) paths[lot.id] = path
+      else failedCount++
+    } catch {
+      failedCount++
+    }
+  }
+
+  for (const job of jobs) {
+    try {
+      const result = await getClaimExtraJobData(job.id)
+      if (!result.data) { failedCount++; continue }
+      const blob = await generateExtraJobPdfBlob(result.data)
+      const path = await uploadSnapshot(`extrajob_${job.id}`, timestamp, blob, extraJobPdfFilename(result.data))
+      if (path) paths[job.id] = path
       else failedCount++
     } catch {
       failedCount++
@@ -162,9 +185,9 @@ export default function ApprovedPanel({
     setWarning(null)
     startTransition(async () => {
       let snapshotPaths: Record<string, string> = {}
-      if (selectedLots.length > 0) {
+      if (selectedLots.length > 0 || selectedJobs.length > 0) {
         setInvoicingStep('snapshots')
-        const result = await uploadInvoiceSnapshots(selectedLots)
+        const result = await uploadInvoiceSnapshots(selectedLots, selectedJobs)
         snapshotPaths = result.paths
         if (result.failedCount > 0) {
           setWarning(

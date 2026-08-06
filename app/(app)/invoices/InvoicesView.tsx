@@ -5,11 +5,14 @@ import { useRouter } from 'next/navigation'
 import {
   toggleInvoiced, togglePendingReview, toggleApprovedForInvoicing,
   toggleExtraJobComplete, toggleExtraJobPendingReview, toggleExtraJobApprovedForInvoicing, toggleExtraJobInvoiced,
+  getClaimExtraJobData,
 } from './actions'
 import { getExtraJobsPricing } from '@/app/(app)/sites/[siteId]/stages/[stageId]/extra-jobs/[extraJobId]/pricing-actions'
 import { LOGO_DATA_URL } from '@/lib/pdfAssets'
+import { generateExtraJobPdfBlob, extraJobPdfFilename, downloadBlob } from './pdfClient'
 import ProgressClaimsSection from './ProgressClaimsSection'
 import type { ProgressClaimRow } from './ProgressClaimsSection'
+import FinanceNotesField from './FinanceNotesField'
 
 // Re-export so page.tsx can import from a single place
 export type { ProgressClaimRow }
@@ -56,6 +59,7 @@ export type ExtraJobRow = {
   total: number
   quotedAmount: number | null
   approvedByName: string | null
+  financeNotes: string | null
   pendingReview: boolean
   approvedForInvoicing: boolean
   invoiced: boolean
@@ -704,6 +708,31 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
     downloadPDF(content, filename, setActionError, () => endGen(genId), true)
   }
 
+  // Fetches full claim data (description/notes/finance notes/line items —
+  // none of which live on ExtraJobRow) then renders via the shared
+  // pdfClient renderer, same one used for invoice-run snapshots.
+  function exportExtraJobPdf(job: ExtraJobRow) {
+    const genId = job.id
+    startGen(genId)
+    getClaimExtraJobData(job.id)
+      .then((result) => {
+        if (result.error || !result.data) {
+          setActionError(result.error ?? 'Failed to generate PDF.')
+          endGen(genId)
+          return
+        }
+        const data = result.data
+        generateExtraJobPdfBlob(data)
+          .then((blob) => downloadBlob(blob, extraJobPdfFilename(data)))
+          .catch(() => setActionError('Failed to generate PDF. Please try again.'))
+          .finally(() => endGen(genId))
+      })
+      .catch(() => {
+        setActionError('Failed to generate PDF. Please try again.')
+        endGen(genId)
+      })
+  }
+
   function exportSelectedClaimSheets() {
     const genId = 'batch'
     // Collect selected lots in site → stage → lot order
@@ -1048,11 +1077,14 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                                     <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Final Amount</th>
                                     <th className="text-center text-xs font-semibold text-amber-600 uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Pending</th>
                                     <th className="text-center text-xs font-semibold text-accent-fg uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Approved</th>
-                                    <th className="text-center text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide pb-2 pr-4 whitespace-nowrap">Invoiced</th>
+                                    <th className="text-center text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Invoiced</th>
+                                    <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Finance Notes</th>
+                                    <th className="pb-2 pr-4 w-8"></th>
                                   </tr>
                                 </thead>
                                 <tbody>
                                   {stage.extraJobs.map((job) => {
+                                    const jobGenning  = generating.has(job.id)
                                     const jobComplete = extraJobCompleteMap[job.id] ?? (job.status === 'complete')
                                     const jobPending  = extraJobPendingMap[job.id] ?? job.pendingReview
                                     const jobApproved = extraJobApprovedMap[job.id] ?? job.approvedForInvoicing
@@ -1133,6 +1165,24 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                                             }`}
                                           >
                                             {jobInvoiced ? 'Invoiced' : 'Invoice'}
+                                          </button>
+                                        </td>
+                                        <td className="py-2.5 px-3" onClick={e => e.stopPropagation()}>
+                                          {isAdmin ? (
+                                            <FinanceNotesField extraJobId={job.id} financeNotes={job.financeNotes} />
+                                          ) : (
+                                            <span className="text-xs text-fg-muted">{job.financeNotes ?? '—'}</span>
+                                          )}
+                                        </td>
+                                        <td className="py-2.5 pr-4 pl-2" onClick={e => e.stopPropagation()}>
+                                          <button
+                                            type="button"
+                                            onClick={() => exportExtraJobPdf(job)}
+                                            disabled={jobGenning}
+                                            title="Download extra job PDF"
+                                            className="text-fg-muted hover:text-fg-secondary disabled:opacity-40 transition-colors"
+                                          >
+                                            {jobGenning ? <Spinner /> : <PdfIcon />}
                                           </button>
                                         </td>
                                       </tr>
