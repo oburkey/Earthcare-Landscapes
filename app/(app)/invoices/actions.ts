@@ -3,7 +3,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
+import { uploadToR2, getR2FileAsDataUrl } from '@/lib/r2'
 import type { ActionState } from '@/types/actions'
+import type { ClaimLotData } from './pdfClient'
+import type { LotSection } from './InvoicesView'
 
 // Free text, not a profiles lookup — approval sometimes comes from an
 // external developer's contact who isn't a user in the system, and finance
@@ -203,11 +206,20 @@ export async function markAsInvoiced(
   const totalAmountRaw     = formData.get('total_amount')       as string
   const notes              = (formData.get('notes') as string)?.trim() || null
   const invoiceDate        = (formData.get('invoice_date') as string) || new Date().toISOString()
+  const snapshotPathsRaw   = (formData.get('snapshot_paths') as string) || '{}'
 
   const lotIds           = lotIdsRaw           ? lotIdsRaw.split(',').filter(Boolean)           : []
   const extraJobIds      = extraJobIdsRaw      ? extraJobIdsRaw.split(',').filter(Boolean)      : []
   const progressClaimIds = progressClaimIdsRaw ? progressClaimIdsRaw.split(',').filter(Boolean) : []
   const totalAmount      = totalAmountRaw ? parseFloat(totalAmountRaw) || null : null
+
+  let snapshotPaths: Record<string, string> = {}
+  try {
+    const parsed = JSON.parse(snapshotPathsRaw)
+    if (parsed && typeof parsed === 'object') snapshotPaths = parsed
+  } catch {
+    // malformed/absent — proceed without snapshots rather than failing the invoice run
+  }
 
   if (lotIds.length === 0 && extraJobIds.length === 0 && progressClaimIds.length === 0) {
     return { error: 'Nothing selected.' }
@@ -226,6 +238,7 @@ export async function markAsInvoiced(
       progress_claim_ids: progressClaimIds,
       total_amount:       totalAmount,
       notes,
+      snapshot_paths:     snapshotPaths,
     })
     .select('id')
     .single()
@@ -316,4 +329,197 @@ export async function deleteInvoiceRun(
 
   revalidatePath('/invoices')
   return null
+}
+
+// ── Invoice snapshot PDFs ─────────────────────────────────────────────────────
+// The claim sheet PDF is rendered client-side (html2pdf.js needs a browser —
+// see ./pdfClient) at the moment "Mark as Invoiced" is clicked, then uploaded
+// here so invoice history can show exactly what was claimed even after the
+// underlying quant sheet changes later.
+
+const SNAPSHOT_PREFIX = 'invoice-snapshots/'
+
+export async function uploadInvoiceSnapshot(
+  formData: FormData
+): Promise<{ path?: string; error?: string }> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Only admins can upload invoice snapshots.' }
+
+  const lotId     = formData.get('lot_id') as string
+  const timestamp = formData.get('timestamp') as string
+  const file      = formData.get('file') as File
+
+  if (!lotId || !timestamp) return { error: 'Missing lot ID or timestamp.' }
+  if (!file || file.size === 0) return { error: 'No file provided.' }
+  if (file.size > 20 * 1024 * 1024) return { error: 'File too large (max 20 MB).' }
+  if (file.type !== 'application/pdf') return { error: 'File must be a PDF.' }
+
+  const safeTimestamp = timestamp.replace(/[^a-zA-Z0-9-]/g, '')
+  const key = `${SNAPSHOT_PREFIX}${safeTimestamp}/${lotId}.pdf`
+
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer())
+    await uploadToR2(key, buffer, 'application/pdf')
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Upload failed.' }
+  }
+
+  return { path: key }
+}
+
+// Fetches a historical claim-sheet snapshot from R2 as a data URL for the
+// browser to download. Only ever reads keys under invoice-snapshots/ —
+// this action must not become a generic "read any R2 object" endpoint.
+export async function getInvoiceSnapshotDataUrl(
+  path: string
+): Promise<{ dataUrl?: string; error?: string }> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Only admins can view invoice snapshots.' }
+  if (!path.startsWith(SNAPSHOT_PREFIX)) return { error: 'Invalid snapshot path.' }
+
+  const dataUrl = await getR2FileAsDataUrl(path, 'application/pdf')
+  if (!dataUrl) return { error: 'Snapshot not found in storage.' }
+  return { dataUrl }
+}
+
+// ── Fallback: rebuild current pricing for a lot ──────────────────────────────
+// Used by Invoice History when a run has no snapshot for a lot (invoiced
+// before this feature shipped) — regenerates the claim sheet from whatever
+// the lot's pricing looks like right now, which is why the caller shows a
+// "not the historical version" note alongside the download.
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function bestQuoteScore(q: any): number {
+  return q.status === 'approved' ? 3 : q.status === 'submitted' ? 2 : 1
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildClaimSections(items: any[]): { standard: number; extras: number; sections: LotSection[] } {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sectionMap = new Map<string, any>()
+  let standard = 0, extras = 0
+
+  for (const item of items) {
+    const qty = Number(item.quantity ?? 0)
+    const price = Number(item.unit_price_snapshot ?? item.quote_template_items?.unit_price ?? 0)
+    const amount = qty * price
+    const isExtra: boolean = item.quote_template_items?.quote_template_sections?.is_client_extra ?? false
+    const sectionId: string = item.quote_template_items?.section_id ?? '__other__'
+    const sectionName: string = item.quote_template_items?.quote_template_sections?.name ?? 'Other'
+    const sectionOrder: number = item.quote_template_items?.quote_template_sections?.order_index ?? 999
+    const itemOrder: number = item.quote_template_items?.order_index ?? 999
+
+    if (isExtra) extras += amount
+    else standard += amount
+
+    if (qty === 0) continue
+
+    if (!sectionMap.has(sectionId)) {
+      sectionMap.set(sectionId, { name: sectionName, isClientExtra: isExtra, orderIndex: sectionOrder, items: [] })
+    }
+    sectionMap.get(sectionId).items.push({
+      name:      item.item_name || item.quote_template_items?.name || '',
+      quantity:  qty,
+      unit:      item.unit || item.quote_template_items?.unit || '',
+      rate:      price,
+      total:     amount,
+      orderIndex: itemOrder,
+    })
+  }
+
+  const sections: LotSection[] = [...sectionMap.values()]
+    .sort((a, b) => a.orderIndex - b.orderIndex)
+    .map((s) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sortedItems = [...s.items].sort((a: any, b: any) => a.orderIndex - b.orderIndex)
+      return {
+        id:            s.name,
+        name:          s.name,
+        isClientExtra: s.isClientExtra,
+        orderIndex:    s.orderIndex,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        items: sortedItems.map((i: any) => ({
+          name: i.name, quantity: i.quantity, unit: i.unit, rate: i.rate, total: i.total,
+        })),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        subtotal: sortedItems.reduce((sum: number, i: any) => sum + i.total, 0),
+      }
+    })
+
+  return { standard, extras, sections }
+}
+
+export async function getClaimLotDataForSnapshot(
+  lotId: string
+): Promise<{ data?: ClaimLotData; error?: string }> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Only admins can view invoice snapshots.' }
+
+  const supabase = await createClient()
+
+  const { data: lot, error: lotError } = await supabase
+    .from('lots')
+    .select(`
+      id, lot_number, contract_price, has_client_extras,
+      stages!inner(id, name, default_contract_price,
+        sites!inner(id, name, client_contact, has_client_extras))
+    `)
+    .eq('id', lotId)
+    .single()
+  if (lotError || !lot) return { error: lotError?.message ?? 'Lot not found.' }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const stage = lot.stages as any
+  const site = stage.sites
+
+  const { data: quotes } = await supabase
+    .from('lot_quotes')
+    .select(`
+      is_estimated, status,
+      lot_quote_items(
+        quantity, unit_price_snapshot, item_name, unit,
+        quote_template_items(
+          unit_price, section_id, order_index,
+          quote_template_sections(name, is_client_extra, order_index)
+        )
+      )
+    `)
+    .eq('lot_id', lotId)
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const finals = ((quotes ?? []) as any[]).filter((q) => !q.is_estimated)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const estimates = ((quotes ?? []) as any[]).filter((q) => q.is_estimated)
+
+  let amounts = { standard: 0, extras: 0, sections: [] as LotSection[] }
+  if (finals.length > 0) {
+    const best = [...finals].sort((a, b) => bestQuoteScore(b) - bestQuoteScore(a))[0]
+    amounts = buildClaimSections(best.lot_quote_items ?? [])
+  } else if (estimates.length > 0) {
+    const best = [...estimates].sort((a, b) => bestQuoteScore(b) - bestQuoteScore(a))[0]
+    amounts = buildClaimSections(best.lot_quote_items ?? [])
+  }
+
+  const showClientExtras = (site.has_client_extras ?? true) && (lot.has_client_extras ?? true)
+  const effectiveContractPrice =
+    lot.contract_price != null ? Number(lot.contract_price)
+    : stage.default_contract_price != null ? Number(stage.default_contract_price)
+    : null
+
+  const data: ClaimLotData = {
+    id:                 lot.id,
+    lotNumber:          lot.lot_number,
+    siteName:           site.name,
+    clientContact:      site.client_contact ?? null,
+    siteId:             site.id,
+    stageName:          stage.name,
+    stageId:            stage.id,
+    standardAmount:     amounts.standard,
+    clientExtrasAmount: showClientExtras ? amounts.extras : 0,
+    contractPrice:      effectiveContractPrice,
+    showClientExtras,
+    sections:           amounts.sections,
+  }
+
+  return { data }
 }

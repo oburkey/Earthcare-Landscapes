@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import { useActionState } from 'react'
-import { deleteInvoiceRun } from './actions'
+import { deleteInvoiceRun, getInvoiceSnapshotDataUrl, getClaimLotDataForSnapshot } from './actions'
+import { generateClaimPdfBlob, downloadDataUrl, downloadBlob, pdfFilename } from './pdfClient'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -15,9 +16,10 @@ export type InvoiceRun = {
   lotCount: number
   extraJobCount: number
   progressClaimCount: number
-  lotDetails: Array<{ lotNumber: string; siteName: string; stageName: string }>
+  lotDetails: Array<{ id: string; lotNumber: string; siteName: string; stageName: string }>
   extraJobDetails: Array<{ title: string; siteName: string }>
   progressClaimDetails: Array<{ claimNumber: number; stageName: string; siteName: string; amount: number }>
+  snapshotPaths: Record<string, string>
 }
 
 // ── Formatting ────────────────────────────────────────────────────────────────
@@ -89,6 +91,62 @@ function DeleteRunButton({ run }: { run: InvoiceRun }) {
   )
 }
 
+// ── Download PDF (per lot) ─────────────────────────────────────────────────────
+
+function DownloadSnapshotButton({
+  lotId, lotNumber, snapshotPath,
+}: {
+  lotId: string
+  lotNumber: string
+  snapshotPath: string | undefined
+}) {
+  const [pending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+  const [note, setNote]   = useState<string | null>(null)
+
+  function handleClick() {
+    setError(null)
+    setNote(null)
+    startTransition(async () => {
+      if (snapshotPath) {
+        const result = await getInvoiceSnapshotDataUrl(snapshotPath)
+        if (result.error || !result.dataUrl) {
+          setError(result.error ?? 'Snapshot not found.')
+          return
+        }
+        await downloadDataUrl(result.dataUrl, `Lot-${lotNumber}-Claim.pdf`)
+        return
+      }
+
+      // No snapshot on file (invoiced before this feature existed) — rebuild
+      // from current pricing instead.
+      const result = await getClaimLotDataForSnapshot(lotId)
+      if (result.error || !result.data) {
+        setError(result.error ?? 'Unable to generate PDF.')
+        return
+      }
+      const blob = await generateClaimPdfBlob(result.data)
+      downloadBlob(blob, pdfFilename(result.data))
+      setNote('Historical PDF not available — showing current data')
+    })
+  }
+
+  return (
+    <span className="inline-flex flex-col items-end gap-0.5">
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={pending}
+        className="text-xs font-medium text-accent-fg hover:underline disabled:opacity-50"
+      >
+        {pending ? 'Preparing…' : 'Download PDF'}
+      </button>
+      {error && <span className="text-xs text-red-600">{error}</span>}
+      {note && <span className="text-xs text-amber-600 dark:text-amber-400">{note}</span>}
+    </span>
+  )
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function InvoiceHistory({ runs }: { runs: InvoiceRun[] }) {
@@ -151,10 +209,17 @@ export default function InvoiceHistory({ runs }: { runs: InvoiceRun[] }) {
                         <p className="text-xs font-semibold text-fg-muted uppercase tracking-wide mb-1.5">Lots</p>
                         <div className="space-y-1">
                           {run.lotDetails.map((lot, i) => (
-                            <p key={i} className="text-sm text-fg-secondary">
-                              Lot {lot.lotNumber}
-                              <span className="text-fg-muted"> · {lot.siteName} · {lot.stageName}</span>
-                            </p>
+                            <div key={i} className="flex items-center justify-between gap-3">
+                              <p className="text-sm text-fg-secondary">
+                                Lot {lot.lotNumber}
+                                <span className="text-fg-muted"> · {lot.siteName} · {lot.stageName}</span>
+                              </p>
+                              <DownloadSnapshotButton
+                                lotId={lot.id}
+                                lotNumber={lot.lotNumber}
+                                snapshotPath={run.snapshotPaths[lot.id]}
+                              />
+                            </div>
                           ))}
                         </div>
                       </div>

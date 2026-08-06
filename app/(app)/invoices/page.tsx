@@ -60,7 +60,7 @@ export default async function InvoicesPage() {
     try {
       const { data, error } = await supabase
         .from('invoice_runs')
-        .select('id, invoiced_at, invoiced_by, total_amount, notes, lot_ids, extra_job_ids, profiles(first_name, last_name)')
+        .select('id, invoiced_at, invoiced_by, total_amount, notes, lot_ids, extra_job_ids, snapshot_paths, profiles(first_name, last_name)')
         .order('invoiced_at', { ascending: false })
         .limit(50)
       if (!error) invoiceRunsRaw = data ?? []
@@ -430,13 +430,13 @@ export default async function InvoicesPage() {
 
   // ── Invoice history ───────────────────────────────────────────────────────
   // Build lookup maps for resolving IDs in history
-  const lotById = new Map<string, { lotNumber: string; siteName: string; stageName: string }>()
+  const lotById = new Map<string, { id: string; lotNumber: string; siteName: string; stageName: string }>()
   const extraJobById = new Map<string, { title: string; siteName: string }>()
   const progressClaimById = new Map<string, { claimNumber: number; stageName: string; siteName: string; amount: number }>()
   for (const site of activeSites) {
     for (const stage of (site.stages ?? [])) {
       for (const lot of (stage.lots ?? [])) {
-        lotById.set(lot.id, { lotNumber: lot.lot_number, siteName: site.name, stageName: stage.name })
+        lotById.set(lot.id, { id: lot.id, lotNumber: lot.lot_number, siteName: site.name, stageName: stage.name })
       }
       for (const job of (stage.extra_jobs ?? [])) {
         extraJobById.set(job.id, { title: job.title, siteName: site.name })
@@ -480,9 +480,10 @@ export default async function InvoicesPage() {
       lotCount:            lotIds.length,
       extraJobCount:       extraJobIds.length,
       progressClaimCount:  progressClaimIds.length,
-      lotDetails:          lotIds.map((id) => lotById.get(id) ?? { lotNumber: id.slice(0, 8), siteName: '—', stageName: '—' }),
+      lotDetails:          lotIds.map((id) => lotById.get(id) ?? { id, lotNumber: id.slice(0, 8), siteName: '—', stageName: '—' }),
       extraJobDetails:     extraJobIds.map((id) => extraJobById.get(id) ?? { title: id.slice(0, 8), siteName: '—' }),
       progressClaimDetails: progressClaimIds.map((id) => progressClaimById.get(id) ?? { claimNumber: 0, stageName: '—', siteName: '—', amount: 0 }),
+      snapshotPaths:       (r.snapshot_paths ?? {}) as Record<string, string>,
     }
   })
 

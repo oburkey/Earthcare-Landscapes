@@ -2,26 +2,12 @@
 
 import { useState, useTransition, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { markAsInvoiced } from './actions'
-import { LOGO_DATA_URL } from '@/lib/pdfAssets'
-import type { LotSection } from './InvoicesView'
+import { markAsInvoiced, uploadInvoiceSnapshot } from './actions'
+import { generateClaimPdfBlob, pdfFilename, type ClaimLotData } from './pdfClient'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type ApprovedLot = {
-  id: string
-  lotNumber: string
-  siteName: string
-  clientContact: string | null
-  siteId: string
-  stageName: string
-  stageId: string
-  standardAmount: number
-  clientExtrasAmount: number
-  contractPrice: number | null
-  showClientExtras: boolean
-  sections: LotSection[]
-}
+export type ApprovedLot = ClaimLotData
 
 export type ApprovedExtraJob = {
   id: string
@@ -48,123 +34,10 @@ function fmt(n: number): string {
   return '$' + n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-function fmtQty(n: number): string {
-  return parseFloat(n.toFixed(3)).toString()
-}
-
 // ── PDF generation ────────────────────────────────────────────────────────────
-
-const CLAIM_STYLES = `
-<style>
-.html2pdf__container * { box-sizing: border-box; margin: 0; padding: 0; }
-.html2pdf__container { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #111; background: white; }
-.html2pdf__container .invoice-page { padding: 38px 32px 48px; }
-.html2pdf__container .page-break { page-break-before: always; break-before: page; }
-.html2pdf__container .hdr { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 26px; padding-bottom: 14px; border-bottom: 2px solid #111; }
-.html2pdf__container .hdr-left h1 { font-size: 14px; font-weight: bold; margin-bottom: 3px; }
-.html2pdf__container .hdr-left .lbl { font-size: 11px; font-weight: bold; color: #222; margin: 3px 0; }
-.html2pdf__container .hdr-left .sub { font-size: 10px; color: #555; margin-top: 2px; }
-.html2pdf__container .hdr-right img { max-width: 130px; max-height: 55px; object-fit: contain; display: block; }
-.html2pdf__container table { width: 100%; border-collapse: collapse; }
-.html2pdf__container thead th { font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: #555; padding: 8px; border-bottom: 2px solid #bbb; text-align: left; white-space: nowrap; }
-.html2pdf__container thead th.r { text-align: right; }
-.html2pdf__container td { padding: 7px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
-.html2pdf__container td.r { text-align: right; white-space: nowrap; }
-.html2pdf__container td.u { color: #666; white-space: nowrap; }
-.html2pdf__container tr.sec td { background: #e3e3e3; font-weight: bold; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; padding: 10px 8px 8px; border-top: 1px solid #bbb; border-bottom: 1px solid #bbb; }
-.html2pdf__container tr.sec:first-child td { border-top: none; }
-.html2pdf__container tr.sub td { background: #f9f9f9; font-weight: 600; padding-top: 8px; padding-bottom: 8px; border-top: 1px solid #ddd; border-bottom: 2px solid #ccc; }
-.html2pdf__container tr.grand td { background: #f0f0f0; font-weight: bold; font-size: 12px; border-top: 3px solid #999; padding: 11px 8px; }
-.html2pdf__container .note { margin-top: 20px; font-size: 9px; color: #999; }
-</style>`
-
-function lotClaimHtml(lot: ApprovedLot): string {
-  const date  = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
-  const grand = lot.contractPrice ?? (lot.standardAmount + lot.clientExtrasAmount)
-
-  let tableContent: string
-  if (lot.contractPrice != null) {
-    tableContent = `
-      <tr><td></td><td>Contract Price</td><td class="r">1</td><td class="u">Lot</td><td class="r">${fmt(lot.contractPrice)}</td><td class="r">${fmt(lot.contractPrice)}</td></tr>
-      <tr class="grand"><td colspan="5">Grand Total (ex GST)</td><td class="r">${fmt(grand)}</td></tr>`
-  } else {
-    const standard = lot.sections.filter((s) => !s.isClientExtra)
-    const extras   = lot.showClientExtras ? lot.sections.filter((s) => s.isClientExtra) : []
-    let secIdx = 0
-    function sectionItemRows(section: LotSection): string {
-      secIdx++
-      const prefix = section.isClientExtra ? 'E' : String(secIdx)
-      const items  = section.items.map((item, i) => `
-        <tr>
-          <td class="r" style="color:#888;font-size:10px">${prefix}.${i + 1}</td>
-          <td>${item.name}</td>
-          <td class="r">${fmtQty(item.quantity)}</td>
-          <td class="u">${item.unit}</td>
-          <td class="r">${item.rate > 0 ? fmt(item.rate) : '—'}</td>
-          <td class="r">${item.rate > 0 ? fmt(item.total) : '—'}</td>
-        </tr>`).join('')
-      return `
-        <tr class="sec"><td colspan="6">${section.name}</td></tr>
-        ${items}`
-    }
-
-    // Two subtotals — Providence Works (standard sections) and Client Extras
-    // — instead of one per section, using the already-computed lot totals.
-    const standardRows = standard.map(sectionItemRows).join('')
-    const providenceSubtotal = standard.length > 0
-      ? `<tr class="sub"><td colspan="5">Subtotal — Providence Works</td><td class="r">${fmt(lot.standardAmount)}</td></tr>`
-      : ''
-
-    const extrasRows = extras.map(sectionItemRows).join('')
-    const extrasSubtotal = extras.length > 0
-      ? `<tr class="sub"><td colspan="5">Subtotal — Client Extras</td><td class="r">${fmt(lot.clientExtrasAmount)}</td></tr>`
-      : ''
-
-    tableContent = `${standardRows}${providenceSubtotal}${extrasRows}${extrasSubtotal}
-      <tr class="grand"><td colspan="5">Grand Total (ex GST)</td><td class="r">${fmt(grand)}</td></tr>`
-  }
-
-  return `
-<div class="invoice-page">
-  <div class="hdr">
-    <div class="hdr-left">
-      <h1>${lot.siteName} — Lot ${lot.lotNumber}</h1>
-      <div class="lbl">${lot.contractPrice != null ? 'Contract Price' : 'Final Price — ACTUAL'}</div>
-      ${lot.clientContact ? `<div class="sub">Developer: ${lot.clientContact}</div>` : ''}
-      <div class="sub">Stage: ${lot.stageName}</div>
-      <div class="sub">${date}</div>
-    </div>
-    <div class="hdr-right">${LOGO_DATA_URL ? `<img src="${LOGO_DATA_URL}" alt="Earthcare Landscapes" />` : ''}</div>
-  </div>
-  <table>
-    <thead><tr>
-      <th>Code</th><th>Description</th>
-      <th class="r">Qty</th><th>Unit</th>
-      <th class="r">Rate</th><th class="r">Total (ex GST)</th>
-    </tr></thead>
-    <tbody>${tableContent}</tbody>
-  </table>
-  <div class="note">All amounts are exclusive of GST. GST of 10% applies.</div>
-</div>`
-}
-
-function pdfFilename(lot: ApprovedLot): string {
-  const clean = (s: string) => s.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '')
-  return `Lot-${clean(lot.lotNumber)}-${clean(lot.siteName)}-${clean(lot.stageName)}.pdf`
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function stampPageNumbers(pdf: any) {
-  const pageCount = pdf.internal.getNumberOfPages()
-  const pageWidth  = pdf.internal.pageSize.getWidth()
-  const pageHeight = pdf.internal.pageSize.getHeight()
-  for (let i = 1; i <= pageCount; i++) {
-    pdf.setPage(i)
-    pdf.setFontSize(8)
-    pdf.setTextColor(150)
-    pdf.text(`Page ${i} of ${pageCount}`, pageWidth / 2, pageHeight - 10, { align: 'center' })
-  }
-}
+// lotClaimHtml/CLAIM_STYLES/generateClaimPdfBlob live in ./pdfClient — shared
+// with InvoiceHistory's "no snapshot" fallback so both places render the
+// exact same claim sheet.
 
 async function downloadZip(
   lots: ApprovedLot[],
@@ -172,27 +45,10 @@ async function downloadZip(
   onDone: () => void
 ) {
   try {
-    const [{ default: html2pdf }, { default: JSZip }] = await Promise.all([
-      import('html2pdf.js'),
-      import('jszip'),
-    ])
+    const { default: JSZip } = await import('jszip')
     const zip = new JSZip()
     for (const lot of lots) {
-      const el = document.createElement('div')
-      el.innerHTML = CLAIM_STYLES + lotClaimHtml(lot)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pdf = await (html2pdf() as any)
-        .set({
-          margin: 0,
-          image:       { type: 'jpeg', quality: 0.97 },
-          html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' },
-          jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        })
-        .from(el)
-        .toPdf()
-        .get('pdf')
-      stampPageNumbers(pdf)
-      const blob: Blob = pdf.output('blob')
+      const blob = await generateClaimPdfBlob(lot)
       zip.file(pdfFilename(lot), blob)
     }
     const zipBlob = await zip.generateAsync({ type: 'blob' })
@@ -209,6 +65,37 @@ async function downloadZip(
   } finally {
     onDone()
   }
+}
+
+// Generates a claim sheet PDF for each lot being invoiced and uploads it to
+// R2 under invoice-snapshots/{timestamp}/{lot_id}.pdf, so invoice history can
+// later show exactly what was claimed at the moment of invoicing (the quant
+// sheet behind a lot can keep changing after that). Best-effort: a failed
+// snapshot doesn't block marking the lot as invoiced — the core business
+// action must not be gated on a nice-to-have PDF archive.
+async function uploadInvoiceSnapshots(
+  lots: ApprovedLot[]
+): Promise<{ paths: Record<string, string>; failedCount: number }> {
+  const timestamp = Date.now().toString()
+  const paths: Record<string, string> = {}
+  let failedCount = 0
+
+  for (const lot of lots) {
+    try {
+      const blob = await generateClaimPdfBlob(lot)
+      const fd = new FormData()
+      fd.set('lot_id', lot.id)
+      fd.set('timestamp', timestamp)
+      fd.set('file', new File([blob], pdfFilename(lot), { type: 'application/pdf' }))
+      const result = await uploadInvoiceSnapshot(fd)
+      if (result.path) paths[lot.id] = result.path
+      else failedCount++
+    } catch {
+      failedCount++
+    }
+  }
+
+  return { paths, failedCount }
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -231,6 +118,8 @@ export default function ApprovedPanel({
   const [notes, setNotes]                     = useState('')
   const [generating, setGenerating]           = useState(false)
   const [error, setError]                     = useState<string | null>(null)
+  const [warning, setWarning]                 = useState<string | null>(null)
+  const [invoicingStep, setInvoicingStep]     = useState<'snapshots' | 'saving' | null>(null)
   const [isPending, startTransition]          = useTransition()
   const hasSelections = selectedLotIds.size > 0 || selectedJobIds.size > 0 || selectedClaimIds.size > 0
 
@@ -270,7 +159,21 @@ export default function ApprovedPanel({
 
   function handleMarkAsInvoiced() {
     setError(null)
+    setWarning(null)
     startTransition(async () => {
+      let snapshotPaths: Record<string, string> = {}
+      if (selectedLots.length > 0) {
+        setInvoicingStep('snapshots')
+        const result = await uploadInvoiceSnapshots(selectedLots)
+        snapshotPaths = result.paths
+        if (result.failedCount > 0) {
+          setWarning(
+            `${result.failedCount} claim sheet snapshot${result.failedCount === 1 ? '' : 's'} failed to save — invoicing will continue.`
+          )
+        }
+      }
+
+      setInvoicingStep('saving')
       const fd = new FormData()
       fd.set('lot_ids',            [...selectedLotIds].join(','))
       fd.set('extra_job_ids',     [...selectedJobIds].join(','))
@@ -278,7 +181,9 @@ export default function ApprovedPanel({
       fd.set('total_amount', String(runningTotal))
       fd.set('invoice_date', new Date(invoiceDate + 'T00:00:00').toISOString())
       fd.set('notes',        notes)
+      fd.set('snapshot_paths', JSON.stringify(snapshotPaths))
       const result = await markAsInvoiced(null, fd)
+      setInvoicingStep(null)
       if (result?.error) {
         setError(result.error)
       } else {
@@ -466,7 +371,7 @@ export default function ApprovedPanel({
                 onClick={handleMarkAsInvoiced}
                 className="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {isPending ? 'Marking…' : 'Mark as Invoiced'}
+                {invoicingStep === 'snapshots' ? 'Generating PDFs…' : invoicingStep === 'saving' ? 'Marking…' : 'Mark as Invoiced'}
               </button>
 
               {selectedLots.length > 0 && (
@@ -491,6 +396,7 @@ export default function ApprovedPanel({
             </div>
 
             {error && <p className="rounded-lg bg-red-50 dark:bg-red-900/20 px-3 py-2 text-sm text-red-700 dark:text-red-400">{error}</p>}
+            {warning && <p className="rounded-lg bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">{warning}</p>}
           </div>
 
         </div>
