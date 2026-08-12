@@ -9,14 +9,19 @@ interface Props {
   documentName: string
   documentTypeLabel: string
   url: string
+  createdAt: string
   lotId: string
   siteId: string
   stageId: string
   isAdmin: boolean
 }
 
+function formatAddedDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
 export default function LotDocumentRow({
-  docId, documentName, documentTypeLabel, url,
+  docId, documentName, documentTypeLabel, url, createdAt,
   lotId, siteId, stageId, isAdmin,
 }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -29,10 +34,13 @@ export default function LotDocumentRow({
           <p className="text-sm font-medium text-fg truncate">{documentName}</p>
           <p className="text-xs text-fg-muted">{documentTypeLabel}</p>
         </div>
-        <a href={url} target="_blank" rel="noopener noreferrer"
-          className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-muted hover:bg-surface-raised">
-          View PDF
-        </a>
+        <div className="shrink-0 flex flex-col items-end gap-1">
+          <a href={url} target="_blank" rel="noopener noreferrer"
+            className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-muted hover:bg-surface-raised">
+            View PDF
+          </a>
+          <p className="text-xs text-fg-muted">Added {formatAddedDate(createdAt)}</p>
+        </div>
         {isAdmin && !confirmDelete && (
           <button
             type="button"

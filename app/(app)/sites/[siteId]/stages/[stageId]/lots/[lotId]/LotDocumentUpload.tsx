@@ -67,7 +67,7 @@ export default function LotDocumentUpload({ lotId, siteId, stageId }: Props) {
           id="doc-file"
           name="file"
           type="file"
-          accept="application/pdf"
+          accept="application/pdf,.pdf"
           required
           className="mt-1 block w-full text-sm text-fg-muted file:mr-3 file:rounded-lg file:border-0 file:bg-surface-raised file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-fg-secondary hover:file:bg-surface-raised"
         />

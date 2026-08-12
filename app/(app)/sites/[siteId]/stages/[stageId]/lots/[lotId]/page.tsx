@@ -209,13 +209,13 @@ export default async function LotPage({ params }: Props) {
   }
 
   // Documents
-  type DocWithUrl = { id: string; document_name: string; document_type: string; url: string; storage_path: string }
+  type DocWithUrl = { id: string; document_name: string; document_type: string; url: string; storage_path: string; created_at: string }
   let documents: DocWithUrl[] = []
   if (docRows && docRows.length > 0) {
     const signed = await Promise.all(
       docRows.map(async (d) => ({
         id: d.id, document_name: d.document_name, document_type: d.document_type,
-        storage_path: d.storage_path,
+        storage_path: d.storage_path, created_at: d.created_at,
         url: await getR2SignedUrlSafe(d.storage_path),
       }))
     )
@@ -503,6 +503,7 @@ export default async function LotPage({ params }: Props) {
                     documentName={doc.document_name}
                     documentTypeLabel={DOC_TYPE_LABELS[doc.document_type] ?? doc.document_type}
                     url={doc.url}
+                    createdAt={doc.created_at}
                     lotId={lotId}
                     siteId={siteId}
                     stageId={stageId}

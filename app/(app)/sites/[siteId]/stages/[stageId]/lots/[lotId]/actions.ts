@@ -168,7 +168,14 @@ export async function uploadLotDocument(
   if (!documentName) return { error: 'Document name is required.' }
   if (!file || file.size === 0) return { error: 'No file selected.' }
   if (file.size > 20 * 1024 * 1024) return { error: 'File too large (max 20 MB).' }
-  if (file.type !== 'application/pdf') return { error: 'File must be a PDF.' }
+  // iOS/iPadOS reports an unreliable File.type for PDFs picked via several
+  // file providers (Files app / iCloud Drive / some scanner apps) — it can
+  // come through as '', 'application/octet-stream', or similar even for a
+  // genuine PDF, which desktop browsers never do. The filename extension is
+  // the one signal iOS preserves consistently, so trust it as a fallback
+  // instead of hard-rejecting a valid PDF just because the MIME type is odd.
+  const looksLikePdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name)
+  if (!looksLikePdf) return { error: 'File must be a PDF.' }
   if (!['site_plan', 'drawing', 'housing_claim', 'other'].includes(documentType)) {
     return { error: 'Invalid document type.' }
   }
