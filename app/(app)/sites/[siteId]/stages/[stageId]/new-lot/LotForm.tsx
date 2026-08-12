@@ -72,7 +72,7 @@ export default function LotForm({ stageId, siteId }: Props) {
         </div>
         <div>
           <label htmlFor="scheduled_date" className="block text-sm font-medium text-fg-secondary">
-            Scheduled date
+            Start date
           </label>
           <input
             id="scheduled_date"

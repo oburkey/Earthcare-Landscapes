@@ -22,7 +22,7 @@ export default function LotLoading() {
 
         {/* Info card */}
         <div className="rounded-xl border border-border bg-surface divide-y divide-border-subtle overflow-hidden">
-          {['Site', 'Stage', 'Due date', 'Scheduled'].map((label) => (
+          {['Site', 'Stage', 'Due date', 'Start date'].map((label) => (
             <div key={label} className="flex items-center justify-between px-4 py-3 gap-4">
               <div className="h-4 w-16 rounded bg-skeleton animate-pulse" />
               <div className="h-4 w-28 rounded bg-skeleton animate-pulse" />

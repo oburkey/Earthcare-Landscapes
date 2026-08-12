@@ -30,6 +30,7 @@ export default async function SchedulePage() {
       lotNumber: lot.lot_number,
       status: lot.status as LotStatus,
       dueDate: lot.due_date as string,
+      startDate: (lot as unknown as { scheduled_date?: string | null }).scheduled_date ?? null,
       tradesCompleted: [],
       readyForLandscaping: false,
       delayed: (lot as unknown as { delayed?: boolean }).delayed ?? false,

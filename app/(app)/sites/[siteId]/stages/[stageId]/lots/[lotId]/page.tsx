@@ -357,7 +357,7 @@ export default async function LotPage({ params }: Props) {
           <InfoRow label="Site"      value={site.name} />
           <InfoRow label="Stage"     value={stage.name} />
           <InfoRow label="Due date"  value={formatDate(lot.due_date)}       dim={!lot.due_date} />
-          <InfoRow label="Scheduled" value={formatDate(lot.scheduled_date)} dim={!lot.scheduled_date} />
+          <InfoRow label="Start date" value={formatDate(lot.scheduled_date)} dim={!lot.scheduled_date} />
           {lot.completion_date && <InfoRow label="Completed" value={formatDate(lot.completion_date)} />}
           {lot.notes && (
             <div className="px-4 py-3">

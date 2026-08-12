@@ -27,6 +27,7 @@ export type LotItem = {
   lotNumber: string
   status: LotStatus
   dueDate: string
+  startDate: string | null
   tradesCompleted: string[]
   readyForLandscaping: boolean
   delayed: boolean
@@ -252,6 +253,23 @@ function TwoWeekLotChip({ item, today }: { item: LotItem; today: string }) {
   )
 }
 
+// Subtle, informational — start dates never carry the urgent/overdue styling
+// that due dates do; that logic stays keyed on dueDate only (see TwoWeekLotChip).
+function TwoWeekStartIndicator({ item }: { item: LotItem }) {
+  return (
+    <Link
+      href={`/sites/${item.siteId}/stages/${item.stageId}/lots/${item.lotId}`}
+      title={`Lot ${item.lotNumber} — start date`}
+      className="flex items-center gap-1 rounded-md border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-900/10 px-1.5 py-0.5 hover:bg-blue-100 dark:hover:bg-blue-900/20 transition-colors"
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" aria-hidden="true" />
+      <span className="text-[10px] font-medium text-blue-700 dark:text-blue-400 truncate leading-tight">
+        Lot {item.lotNumber} starts
+      </span>
+    </Link>
+  )
+}
+
 function TwoWeekJobChip({ item }: { item: JobItem }) {
   const cfg = EXTRA_JOB_STATUS_CONFIG[item.status] ?? EXTRA_JOB_STATUS_CONFIG.not_started
   return (
@@ -340,6 +358,9 @@ function WeekGrid({ days, lots, jobs, events, today, onDayClick }: {
 
         {days.map((day) => {
           const dayLots   = lots.filter((l) => l.dueDate === day)
+          // Start-date indicator only when it's not the same day as the due
+          // date chip already shown above — no point showing both.
+          const dayStartLots = lots.filter((l) => l.startDate === day && l.dueDate !== day)
           const dayJobs   = jobs.filter((j) => j.dueDate === day)
           const dayEvents = getEventsForDay(events, day)
           const isToday   = day === today
@@ -350,6 +371,9 @@ function WeekGrid({ days, lots, jobs, events, today, onDayClick }: {
                 isToday ? 'bg-green-50/40 dark:bg-green-900/5' : ''
               }`}
             >
+              {dayStartLots.map((item) => (
+                <TwoWeekStartIndicator key={`start-${item.id}`} item={item} />
+              ))}
               {dayLots.map((item) => (
                 <TwoWeekLotChip key={item.id} item={item} today={today} />
               ))}
@@ -536,7 +560,7 @@ function MonthView({
 // ── List view ─────────────────────────────────────────────────────────────────
 
 type FlatItem =
-  | { kind: 'lot';   id: string; siteId: string; stageId: string; lotId: string;  label: string; site: string; stage: string; status: LotStatus;      due_date: string; tradesCompleted: string[]; readyForLandscaping: boolean; delayed: boolean; delayReason: string | null; expectedCompletionDate: string | null }
+  | { kind: 'lot';   id: string; siteId: string; stageId: string; lotId: string;  label: string; site: string; stage: string; status: LotStatus;      due_date: string; startDate: string | null; tradesCompleted: string[]; readyForLandscaping: boolean; delayed: boolean; delayReason: string | null; expectedCompletionDate: string | null }
   | { kind: 'job';   id: string; siteId: string; stageId: string;                 label: string; site: string; stage: string; status: ExtraJobStatus; due_date: string; delayed: boolean; delayReason: string | null; expectedCompletionDate: string | null }
   | { kind: 'event'; id: string; title: string; description: string | null; startTime: string | null; endDate: string | null; due_date: string }
 
@@ -551,7 +575,7 @@ function ListView({ lots, jobs, events, today, onDayClick }: {
     ...lots.map((l): FlatItem => ({
       kind: 'lot', id: l.id, siteId: l.siteId, stageId: l.stageId, lotId: l.lotId,
       label: `Lot ${l.lotNumber}`, site: l.siteName, stage: l.stageName, status: l.status,
-      due_date: l.dueDate, tradesCompleted: l.tradesCompleted, readyForLandscaping: l.readyForLandscaping,
+      due_date: l.dueDate, startDate: l.startDate, tradesCompleted: l.tradesCompleted, readyForLandscaping: l.readyForLandscaping,
       delayed: l.delayed, delayReason: l.delayReason, expectedCompletionDate: l.expectedCompletionDate,
     })),
     ...jobs.map((j): FlatItem => ({
@@ -655,7 +679,10 @@ function ListView({ lots, jobs, events, today, onDayClick }: {
                       <p className="mt-0.5 text-xs text-fg-muted">{item.site} · {item.stage}</p>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-xs text-fg-muted">{formatDate(item.due_date)}</p>
+                      {item.kind === 'lot' && item.startDate && (
+                        <p className="text-xs text-blue-600 dark:text-blue-400">Start {formatDate(item.startDate)}</p>
+                      )}
+                      <p className="text-xs text-fg-muted">Due {formatDate(item.due_date)}</p>
                     </div>
                   </Link>
                 )

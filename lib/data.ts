@@ -101,7 +101,7 @@ async function _scheduleData(db: Db) {
   const [{ data: lots }, { data: jobs }] = await Promise.all([
     db
       .from('lots')
-      .select('id, lot_number, status, due_date, delayed, delay_reason, expected_completion_date, stages!inner(id, name, sites!inner(id, name))')
+      .select('id, lot_number, status, due_date, scheduled_date, delayed, delay_reason, expected_completion_date, stages!inner(id, name, sites!inner(id, name))')
       .not('due_date', 'is', null)
       .neq('status', 'complete')
       .order('due_date', { ascending: true }),
