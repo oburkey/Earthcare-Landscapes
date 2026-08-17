@@ -19,7 +19,7 @@ export default async function MaterialsSummary({ stageId, siteId }: Props) {
       .select(`
         id, lot_number,
         lot_quotes (
-          id, status, is_estimated,
+          id, status, quote_type,
           lot_quote_items ( template_item_id, quantity )
         )
       `)
@@ -45,13 +45,15 @@ export default async function MaterialsSummary({ stageId, siteId }: Props) {
 
   type LotQuote = {
     status: string
-    is_estimated: boolean
+    quote_type: 'estimate' | 'budget' | 'final'
     lot_quote_items: { template_item_id: string; quantity: number | null }[]
   }
 
-  function estimateQuote(quotes: LotQuote[]) {
+  // Budget is the primary source (leading_hand+ can see it, unlike Estimate
+  // which is admin-only) — falls back to Final if no Budget has been entered.
+  function sourceQuote(quotes: LotQuote[]) {
     if (!quotes || quotes.length === 0) return null
-    return quotes.find((q) => q.is_estimated) ?? null
+    return quotes.find((q) => q.quote_type === 'budget') ?? quotes.find((q) => q.quote_type === 'final') ?? null
   }
 
   // Aggregate: template_item_id → total quantity across all lots
@@ -59,7 +61,7 @@ export default async function MaterialsSummary({ stageId, siteId }: Props) {
   let quotedLots = 0
 
   for (const lot of lots) {
-    const quote = estimateQuote(lot.lot_quotes as LotQuote[])
+    const quote = sourceQuote(lot.lot_quotes as LotQuote[])
     if (!quote) continue
     quotedLots++
     for (const qi of quote.lot_quote_items) {
@@ -124,7 +126,7 @@ export default async function MaterialsSummary({ stageId, siteId }: Props) {
   function fmtLm(n: number)  { return n % 1 === 0 ? String(n) : n.toFixed(1) }
   function fmtTon(n: number) { return n % 1 === 0 ? String(n) : n.toFixed(2) }
 
-  const unquotedLots = lots.filter((l) => !estimateQuote(l.lot_quotes as LotQuote[]))
+  const unquotedLots = lots.filter((l) => !sourceQuote(l.lot_quotes as LotQuote[]))
 
   return (
     <div className="space-y-3">
