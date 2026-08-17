@@ -86,7 +86,7 @@ export default async function StagePage({ params }: Props) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const lotAny = lot as any
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const finalQuote = ((lotAny.lot_quotes ?? []) as any[]).find((q) => q.is_estimated === false)
+    const finalQuote = ((lotAny.lot_quotes ?? []) as any[]).find((q) => q.quote_type === 'final')
     const editor = finalQuote
       ? (Array.isArray(finalQuote.profiles) ? finalQuote.profiles[0] : finalQuote.profiles)
       : null

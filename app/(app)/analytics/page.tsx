@@ -74,7 +74,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   const allLotIds = allLots.map((l) => l.id)
 
   const QUOTE_SELECT = `
-    lot_id, is_estimated, status,
+    lot_id, quote_type, status,
     lot_quote_items(
       item_name, quantity, unit_price_snapshot,
       quote_template_items(

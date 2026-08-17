@@ -14,11 +14,13 @@ export type QuoteItemPayload = {
   unit_price_snapshot: number | null
 }
 
+export type QuoteType = 'estimate' | 'budget' | 'final'
+
 export type SaveQuotePayload = {
   lotId: string
   siteId: string
   stageId: string
-  isEstimated: boolean
+  quoteType: QuoteType
   status: 'draft' | 'submitted'
   notes: string
   items: QuoteItemPayload[]
@@ -30,15 +32,25 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
     return { error: 'You do not have permission to save quantity takeoffs.' }
   }
 
-  const { lotId, siteId, stageId, isEstimated, status, notes, items } = payload
+  const { lotId, siteId, stageId, quoteType, status, notes, items } = payload
+
+  // Estimate is admin-only — RLS already enforces this at the DB layer, this
+  // is just a clearer error than the raw RLS failure would give.
+  if (quoteType === 'estimate' && profile.role !== 'admin') {
+    return { error: 'Only admins can edit the estimate quant sheet.' }
+  }
+
   const supabase = await createClient()
+  // is_estimated is kept in sync alongside quote_type for now (not dropped —
+  // see supabase/migration_budget_quant_sheet.sql), true only for 'estimate'.
+  const isEstimated = quoteType === 'estimate'
 
   // Find existing quote for this lot + type
   const { data: existing } = await supabase
     .from('lot_quotes')
     .select('id')
     .eq('lot_id', lotId)
-    .eq('is_estimated', isEstimated)
+    .eq('quote_type', quoteType)
     .maybeSingle()
 
   let quoteId: string
@@ -64,6 +76,7 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
       .from('lot_quotes')
       .insert({
         lot_id: lotId,
+        quote_type: quoteType,
         is_estimated: isEstimated,
         status,
         notes: notes || null,
@@ -80,9 +93,10 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
 
   // For a final quant sheet, snapshot the current (about-to-be-replaced)
   // items first — this is the "old" side of the stock-deduction diff below,
-  // and must be captured before the delete wipes it.
+  // and must be captured before the delete wipes it. Budget is excluded —
+  // it doesn't drive stock deduction (see below).
   let oldItemsSnapshot: { item_name: string; quantity: number | null }[] = []
-  if (!isEstimated) {
+  if (quoteType === 'final') {
     const { data } = await supabase
       .from('lot_quote_items')
       .select('item_name, quantity')
@@ -117,7 +131,7 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
 
   // When saving an estimate, auto-copy fine grading values to the final quote
   // if the final quote doesn't already have that item entered.
-  if (isEstimated) {
+  if (quoteType === 'estimate') {
     const fineGradingItems = items.filter(
       (i) => i.quantity != null && i.item_name.toLowerCase().includes('fine grading')
     )
@@ -126,7 +140,7 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
         .from('lot_quotes')
         .select('id, lot_quote_items(template_item_id, quantity)')
         .eq('lot_id', lotId)
-        .eq('is_estimated', false)
+        .eq('quote_type', 'final')
         .maybeSingle()
 
       if (finalQuote) {
@@ -155,8 +169,9 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
     }
   }
 
-  // Saving a final quant sheet flags the lot for admin review.
-  if (!isEstimated) {
+  // Saving a final quant sheet flags the lot for admin review. Budget is
+  // excluded — it's a tracking sheet, not a claim of completed work.
+  if (quoteType === 'final') {
     const { error: pendingReviewError } = await supabase
       .from('lots')
       .update({ pending_review: true })
@@ -168,7 +183,8 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
   // from the previous save (oldItemsSnapshot captured above), so re-saving
   // the same quant sheet repeatedly doesn't double-deduct. Never blocks the
   // quant sheet save itself — any failure here is logged and swallowed.
-  if (!isEstimated) {
+  // Budget is excluded — it's a tracking sheet, not actual material usage.
+  if (quoteType === 'final') {
     try {
       const materialTypes = await getActiveMaterialTypes(supabase)
       const { data: newItems } = await supabase

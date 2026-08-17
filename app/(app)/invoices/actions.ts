@@ -503,7 +503,7 @@ export async function getClaimLotDataForSnapshot(
   const { data: quotes } = await supabase
     .from('lot_quotes')
     .select(`
-      is_estimated, status,
+      quote_type, status,
       lot_quote_items(
         quantity, unit_price_snapshot, item_name, unit,
         quote_template_items(
@@ -515,9 +515,9 @@ export async function getClaimLotDataForSnapshot(
     .eq('lot_id', lotId)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const finals = ((quotes ?? []) as any[]).filter((q) => !q.is_estimated)
+  const finals = ((quotes ?? []) as any[]).filter((q) => q.quote_type === 'final')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const estimates = ((quotes ?? []) as any[]).filter((q) => q.is_estimated)
+  const estimates = ((quotes ?? []) as any[]).filter((q) => q.quote_type === 'estimate')
 
   let amounts = { standard: 0, extras: 0, sections: [] as LotSection[] }
   if (finals.length > 0) {

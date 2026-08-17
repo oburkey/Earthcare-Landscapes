@@ -13,11 +13,13 @@ interface Props {
 const PLACEHOLDER: Record<BulkDateMode, string> = {
   due_only:      '059\t03/04/2026\tBillie Jean\n076\t03/04/2026\n077\t25/03/2026\tCecilia',
   start_and_due: '059\t20/03/2026\t03/04/2026\tBillie Jean\n076\t\t03/04/2026\n077\t18/03/2026\t\tCecilia',
+  start_only:    '059\t20/03/2026\tBillie Jean\n076\t18/03/2026\n077\t25/03/2026\tCecilia',
 }
 
 const HELP_TEXT: Record<BulkDateMode, string> = {
   due_only:      'One lot per line — lot number, then tab or comma, then due date in DD/MM/YYYY format, then optionally tab/comma and a Home Design name.',
   start_and_due: 'One lot per line — lot number, then tab or comma, then start date, then due date (both DD/MM/YYYY, either can be left blank), then optionally a Home Design name.',
+  start_only:    'One lot per line — lot number, then tab or comma, then start date in DD/MM/YYYY format, then optionally tab/comma and a Home Design name. Due dates are left untouched.',
 }
 
 function formatDateDisplay(iso: string | null): string {
@@ -114,7 +116,7 @@ export default function BulkUpdateLotsButton({ stageId, siteId }: Props) {
 
       {/* Format toggle */}
       <div className="flex gap-1 rounded-lg border border-border p-1 w-fit">
-        {(['due_only', 'start_and_due'] as const).map((m) => (
+        {(['due_only', 'start_and_due', 'start_only'] as const).map((m) => (
           <button
             key={m}
             type="button"
@@ -123,7 +125,7 @@ export default function BulkUpdateLotsButton({ stageId, siteId }: Props) {
               mode === m ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900' : 'text-fg-muted hover:bg-surface-raised'
             }`}
           >
-            {m === 'due_only' ? 'Due date only' : 'Start + Due date'}
+            {m === 'due_only' ? 'Due date only' : m === 'start_and_due' ? 'Start + Due date' : 'Start date only'}
           </button>
         ))}
       </div>
@@ -149,10 +151,12 @@ export default function BulkUpdateLotsButton({ stageId, siteId }: Props) {
               <thead>
                 <tr className="border-b border-border bg-surface-raised text-fg-muted sticky top-0">
                   <th className="text-left font-medium px-2.5 py-1.5 whitespace-nowrap">Lot</th>
-                  {mode === 'start_and_due' && (
+                  {(mode === 'start_and_due' || mode === 'start_only') && (
                     <th className="text-left font-medium px-2.5 py-1.5 whitespace-nowrap">Start Date</th>
                   )}
-                  <th className="text-left font-medium px-2.5 py-1.5 whitespace-nowrap">Due Date</th>
+                  {mode !== 'start_only' && (
+                    <th className="text-left font-medium px-2.5 py-1.5 whitespace-nowrap">Due Date</th>
+                  )}
                   <th className="text-left font-medium px-2.5 py-1.5 whitespace-nowrap">Home Design</th>
                   <th className="text-left font-medium px-2.5 py-1.5 whitespace-nowrap">Status</th>
                 </tr>
@@ -161,10 +165,12 @@ export default function BulkUpdateLotsButton({ stageId, siteId }: Props) {
                 {preview.map((row, i) => (
                   <tr key={i} className="border-b border-border-subtle last:border-0">
                     <td className="px-2.5 py-1.5 text-fg-secondary whitespace-nowrap">{row.lotNumber ?? '—'}</td>
-                    {mode === 'start_and_due' && (
+                    {(mode === 'start_and_due' || mode === 'start_only') && (
                       <td className="px-2.5 py-1.5 text-fg-secondary whitespace-nowrap">{formatDateDisplay(row.startDate)}</td>
                     )}
-                    <td className="px-2.5 py-1.5 text-fg-secondary whitespace-nowrap">{formatDateDisplay(row.dueDate)}</td>
+                    {mode !== 'start_only' && (
+                      <td className="px-2.5 py-1.5 text-fg-secondary whitespace-nowrap">{formatDateDisplay(row.dueDate)}</td>
+                    )}
                     <td className="px-2.5 py-1.5 text-fg-secondary whitespace-nowrap">{row.homeDesign ?? '—'}</td>
                     <td className="px-2.5 py-1.5 whitespace-nowrap">
                       {row.error ? (

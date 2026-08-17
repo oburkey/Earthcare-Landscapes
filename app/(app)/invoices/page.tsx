@@ -199,7 +199,7 @@ export default async function InvoicesPage() {
     const { data } = await supabase
       .from('lot_quotes')
       .select(`
-        lot_id, is_estimated, status,
+        lot_id, quote_type, status,
         lot_quote_items(
           quantity, unit_price_snapshot, item_name, unit,
           quote_template_items(
@@ -264,8 +264,9 @@ export default async function InvoicesPage() {
     const byLot = new Map<string, { finals: any[]; estimates: any[] }>()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const q of quotesData as any[]) {
+      if (q.quote_type === 'budget') continue // budget doesn't feed invoicing
       if (!byLot.has(q.lot_id)) byLot.set(q.lot_id, { finals: [], estimates: [] })
-      if (q.is_estimated) byLot.get(q.lot_id)!.estimates.push(q)
+      if (q.quote_type === 'estimate') byLot.get(q.lot_id)!.estimates.push(q)
       else byLot.get(q.lot_id)!.finals.push(q)
     }
 

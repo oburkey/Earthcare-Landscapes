@@ -78,7 +78,7 @@ export type QuoteItemRow = {
 }
 export type QuoteRow = {
   lot_id: string
-  is_estimated: boolean
+  quote_type: 'estimate' | 'budget' | 'final'
   status: string
   lot_quote_items: QuoteItemRow[] | null
 }
@@ -136,8 +136,12 @@ export type LotDrillDownRow = {
   dueDate: string | null
   buildComplete: boolean
   invoiced: boolean
+  estimateTotal: number | null
+  budgetTotal: number | null
   finalTotal: number | null
-  estimateOnlyTotal: number | null
+  // (final - budget) / budget * 100 — how closely actual work tracked to
+  // budget. null unless both a budget and a final total exist.
+  budgetVsFinalPct: number | null
   varianceCategories: LotVarianceCategory[] | null
   contractPrice: number | null
   subcontractorCost: number
@@ -295,9 +299,12 @@ function quoteTotal(items: QuoteItemRow[] | null | undefined): number {
   }, 0)
 }
 
+// Only ever called on estimate/final rows (budget is filtered out before
+// this runs — see buildLotCalcs) — budget is a tracking sheet, not a price
+// quote, so it never participates in revenue/"best available price" calcs.
 function bestQuoteScore(q: QuoteRow): number {
   const statusScore = q.status === 'approved' ? 3 : q.status === 'submitted' ? 2 : 1
-  const typeScore = q.is_estimated ? 0 : 1 // final preferred over estimated
+  const typeScore = q.quote_type === 'final' ? 1 : 0 // final preferred over estimate
   return statusScore * 10 + typeScore
 }
 
@@ -334,6 +341,7 @@ type LotCalc = {
   invoiced: boolean
   finalTotal: number | null
   estimateTotal: number | null
+  budgetTotal: number | null
   bestTotal: number | null
   hasQuoteData: boolean
   estimateCats: CategoryQuantities | null
@@ -361,10 +369,14 @@ function buildLotCalcs(
 
   return lots.map((lot) => {
     const quotesForLot = byLot.get(lot.id) ?? []
-    const finalQuote = quotesForLot.find((q) => !q.is_estimated) ?? null
-    const estimateQuote = quotesForLot.find((q) => q.is_estimated) ?? null
-    const best = quotesForLot.length > 0
-      ? [...quotesForLot].sort((a, b) => bestQuoteScore(b) - bestQuoteScore(a))[0]
+    const finalQuote = quotesForLot.find((q) => q.quote_type === 'final') ?? null
+    const estimateQuote = quotesForLot.find((q) => q.quote_type === 'estimate') ?? null
+    const budgetQuote = quotesForLot.find((q) => q.quote_type === 'budget') ?? null
+    // Budget is excluded from revenue/"best available price" — it's a
+    // tracking sheet, not a price quote (see bestQuoteScore).
+    const revenueQuotes = quotesForLot.filter((q) => q.quote_type !== 'budget')
+    const best = revenueQuotes.length > 0
+      ? [...revenueQuotes].sort((a, b) => bestQuoteScore(b) - bestQuoteScore(a))[0]
       : null
 
     const ownPrice = lot.contract_price != null ? Number(lot.contract_price) : null
@@ -384,6 +396,7 @@ function buildLotCalcs(
       invoiced: lot.invoiced,
       finalTotal: hasContractPrice ? cp : (finalQuote ? quoteTotal(finalQuote.lot_quote_items) : null),
       estimateTotal: hasContractPrice ? null : (estimateQuote ? quoteTotal(estimateQuote.lot_quote_items) : null),
+      budgetTotal: hasContractPrice ? null : (budgetQuote ? quoteTotal(budgetQuote.lot_quote_items) : null),
       bestTotal: hasContractPrice ? cp : (best ? quoteTotal(best.lot_quote_items) : null),
       hasQuoteData: hasContractPrice || quotesForLot.length > 0,
       estimateCats: hasContractPrice ? null : (estimateQuote ? computeCategoryQuantities(estimateQuote.lot_quote_items) : null),
@@ -486,6 +499,13 @@ function lotVarianceCategories(lot: LotCalc): LotVarianceCategory[] | null {
     parts.push({ key, label: CATEGORY_LABELS[key], pct })
   }
   return parts.length > 0 ? parts : null
+}
+
+// Budget vs final $ variance for a single lot — how closely actual work
+// (final) tracked to what was budgeted. Only meaningful once both exist.
+function budgetVsFinalVariance(lot: LotCalc): number | null {
+  if (lot.budgetTotal == null || lot.finalTotal == null || lot.budgetTotal <= 0) return null
+  return ((lot.finalTotal - lot.budgetTotal) / lot.budgetTotal) * 100
 }
 
 // ── Aggregate summaries (shared by drill-down & comparison) ────────────────────
@@ -687,8 +707,10 @@ export function buildAnalyticsData(input: {
               dueDate: lot.dueDate,
               buildComplete: lot.buildComplete,
               invoiced: lot.invoiced,
+              estimateTotal: lot.estimateTotal,
+              budgetTotal: lot.budgetTotal,
               finalTotal: lot.finalTotal,
-              estimateOnlyTotal: lot.finalTotal === null ? lot.estimateTotal : null,
+              budgetVsFinalPct: budgetVsFinalVariance(lot),
               varianceCategories: lotVarianceCategories(lot),
               contractPrice: lot.contractPrice,
               subcontractorCost: lot.subcontractorCost,

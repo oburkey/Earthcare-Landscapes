@@ -221,6 +221,10 @@ export interface QuoteTemplateItem {
 export interface LotQuote {
   id: string
   lot_id: string
+  // quote_type is the source of truth for estimate/budget/final. is_estimated
+  // is kept in sync (true only for 'estimate') but is not dropped yet — see
+  // supabase/migration_budget_quant_sheet.sql.
+  quote_type: 'estimate' | 'budget' | 'final'
   is_estimated: boolean
   status: QuoteStatus
   quoted_by: string | null

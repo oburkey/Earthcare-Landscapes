@@ -22,7 +22,7 @@ export type TableLotRow = {
   invoiced: boolean
   quantDone: boolean
   // Who last saved this lot's FINAL quant sheet, and when — from
-  // lot_quotes.last_edited_by/last_edited_at (is_estimated = false).
+  // lot_quotes.last_edited_by/last_edited_at (quote_type = 'final').
   // Admin/supervisor-only column, see canSeeLastEdited.
   lastEditedAt: string | null
   lastEditedByInitials: string | null

@@ -17,7 +17,9 @@ export type BulkUpdateResult = {
 // 'due_only' is the original format (single date column = due date).
 // 'start_and_due' adds an explicit Start Date column ahead of Due Date —
 // either can be left blank on a given line.
-export type BulkDateMode = 'due_only' | 'start_and_due'
+// 'start_only' is like 'due_only' but the single date column is the start
+// date, and due date is left untouched entirely.
+export type BulkDateMode = 'due_only' | 'start_and_due' | 'start_only'
 
 export type BulkPreviewRow = {
   line: string
@@ -70,6 +72,17 @@ function parseBulkLine(line: string, mode: BulkDateMode): BulkPreviewRow {
     const due = parseDatePart(dueRaw, 'date')
     if (due.error) return { line, lotNumber, startDate: null, dueDate: null, homeDesign, action: null, error: `Lot ${lotNumber}: ${due.error}` }
     return { line, lotNumber, startDate: null, dueDate: due.iso, homeDesign, action: null, error: null }
+  }
+
+  if (mode === 'start_only') {
+    const startRaw = parts[1] ?? ''
+    const homeDesign = parts[2] || null
+    if (!startRaw) {
+      return { line, lotNumber, startDate: null, dueDate: null, homeDesign, action: null, error: `Lot ${lotNumber}: start date is required` }
+    }
+    const start = parseDatePart(startRaw, 'date')
+    if (start.error) return { line, lotNumber, startDate: null, dueDate: null, homeDesign, action: null, error: `Lot ${lotNumber}: ${start.error}` }
+    return { line, lotNumber, startDate: start.iso, dueDate: null, homeDesign, action: null, error: null }
   }
 
   // start_and_due: lot, start date, due date, home design — start/due each optional

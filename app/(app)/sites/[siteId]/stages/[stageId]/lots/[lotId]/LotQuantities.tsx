@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useTransition } from 'react'
 import { saveLotQuote } from './quote-actions'
-import type { QuoteItemPayload } from './quote-actions'
+import type { QuoteItemPayload, QuoteType } from './quote-actions'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -51,6 +51,7 @@ type Props = {
   canSupervise?: boolean
   sections: TemplateSection[]
   estimatedQuote: QuoteData
+  budgetQuote: QuoteData
   finalQuote: QuoteData
   showClientExtras?: boolean
   contractPrice?: number | null
@@ -149,18 +150,25 @@ const DEFAULT_YES_TOGGLES = new Set<string>([])
 export default function LotQuantities({
   lotId, siteId, stageId,
   isAdmin, canManage, canSupervise,
-  sections, estimatedQuote, finalQuote,
+  sections, estimatedQuote, budgetQuote, finalQuote,
   showClientExtras = true,
   plantRatios,
 }: Props) {
   const [open, setOpen] = useState(false)
   const hasFinalData = !!finalQuote && finalQuote.items.some((i) => i.quantity !== null)
-  const [isEstimated, setIsEstimated] = useState(false)
-  const activeQuote = isEstimated ? estimatedQuote : finalQuote
+  // Estimate isn't an option for non-admins at all — default to Final when it
+  // has data, otherwise Budget for non-admins (Estimate is admin's own default).
+  const [quoteType, setQuoteType] = useState<QuoteType>(
+    hasFinalData ? 'final' : (isAdmin ? 'estimate' : 'budget')
+  )
+  function quoteForType(type: QuoteType): QuoteData {
+    return type === 'estimate' ? estimatedQuote : type === 'budget' ? budgetQuote : finalQuote
+  }
+  const activeQuote = quoteForType(quoteType)
   // The quote matching the initial active mode above — used to seed initial
-  // state below (must NOT always be estimatedQuote, or "Final" mode would
-  // open showing Estimate data when it defaults to Final).
-  const initialQuote = hasFinalData ? finalQuote : estimatedQuote
+  // state below (must match the useState initializer, or the default mode
+  // would open showing the wrong quote's data).
+  const initialQuote = quoteForType(hasFinalData ? 'final' : (isAdmin ? 'estimate' : 'budget'))
 
   const allItems = useMemo(
     () => sections.flatMap((s) => s.items.map((item) => ({ ...item, isClientExtra: s.isClientExtra ?? false }))),
@@ -241,9 +249,9 @@ export default function LotQuantities({
     setValues((prev) => ({ ...prev, ...computePlantValues(prev) }))
   }
 
-  function switchMode(estimated: boolean) {
-    const quote = estimated ? estimatedQuote : finalQuote
-    setIsEstimated(estimated)
+  function switchMode(type: QuoteType) {
+    const quote = quoteForType(type)
+    setQuoteType(type)
     setValues(initValues(quote))
     setVariantSel(initVariantSel(quote, variantGroups))
     setNotes(quote?.notes ?? '')
@@ -261,7 +269,7 @@ export default function LotQuantities({
     setValues((prev) => {
       const next = { ...prev, [itemId]: value }
 
-      if (isEstimated && plantRatios) {
+      if (quoteType === 'estimate' && plantRatios) {
         const { frontBedIds, rearBedIds, frontPlantIds, rearPlantIds } = plantCalcIds
         const isBedItem = frontBedIds.includes(itemId) || rearBedIds.includes(itemId)
         if (isBedItem) {
@@ -312,7 +320,7 @@ export default function LotQuantities({
 
     startTransition(async () => {
       const result = await saveLotQuote({
-        lotId, siteId, stageId, isEstimated,
+        lotId, siteId, stageId, quoteType,
         status: submitStatus,
         notes,
         items,
@@ -324,8 +332,11 @@ export default function LotQuantities({
 
   const currentStatus = activeQuote?.status ?? 'draft'
   const isApproved    = currentStatus === 'approved'
-  const disabled            = isApproved || !canManage
-  const fineGradingDisabled = isApproved || !(canSupervise ?? canManage)
+  // Estimate is admin-only to edit (defense in depth — the tab is hidden from
+  // non-admins entirely, and the server also rejects non-admin estimate saves).
+  const canEditActiveTab    = canManage && (quoteType !== 'estimate' || isAdmin)
+  const disabled            = isApproved || !canEditActiveTab
+  const fineGradingDisabled = isApproved || !(canSupervise ?? canManage) || (quoteType === 'estimate' && !isAdmin)
 
   const colClass = isAdmin
     ? 'grid-cols-[1fr_100px_80px_80px]'
@@ -358,25 +369,24 @@ export default function LotQuantities({
 
       {open && (<>
 
-      {/* Estimate / Final toggle */}
+      {/* Estimate / Budget / Final toggle — Estimate hidden entirely for non-admins */}
       <div className="flex items-center gap-1 bg-surface-raised rounded-lg p-1 self-start w-fit">
-        {(['Estimate', 'Final'] as const).map((label) => {
-          const est = label === 'Estimate'
-          return (
+        {(['estimate', 'budget', 'final'] as const)
+          .filter((type) => type !== 'estimate' || isAdmin)
+          .map((type) => (
             <button
-              key={label}
+              key={type}
               type="button"
-              onClick={() => switchMode(est)}
+              onClick={() => switchMode(type)}
               className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                isEstimated === est
+                quoteType === type
                   ? 'bg-surface text-fg shadow-sm'
                   : 'text-fg-muted hover:text-fg-secondary'
               }`}
             >
-              {label}
+              {type === 'estimate' ? 'Estimate' : type === 'budget' ? 'Budget' : 'Final'}
             </button>
-          )
-        })}
+          ))}
       </div>
 
       {/* Status badge */}
@@ -627,7 +637,7 @@ export default function LotQuantities({
       })()}
 
       {/* Notes */}
-      {canManage && !isApproved && (
+      {canEditActiveTab && !isApproved && (
         <div>
           <label className="block text-sm font-medium text-fg-secondary mb-1">Notes</label>
           <textarea
@@ -648,7 +658,7 @@ export default function LotQuantities({
       )}
 
       {/* Recalculate plants button — estimate mode only */}
-      {isEstimated && plantRatios && !disabled && (
+      {quoteType === 'estimate' && plantRatios && !disabled && (
         <button
           type="button"
           onClick={recalculatePlants}
@@ -659,7 +669,7 @@ export default function LotQuantities({
       )}
 
       {/* Actions */}
-      {canManage && !isApproved && (
+      {canEditActiveTab && !isApproved && (
         <div className="flex gap-3">
           <button
             type="button"
