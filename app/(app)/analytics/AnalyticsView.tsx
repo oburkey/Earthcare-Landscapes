@@ -9,7 +9,7 @@ import DrillDownSection from './components/DrillDownSection'
 import ComparisonSection from './components/ComparisonSection'
 import type { AnalyticsData } from './lib'
 
-export default function AnalyticsView({ data }: { data: AnalyticsData }) {
+export default function AnalyticsView({ data, isAdmin }: { data: AnalyticsData; isAdmin: boolean }) {
   // Lifted here (rather than owned by MaterialsAccuracyPanel) so a
   // site/stage selection in the accuracy filter can also drive
   // DrillDownSection's auto-expand below — both read from the same state.
@@ -44,6 +44,7 @@ export default function AnalyticsView({ data }: { data: AnalyticsData }) {
           siteIndex={data.materialsSiteIndex}
           selection={selection}
           onSelectionChange={setSelection}
+          isAdmin={isAdmin}
         />
       </section>
 

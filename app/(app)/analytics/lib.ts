@@ -165,6 +165,17 @@ export type SiteAnalytics = {
   stages: StageAnalytics[]
 }
 
+export type PlantSize = '130/140mm plants' | '200mm plants' | '300mm plants'
+
+export type PlantSizeBreakdownRow = {
+  size: PlantSize
+  estimateQty: number | null
+  budgetQty: number | null
+  finalQty: number | null
+  // (final - budget) / budget * 100 — how closely actual usage tracked to budget.
+  budgetVsFinalPct: number | null
+}
+
 export type MaterialsSection = {
   variance: MaterialsVariance
   trend: VarianceTrendPoint[]
@@ -174,6 +185,7 @@ export type MaterialsSection = {
     actualFront: number | null
     actualRear: number | null
   }
+  plantBreakdown: PlantSizeBreakdownRow[]
 }
 
 // Lightweight site/stage/lot list for the materials-accuracy filter sidebar —
@@ -308,6 +320,22 @@ function bestQuoteScore(q: QuoteRow): number {
   return statusScore * 10 + typeScore
 }
 
+// Item names are shared verbatim across front/rear sections, so summing by
+// name naturally combines both sections — same approach as the Retic
+// stock-deduction plant total (see app/(app)/materials/stock-deduction.ts).
+const PLANT_SIZE_ITEMS: PlantSize[] = ['130/140mm plants', '200mm plants', '300mm plants']
+
+function computePlantSizeQuantities(items: QuoteItemRow[] | null | undefined): Record<PlantSize, number> {
+  const result: Record<PlantSize, number> = { '130/140mm plants': 0, '200mm plants': 0, '300mm plants': 0 }
+  if (!items) return result
+  for (const item of items) {
+    if ((PLANT_SIZE_ITEMS as string[]).includes(item.item_name)) {
+      result[item.item_name as PlantSize] += Number(item.quantity ?? 0)
+    }
+  }
+  return result
+}
+
 function computeCategoryQuantities(items: QuoteItemRow[] | null | undefined): CategoryQuantities {
   const cats: CategoryQuantities = { turf: 0, gardenBedFront: 0, gardenBedRear: 0, edging: 0, plantsFront: 0, plantsRear: 0 }
   if (!items) return cats
@@ -346,6 +374,9 @@ type LotCalc = {
   hasQuoteData: boolean
   estimateCats: CategoryQuantities | null
   finalCats: CategoryQuantities | null
+  estimatePlantSizes: Record<PlantSize, number> | null
+  budgetPlantSizes: Record<PlantSize, number> | null
+  finalPlantSizes: Record<PlantSize, number> | null
   contractPrice: number | null
   subcontractorCost: number
   subcontractorBreakdown: SubcontractorCostLine[]
@@ -401,6 +432,9 @@ function buildLotCalcs(
       hasQuoteData: hasContractPrice || quotesForLot.length > 0,
       estimateCats: hasContractPrice ? null : (estimateQuote ? computeCategoryQuantities(estimateQuote.lot_quote_items) : null),
       finalCats: hasContractPrice ? null : (finalQuote ? computeCategoryQuantities(finalQuote.lot_quote_items) : null),
+      estimatePlantSizes: hasContractPrice ? null : (estimateQuote ? computePlantSizeQuantities(estimateQuote.lot_quote_items) : null),
+      budgetPlantSizes: hasContractPrice ? null : (budgetQuote ? computePlantSizeQuantities(budgetQuote.lot_quote_items) : null),
+      finalPlantSizes: hasContractPrice ? null : (finalQuote ? computePlantSizeQuantities(finalQuote.lot_quote_items) : null),
       contractPrice: cp,
       subcontractorCost,
       subcontractorBreakdown: subBreakdown,
@@ -427,6 +461,36 @@ function computeVariance(lots: LotCalc[]): MaterialsVariance {
     result[key] = { avgPct: diffs.length > 0 ? sum(diffs) / diffs.length : null, n: diffs.length }
   }
   return result
+}
+
+// Sums plant-size quantities across a set of lots, per quote type. A size is
+// only included if at least one lot in this scope has quote data for it
+// (estimate/budget/final) — distinct from that quote existing but summing to
+// zero, which is shown as 0 rather than omitted.
+function computePlantBreakdown(lots: LotCalc[]): PlantSizeBreakdownRow[] {
+  const rows: PlantSizeBreakdownRow[] = []
+  for (const size of PLANT_SIZE_ITEMS) {
+    let estimateQty = 0, hasEstimate = false
+    let budgetQty = 0, hasBudget = false
+    let finalQty = 0, hasFinal = false
+    for (const lot of lots) {
+      if (lot.estimatePlantSizes) { hasEstimate = true; estimateQty += lot.estimatePlantSizes[size] }
+      if (lot.budgetPlantSizes) { hasBudget = true; budgetQty += lot.budgetPlantSizes[size] }
+      if (lot.finalPlantSizes) { hasFinal = true; finalQty += lot.finalPlantSizes[size] }
+    }
+    if (!hasEstimate && !hasBudget && !hasFinal) continue
+    const budgetVsFinalPct = hasBudget && hasFinal && budgetQty > 0
+      ? ((finalQty - budgetQty) / budgetQty) * 100
+      : null
+    rows.push({
+      size,
+      estimateQty: hasEstimate ? estimateQty : null,
+      budgetQty: hasBudget ? budgetQty : null,
+      finalQty: hasFinal ? finalQty : null,
+      budgetVsFinalPct,
+    })
+  }
+  return rows
 }
 
 // Builds the variance / trend / plant-ratio bundle for a set of lots against
@@ -471,6 +535,7 @@ function buildMaterialsSection(
     variance,
     trend,
     plantRatios: { configuredFront, configuredRear, actualFront, actualRear },
+    plantBreakdown: computePlantBreakdown(lotCalcs),
   }
 }
 

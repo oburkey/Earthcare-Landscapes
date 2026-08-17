@@ -146,7 +146,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
         </div>
       </div>
 
-      <AnalyticsView data={data} />
+      <AnalyticsView data={data} isAdmin={profile.role === 'admin'} />
     </div>
   )
 }

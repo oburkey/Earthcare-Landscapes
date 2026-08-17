@@ -22,10 +22,11 @@ interface Props {
   siteIndex: MaterialsSiteOption[]
   selection: Selection
   onSelectionChange: (selection: Selection) => void
+  isAdmin: boolean
 }
 
 export default function MaterialsAccuracyPanel({
-  global, bySite, byStage, byLot, siteIndex, selection, onSelectionChange,
+  global, bySite, byStage, byLot, siteIndex, selection, onSelectionChange, isAdmin,
 }: Props) {
   // Which site's stage-list, and which stage's lot-list, are visually open —
   // independent of `selection` (e.g. selecting a stage auto-opens its lot
@@ -83,7 +84,7 @@ export default function MaterialsAccuracyPanel({
     <div className="grid gap-4 lg:grid-cols-[1fr_260px]">
       <div className="space-y-4 min-w-0">
         <p className="text-xs font-medium text-fg-muted">Materials accuracy — {breadcrumb}</p>
-        <MaterialsAccuracySection materials={active} />
+        <MaterialsAccuracySection materials={active} isAdmin={isAdmin} />
         <VarianceTrendChart trend={active.trend} />
       </div>
 
