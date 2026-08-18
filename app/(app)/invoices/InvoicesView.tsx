@@ -126,6 +126,7 @@ const CLAIM_STYLES = `
 .html2pdf__container td.u    { color: #666; white-space: nowrap; }
 .html2pdf__container tr.sec td { background: #e3e3e3; font-weight: bold; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; padding: 10px 8px 8px; border-top: 1px solid #bbb; border-bottom: 1px solid #bbb; }
 .html2pdf__container tr.sec:first-child td { border-top: none; }
+.html2pdf__container tr.secsub td { font-size: 10px; font-weight: 600; color: #777; padding-top: 5px; padding-bottom: 9px; border-bottom: 1px solid #eee; }
 .html2pdf__container tr.sub td { background: #f9f9f9; font-weight: 600; padding-top: 8px; padding-bottom: 8px; border-top: 1px solid #ddd; border-bottom: 2px solid #ccc; }
 .html2pdf__container tr.grand td { background: #f0f0f0; font-weight: bold; font-size: 12px; border-top: 3px solid #999; padding: 11px 8px; }
 .html2pdf__container .note { margin-top: 20px; font-size: 9px; color: #999; }
@@ -173,13 +174,18 @@ function claimSheetBody(
           <td class="r">${item.rate > 0 ? fmt(item.rate) : '—'}</td>
           <td class="r">${item.rate > 0 ? fmt(item.total) : '—'}</td>
         </tr>`).join('')
+      const sectionSubtotal = items
+        ? `<tr class="secsub"><td colspan="5">Subtotal</td><td class="r">${fmt(section.subtotal)}</td></tr>`
+        : ''
       return `
         <tr class="sec"><td colspan="6">${section.name}</td></tr>
-        ${items}`
+        ${items}
+        ${sectionSubtotal}`
     }
 
-    // Two subtotals — Providence Works (standard sections) and Client Extras
-    // — instead of one per section, using the already-computed lot totals.
+    // Each section gets its own subtotal row (sectionItemRows above), plus
+    // two aggregate subtotals — Providence Works (standard sections) and
+    // Client Extras — using the already-computed lot totals.
     const standardRows = standard.map(sectionItemRows).join('')
     const providenceSubtotal = standard.length > 0 ? `
       <tr class="sub">

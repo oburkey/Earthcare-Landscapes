@@ -38,6 +38,7 @@ export const CHECKLIST_SECTIONS: ChecklistSectionDef[] = [
     title: 'Landscaping Works',
     gatesBuildComplete: true,
     items: [
+      { key: 'lw_crackerdust_installed',   label: 'Crackerdust installed',                       type: 'checkbox' },
       { key: 'lw_edging_installed',        label: 'Edging installed',                            type: 'checkbox' },
       { key: 'lw_turf_installed',          label: 'Turf installed',                              type: 'checkbox' },
       { key: 'lw_steppers_installed',      label: 'Steppers installed',                          type: 'checkbox' },
