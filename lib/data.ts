@@ -53,6 +53,18 @@ async function _site(db: Db, siteId: string) {
   return data
 }
 
+// Last-edited indicator sources, fetched alongside the lot itself so the
+// whole stage resolves in one query rather than one per lot: quant sheet
+// saves (any quote_type), photo uploads, checklist ticks, and the lot row's
+// own updated_at/updated_by. Picking the single most-recent one across all
+// four happens in the consumer (stage page.tsx) — see mostRecentActivity.
+const LAST_EDITED_SOURCES_SELECT = `
+  updated_at, profiles!updated_by(first_name, last_name),
+  lot_quotes(last_edited_at, profiles!last_edited_by(first_name, last_name)),
+  lot_photos(created_at, profiles!uploaded_by(first_name, last_name)),
+  lot_checklist_items(updated_at, profiles!completed_by(first_name, last_name))
+`
+
 async function _stage(db: Db, stageId: string) {
   const [{ data: stage }, { data: extraJobs }] = await Promise.all([
     db
@@ -61,7 +73,7 @@ async function _stage(db: Db, stageId: string) {
         id, name, site_plan_path, is_contract_pricing, default_contract_price,
         sites!inner(id, name),
         lots(id, lot_number, home_design, status, due_date, scheduled_date, build_complete, quant_done, invoiced, delayed, delay_reason, expected_completion_date,
-          lot_quotes(quote_type, last_edited_at, profiles!last_edited_by(first_name, last_name)))
+          ${LAST_EDITED_SOURCES_SELECT})
       `)
       .eq('id', stageId)
       .single(),

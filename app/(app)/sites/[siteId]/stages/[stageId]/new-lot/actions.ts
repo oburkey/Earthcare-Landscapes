@@ -34,6 +34,7 @@ export async function createLot(
     due_date: rawDue || null,
     scheduled_date: rawScheduled || null,
     notes: (formData.get('notes') as string)?.trim() || null,
+    updated_by: profile.id,
   })
 
   if (error) return { error: error.message }

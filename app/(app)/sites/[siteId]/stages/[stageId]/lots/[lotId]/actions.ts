@@ -37,7 +37,7 @@ export async function toggleLotFlag(
   }
 
   const supabase = await createClient()
-  const update: Record<string, unknown> = { [flag as LotFlag]: value }
+  const update: Record<string, unknown> = { [flag as LotFlag]: value, updated_by: profile.id }
   if (flag === 'build_complete') {
     update.build_completed_at = value ? new Date().toISOString() : null
   }
@@ -51,6 +51,8 @@ export async function toggleLotFlag(
   if (error) return { error: error.message }
 
   revalidatePath(`/sites/${siteId}/stages/${stageId}/lots/${lotId}`)
+  revalidatePath(`/sites/${siteId}/stages/${stageId}`)
+  revalidateTag('stages')
   return null
 }
 
@@ -71,7 +73,7 @@ export async function updateLotHomeDesign(
   const supabase = await createClient()
   const { error } = await supabase
     .from('lots')
-    .update({ home_design: homeDesign })
+    .update({ home_design: homeDesign, updated_by: profile.id })
     .eq('id', lotId)
   if (error) return { error: error.message }
 
@@ -113,7 +115,7 @@ export async function setLotDelayed(
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('lots')
-    .update({ delayed: true, delay_reason: reason, expected_completion_date: expectedCompletionDate })
+    .update({ delayed: true, delay_reason: reason, expected_completion_date: expectedCompletionDate, updated_by: profile.id })
     .eq('id', lotId)
     .select('id')
 
@@ -138,7 +140,7 @@ export async function clearLotDelayed(
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('lots')
-    .update({ delayed: false, delay_reason: null, expected_completion_date: null })
+    .update({ delayed: false, delay_reason: null, expected_completion_date: null, updated_by: profile.id })
     .eq('id', lotId)
     .select('id')
 
@@ -255,6 +257,8 @@ export async function uploadLotPhoto(
   }
 
   revalidatePath(`/sites/${siteId}/stages/${stageId}/lots/${lotId}`)
+  revalidatePath(`/sites/${siteId}/stages/${stageId}`)
+  revalidateTag('stages')
   return null
 }
 
@@ -401,6 +405,7 @@ export async function updateChecklist(
         completed,
         response,
         completed_date: completed ? (dateRaw || today) : dateRaw,
+        completed_by: completed ? profile.id : null,
       }
     })
   )
@@ -416,7 +421,7 @@ export async function updateChecklist(
 
   const { error: notesError } = await supabase
     .from('lots')
-    .update({ extras_notes: extrasNotes })
+    .update({ extras_notes: extrasNotes, updated_by: profile.id })
     .eq('id', lotId)
   if (notesError) return { error: notesError.message }
 
@@ -434,7 +439,8 @@ export async function updateChecklist(
       .eq('id', lotId)
       .single()
 
-    const update: { build_complete: true; build_completed_at?: string } = { build_complete: true }
+    const update: { build_complete: true; build_completed_at?: string; updated_by: string } =
+      { build_complete: true, updated_by: profile.id }
     if (!lotRow?.build_completed_at) update.build_completed_at = new Date().toISOString()
 
     await supabase.from('lots').update(update).eq('id', lotId)
@@ -467,6 +473,7 @@ export async function updateLot(
     notes,
     completion_date:
       newStatus === 'complete' ? new Date().toISOString().split('T')[0] : null,
+    updated_by: profile.id,
   }
 
   // Leading hands, supervisors and admins can also update dates and contract price

@@ -140,7 +140,7 @@ export async function importBulkSitePlans(formData: FormData): Promise<BulkImpor
     if (updateHomeDesign && homeDesign) {
       const { error: hdError } = await supabase
         .from('lots')
-        .update({ home_design: homeDesign })
+        .update({ home_design: homeDesign, updated_by: profile.id })
         .eq('id', lotId)
       if (hdError) errors.push({ filename, error: `Uploaded, but failed to update home design: ${hdError.message}` })
     }

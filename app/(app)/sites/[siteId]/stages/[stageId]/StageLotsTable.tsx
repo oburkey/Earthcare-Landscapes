@@ -21,8 +21,9 @@ export type TableLotRow = {
   // can share one row shape built once in page.tsx.
   invoiced: boolean
   quantDone: boolean
-  // Who last saved this lot's FINAL quant sheet, and when — from
-  // lot_quotes.last_edited_by/last_edited_at (quote_type = 'final').
+  // Most recent activity on this lot and who did it — the newest of
+  // lot_quotes.last_edited_at, lot_photos.created_at, lot_checklist_items
+  // .updated_at, and lots.updated_at. See mostRecentActivity in page.tsx.
   // Admin/supervisor-only column, see canSeeLastEdited.
   lastEditedAt: string | null
   lastEditedByInitials: string | null

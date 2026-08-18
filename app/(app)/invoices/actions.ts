@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { uploadToR2, getR2FileAsDataUrl } from '@/lib/r2'
 import { getExtraJobsPricing } from '@/app/(app)/sites/[siteId]/stages/[stageId]/extra-jobs/[extraJobId]/pricing-actions'
 import type { ActionState } from '@/types/actions'
@@ -73,11 +73,12 @@ export async function toggleInvoiced(
   const supabase = await createClient()
   const { error } = await supabase
     .from('lots')
-    .update({ invoiced: value })
+    .update({ invoiced: value, updated_by: profile.id })
     .eq('id', lotId)
   if (error) return { error: error.message }
 
   revalidatePath('/invoices')
+  revalidateTag('stages')
   return null
 }
 
@@ -94,11 +95,12 @@ export async function togglePendingReview(
   const supabase = await createClient()
   const { error } = await supabase
     .from('lots')
-    .update({ pending_review: value })
+    .update({ pending_review: value, updated_by: profile.id })
     .eq('id', lotId)
   if (error) return { error: error.message }
 
   revalidatePath('/invoices')
+  revalidateTag('stages')
   return null
 }
 
@@ -114,7 +116,7 @@ export async function toggleApprovedForInvoicing(
 
   const supabase = await createClient()
   // Approving also clears pending_review
-  const update: Record<string, boolean> = { approved_for_invoicing: value }
+  const update: Record<string, boolean | string> = { approved_for_invoicing: value, updated_by: profile.id }
   if (value) update.pending_review = false
 
   const { error } = await supabase
@@ -124,6 +126,7 @@ export async function toggleApprovedForInvoicing(
   if (error) return { error: error.message }
 
   revalidatePath('/invoices')
+  revalidateTag('stages')
   return null
 }
 
@@ -272,7 +275,7 @@ export async function markAsInvoiced(
   if (lotIds.length > 0) {
     const { error } = await supabase
       .from('lots')
-      .update({ invoiced: true, approved_for_invoicing: false })
+      .update({ invoiced: true, approved_for_invoicing: false, updated_by: profile.id })
       .in('id', lotIds)
     if (error) return { error: error.message }
   }
@@ -294,6 +297,7 @@ export async function markAsInvoiced(
   }
 
   revalidatePath('/invoices')
+  revalidateTag('stages')
   return null
 }
 
@@ -325,7 +329,7 @@ export async function deleteInvoiceRun(
   if (lotIds.length > 0) {
     const { error } = await supabase
       .from('lots')
-      .update({ invoiced: false, approved_for_invoicing: true })
+      .update({ invoiced: false, approved_for_invoicing: true, updated_by: profile.id })
       .in('id', lotIds)
     if (error) return { error: error.message }
   }
@@ -353,6 +357,7 @@ export async function deleteInvoiceRun(
   if (deleteError) return { error: deleteError.message }
 
   revalidatePath('/invoices')
+  revalidateTag('stages')
   return null
 }
 

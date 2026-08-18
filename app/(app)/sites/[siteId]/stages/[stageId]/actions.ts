@@ -109,12 +109,12 @@ function parseBulkLine(line: string, mode: BulkDateMode): BulkPreviewRow {
   return { line, lotNumber, startDate: start.iso, dueDate: due.iso, homeDesign, action: null, error: null }
 }
 
-async function requireBulkUpdatePermission(): Promise<string | null> {
+async function requireBulkUpdatePermission(): Promise<{ error: string | null; profileId: string | null }> {
   const profile = await requireAuth()
   if (profile.role !== 'leading_hand' && profile.role !== 'supervisor' && profile.role !== 'admin') {
-    return 'Insufficient permissions'
+    return { error: 'Insufficient permissions', profileId: null }
   }
-  return null
+  return { error: null, profileId: profile.id }
 }
 
 // Dry run — parses and resolves update-vs-create per line without writing
@@ -125,7 +125,7 @@ export async function previewBulkUpdateLots(
   rawData: string,
   mode: BulkDateMode,
 ): Promise<BulkPreviewRow[]> {
-  const permError = await requireBulkUpdatePermission()
+  const { error: permError } = await requireBulkUpdatePermission()
   const lines = rawData.split('\n').map(l => l.trim()).filter(Boolean)
   if (permError) return lines.map((line) => ({ line, lotNumber: null, startDate: null, dueDate: null, homeDesign: null, action: null, error: permError }))
   if (lines.length === 0) return []
@@ -150,7 +150,7 @@ export async function bulkUpdateLots(
   rawData: string,
   mode: BulkDateMode = 'due_only',
 ): Promise<BulkUpdateResult> {
-  const permError = await requireBulkUpdatePermission()
+  const { error: permError, profileId } = await requireBulkUpdatePermission()
   if (permError) return { updated: 0, created: 0, errors: [permError] }
 
   const lines = rawData.split('\n').map(l => l.trim()).filter(Boolean)
@@ -183,7 +183,7 @@ export async function bulkUpdateLots(
     if (existing) {
       const noDowngrade = existing.status === 'complete' || existing.status === 'in_progress'
       const newStatus   = noDowngrade ? existing.status : 'scheduled'
-      const update: Record<string, unknown> = {}
+      const update: Record<string, unknown> = { updated_by: profileId }
       if (dueDate) update.due_date = dueDate
       if (startDate) update.scheduled_date = startDate
       if (homeDesign) update.home_design = homeDesign
@@ -204,6 +204,7 @@ export async function bulkUpdateLots(
         .insert({
           stage_id: stageId, lot_number: lotNumber, status: 'scheduled',
           due_date: dueDate, scheduled_date: startDate, home_design: homeDesign,
+          updated_by: profileId,
         })
         .select('id, lot_number, status')
         .single()
@@ -294,7 +295,7 @@ export async function updateStage(
   if (isContractPricing && defaultContractPrice !== null) {
     await supabase
       .from('lots')
-      .update({ contract_price: defaultContractPrice })
+      .update({ contract_price: defaultContractPrice, updated_by: profile.id })
       .eq('stage_id', stageId)
       .is('contract_price', null)
   }

@@ -174,7 +174,7 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
   if (quoteType === 'final') {
     const { error: pendingReviewError } = await supabase
       .from('lots')
-      .update({ pending_review: true })
+      .update({ pending_review: true, updated_by: profile.id })
       .eq('id', lotId)
     if (pendingReviewError) return { error: pendingReviewError.message }
   }

@@ -42,6 +42,14 @@ async function uploadLotPhotoAction(formData: FormData) {
   return uploadLotPhoto(null, formData)
 }
 
+// Same Australia/Perth-anchored approach as LotQuantities.tsx's
+// formatPerthDateTime, date-only (no time-of-day needed for photo captions).
+function formatPerthDate(iso: string): string {
+  return new Intl.DateTimeFormat('en-AU', {
+    timeZone: 'Australia/Perth', day: 'numeric', month: 'short', year: 'numeric',
+  }).format(new Date(iso))
+}
+
 export default async function LotPage({ params }: Props) {
   const { siteId, stageId, lotId } = await params
   const profile = await requireAuth()
@@ -74,7 +82,7 @@ export default async function LotPage({ params }: Props) {
       .single(),
     supabase
       .from('lot_photos')
-      .select('id, storage_path, photo_type, notes, photo_category, created_at')
+      .select('id, storage_path, photo_type, notes, photo_category, created_at, profiles!uploaded_by(first_name, last_name)')
       .eq('lot_id', lotId)
       .order('created_at', { ascending: true }),
     supabase
@@ -199,15 +207,28 @@ export default async function LotPage({ params }: Props) {
   })()
 
   // Photos
-  type PhotoWithUrl = { id: string; url: string; photo_type: string; notes: string | null; photo_category: string | null }
+  type PhotoWithUrl = {
+    id: string; url: string; photo_type: string; notes: string | null; photo_category: string | null
+    uploadedByName: string | null; createdAt: string | null
+  }
   let photos: PhotoWithUrl[] = []
   if (photoRows && photoRows.length > 0) {
     const signed = await Promise.all(
-      photoRows.map(async (p) => ({
-        id: p.id, url: await getR2SignedUrlSafe(p.storage_path), photo_type: p.photo_type,
-        notes: (p as { notes?: string | null }).notes ?? null,
-        photo_category: (p as { photo_category?: string | null }).photo_category ?? null,
-      }))
+      photoRows.map(async (p) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const pAny = p as any
+        const uploader = Array.isArray(pAny.profiles) ? pAny.profiles[0] : pAny.profiles
+        const uploadedByName = uploader
+          ? `${uploader.first_name ?? ''} ${uploader.last_name ?? ''}`.trim() || null
+          : null
+        return {
+          id: p.id, url: await getR2SignedUrlSafe(p.storage_path), photo_type: p.photo_type,
+          notes: (p as { notes?: string | null }).notes ?? null,
+          photo_category: (p as { photo_category?: string | null }).photo_category ?? null,
+          uploadedByName,
+          createdAt: pAny.created_at ?? null,
+        }
+      })
     )
     photos = signed.filter((p) => p.url)
   }
@@ -488,6 +509,11 @@ export default async function LotPage({ params }: Props) {
                                 <p className="text-xs text-fg-muted truncate" title={photo.notes}>{photo.notes}</p>
                               )}
                             </div>
+                          )}
+                          {photo.uploadedByName && photo.createdAt && (
+                            <p className="text-xs text-fg-muted truncate">
+                              {photo.uploadedByName} · {formatPerthDate(photo.createdAt)}
+                            </p>
                           )}
                         </div>
                       ))}

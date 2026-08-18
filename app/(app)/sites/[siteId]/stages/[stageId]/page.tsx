@@ -37,6 +37,31 @@ function initialsOf(first: string | null | undefined, last: string | null | unde
   return initials || null
 }
 
+// ── Last-edited indicator ────────────────────────────────────────────────────
+// Picks the single most recent event across all four activity sources for a
+// lot (quant sheet saves, photo uploads, checklist ticks, lot row changes),
+// all fetched in getCachedStage's one query per stage — see
+// LAST_EDITED_SOURCES_SELECT in lib/data.ts.
+
+type ActivityProfile = { first_name: string; last_name: string }
+type ActivityEntry = { at: string; profile: ActivityProfile | null }
+
+function normalizeActivityProfile(p: unknown): ActivityProfile | null {
+  if (!p) return null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const one = Array.isArray(p) ? (p as any[])[0] : (p as any)
+  return one ? { first_name: one.first_name ?? '', last_name: one.last_name ?? '' } : null
+}
+
+function mostRecentActivity(entries: (ActivityEntry | null)[]): ActivityEntry | null {
+  let best: ActivityEntry | null = null
+  for (const e of entries) {
+    if (!e?.at) continue
+    if (!best || new Date(e.at).getTime() > new Date(best.at).getTime()) best = e
+  }
+  return best
+}
+
 export default async function StagePage({ params }: Props) {
   const { siteId, stageId } = await params
   const profile = await requireAuth()
@@ -86,11 +111,25 @@ export default async function StagePage({ params }: Props) {
   const lotsForTable: TableLotRow[] = lots.map((lot) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const lotAny = lot as any
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const finalQuote = ((lotAny.lot_quotes ?? []) as any[]).find((q) => q.quote_type === 'final')
-    const editor = finalQuote
-      ? (Array.isArray(finalQuote.profiles) ? finalQuote.profiles[0] : finalQuote.profiles)
+    const quoteActivities: (ActivityEntry | null)[] = ((lotAny.lot_quotes ?? []) as any[]).map((q) =>
+      q.last_edited_at ? { at: q.last_edited_at, profile: normalizeActivityProfile(q.profiles) } : null
+    )
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const photoActivities: (ActivityEntry | null)[] = ((lotAny.lot_photos ?? []) as any[]).map((p) =>
+      p.created_at ? { at: p.created_at, profile: normalizeActivityProfile(p.profiles) } : null
+    )
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const checklistActivities: (ActivityEntry | null)[] = ((lotAny.lot_checklist_items ?? []) as any[]).map((c) =>
+      c.updated_at ? { at: c.updated_at, profile: normalizeActivityProfile(c.profiles) } : null
+    )
+    const lotActivity: ActivityEntry | null = lotAny.updated_at
+      ? { at: lotAny.updated_at, profile: normalizeActivityProfile(lotAny.profiles) }
       : null
+
+    const lastActivity = mostRecentActivity([...quoteActivities, ...photoActivities, ...checklistActivities, lotActivity])
+
     return {
       id: lot.id,
       lotNumber: lot.lot_number,
@@ -104,8 +143,8 @@ export default async function StagePage({ params }: Props) {
       tradesCompleted: tradeStatusMap[lot.id]?.trades_completed ?? [],
       invoiced: lotAny.invoiced ?? false,
       quantDone: lotAny.quant_done ?? false,
-      lastEditedAt: finalQuote?.last_edited_at ?? null,
-      lastEditedByInitials: editor ? initialsOf(editor.first_name, editor.last_name) : null,
+      lastEditedAt: lastActivity?.at ?? null,
+      lastEditedByInitials: lastActivity?.profile ? initialsOf(lastActivity.profile.first_name, lastActivity.profile.last_name) : null,
     }
   })
 

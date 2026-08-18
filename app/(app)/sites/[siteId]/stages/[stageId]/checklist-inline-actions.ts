@@ -49,6 +49,7 @@ export async function toggleChecklistItemInline(
         item_key: itemKey,
         completed,
         completed_date: completed ? today : null,
+        completed_by: completed ? profile.id : null,
       },
       { onConflict: 'lot_id,item_key' }
     )
@@ -86,6 +87,7 @@ export async function toggleBuildCompleteInline(
     .update({
       build_complete: completed,
       build_completed_at: completed ? new Date().toISOString() : null,
+      updated_by: profile.id,
     })
     .eq('id', lotId)
 
