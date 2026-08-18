@@ -11,15 +11,17 @@ interface Props {
 }
 
 const PLACEHOLDER: Record<BulkDateMode, string> = {
-  due_only:      '059\t03/04/2026\tBillie Jean\n076\t03/04/2026\n077\t25/03/2026\tCecilia',
-  start_and_due: '059\t20/03/2026\t03/04/2026\tBillie Jean\n076\t\t03/04/2026\n077\t18/03/2026\t\tCecilia',
-  start_only:    '059\t20/03/2026\tBillie Jean\n076\t18/03/2026\n077\t25/03/2026\tCecilia',
+  due_only:         '059\t03/04/2026\tBillie Jean\n076\t03/04/2026\n077\t25/03/2026\tCecilia',
+  start_and_due:    '059\t20/03/2026\t03/04/2026\tBillie Jean\n076\t\t03/04/2026\n077\t18/03/2026\t\tCecilia',
+  start_only:       '059\t20/03/2026\tBillie Jean\n076\t18/03/2026\n077\t25/03/2026\tCecilia',
+  home_design_only: '088\tSunshine\n089\tBrightside\n090\tDream Catcher',
 }
 
 const HELP_TEXT: Record<BulkDateMode, string> = {
-  due_only:      'One lot per line — lot number, then tab or comma, then due date in DD/MM/YYYY format, then optionally tab/comma and a Home Design name.',
-  start_and_due: 'One lot per line — lot number, then tab or comma, then start date, then due date (both DD/MM/YYYY, either can be left blank), then optionally a Home Design name.',
-  start_only:    'One lot per line — lot number, then tab or comma, then start date in DD/MM/YYYY format, then optionally tab/comma and a Home Design name. Due dates are left untouched.',
+  due_only:         'One lot per line — lot number, then tab or comma, then due date in DD/MM/YYYY format, then optionally tab/comma and a Home Design name.',
+  start_and_due:    'One lot per line — lot number, then tab or comma, then start date, then due date (both DD/MM/YYYY, either can be left blank), then optionally a Home Design name.',
+  start_only:       'One lot per line — lot number, then tab or comma, then start date in DD/MM/YYYY format, then optionally tab/comma and a Home Design name. Due dates are left untouched.',
+  home_design_only: 'One lot per line — lot number, then tab or comma, then Home Design name. No dates are touched.',
 }
 
 function formatDateDisplay(iso: string | null): string {
@@ -116,7 +118,7 @@ export default function BulkUpdateLotsButton({ stageId, siteId }: Props) {
 
       {/* Format toggle */}
       <div className="flex gap-1 rounded-lg border border-border p-1 w-fit">
-        {(['due_only', 'start_and_due', 'start_only'] as const).map((m) => (
+        {(['due_only', 'start_and_due', 'start_only', 'home_design_only'] as const).map((m) => (
           <button
             key={m}
             type="button"
@@ -125,7 +127,10 @@ export default function BulkUpdateLotsButton({ stageId, siteId }: Props) {
               mode === m ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900' : 'text-fg-muted hover:bg-surface-raised'
             }`}
           >
-            {m === 'due_only' ? 'Due date only' : m === 'start_and_due' ? 'Start + Due date' : 'Start date only'}
+            {m === 'due_only' ? 'Due date only'
+              : m === 'start_and_due' ? 'Start + Due date'
+              : m === 'start_only' ? 'Start date only'
+              : 'Home Design only'}
           </button>
         ))}
       </div>
@@ -154,7 +159,7 @@ export default function BulkUpdateLotsButton({ stageId, siteId }: Props) {
                   {(mode === 'start_and_due' || mode === 'start_only') && (
                     <th className="text-left font-medium px-2.5 py-1.5 whitespace-nowrap">Start Date</th>
                   )}
-                  {mode !== 'start_only' && (
+                  {mode !== 'start_only' && mode !== 'home_design_only' && (
                     <th className="text-left font-medium px-2.5 py-1.5 whitespace-nowrap">Due Date</th>
                   )}
                   <th className="text-left font-medium px-2.5 py-1.5 whitespace-nowrap">Home Design</th>
@@ -168,7 +173,7 @@ export default function BulkUpdateLotsButton({ stageId, siteId }: Props) {
                     {(mode === 'start_and_due' || mode === 'start_only') && (
                       <td className="px-2.5 py-1.5 text-fg-secondary whitespace-nowrap">{formatDateDisplay(row.startDate)}</td>
                     )}
-                    {mode !== 'start_only' && (
+                    {mode !== 'start_only' && mode !== 'home_design_only' && (
                       <td className="px-2.5 py-1.5 text-fg-secondary whitespace-nowrap">{formatDateDisplay(row.dueDate)}</td>
                     )}
                     <td className="px-2.5 py-1.5 text-fg-secondary whitespace-nowrap">{row.homeDesign ?? '—'}</td>

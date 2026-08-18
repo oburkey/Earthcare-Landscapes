@@ -72,6 +72,7 @@ export default async function QuotesPage() {
               .slice()
               .sort((a, b) => a.order_index - b.order_index)
               .map((i) => ({
+                id:          i.id,
                 description: i.description ?? '',
                 qty:         Number(i.qty ?? 0),
                 unit:        i.unit ?? '',

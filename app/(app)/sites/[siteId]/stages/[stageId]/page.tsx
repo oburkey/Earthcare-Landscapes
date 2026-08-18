@@ -7,6 +7,7 @@ import { uploadStagePlan } from './actions'
 import PlanPhotoUpload from '../../PlanPhotoUpload'
 import EditStageForm from './EditStageForm'
 import MaterialsSummary from './MaterialsSummary'
+import ExportEstimatesButton from './ExportEstimatesButton'
 import StageViewSwitcher from './StageViewSwitcher'
 import type { TableLotRow, TableExtraJobRow } from './StageLotsTable'
 import { getR2SignedUrl } from '@/lib/r2'
@@ -169,14 +170,17 @@ export default async function StagePage({ params }: Props) {
               </p>
             )}
           </div>
-          {canAddLot && (
-            <Link
-              href={`/sites/${siteId}/stages/${stageId}/new-lot`}
-              className="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 active:bg-green-900 shrink-0"
-            >
-              + Add lot
-            </Link>
-          )}
+          <div className="flex items-start gap-2 shrink-0">
+            {isAdmin && <ExportEstimatesButton stageId={stageId} />}
+            {canAddLot && (
+              <Link
+                href={`/sites/${siteId}/stages/${stageId}/new-lot`}
+                className="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 active:bg-green-900 shrink-0"
+              >
+                + Add lot
+              </Link>
+            )}
+          </div>
         </div>
 
         {/* Progress bar */}

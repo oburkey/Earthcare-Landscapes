@@ -19,7 +19,9 @@ export type BulkUpdateResult = {
 // either can be left blank on a given line.
 // 'start_only' is like 'due_only' but the single date column is the start
 // date, and due date is left untouched entirely.
-export type BulkDateMode = 'due_only' | 'start_and_due' | 'start_only'
+// 'home_design_only' has no date column at all — lot number + home design
+// name only, for bulk-assigning house types without touching either date.
+export type BulkDateMode = 'due_only' | 'start_and_due' | 'start_only' | 'home_design_only'
 
 export type BulkPreviewRow = {
   line: string
@@ -83,6 +85,14 @@ function parseBulkLine(line: string, mode: BulkDateMode): BulkPreviewRow {
     const start = parseDatePart(startRaw, 'date')
     if (start.error) return { line, lotNumber, startDate: null, dueDate: null, homeDesign, action: null, error: `Lot ${lotNumber}: ${start.error}` }
     return { line, lotNumber, startDate: start.iso, dueDate: null, homeDesign, action: null, error: null }
+  }
+
+  if (mode === 'home_design_only') {
+    const homeDesign = parts[1] || null
+    if (!homeDesign) {
+      return { line, lotNumber, startDate: null, dueDate: null, homeDesign: null, action: null, error: `Lot ${lotNumber}: home design is required` }
+    }
+    return { line, lotNumber, startDate: null, dueDate: null, homeDesign, action: null, error: null }
   }
 
   // start_and_due: lot, start date, due date, home design — start/due each optional

@@ -1,12 +1,16 @@
 'use client'
 
 import { useOptimistic, useState, useTransition } from 'react'
-import { saveQuote, deleteQuote, getStagesForSite, convertQuoteToExtraJob } from './actions'
+import {
+  saveQuote, deleteQuote, getStagesForSite, convertQuoteToExtraJob,
+  reorderQuoteSections, reorderQuoteLineItems,
+} from './actions'
 import { LOGO_DATA_URL } from '@/lib/pdfAssets'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type QuoteLineItem = {
+  id?: string
   description: string
   qty: number
   unit: string
@@ -100,6 +104,14 @@ function emptySection(orderIndex: number): QuoteSection {
 // add/remove/reorder so persisted order always matches display order.
 function reindex<T extends { orderIndex: number }>(arr: T[]): T[] {
   return arr.map((item, i) => ({ ...item, orderIndex: i }))
+}
+
+// Swaps two adjacent-by-position entries and reindexes — used by the ↑/↓
+// reorder buttons. Only the two swapped entries actually change orderIndex.
+function swapAndReindex<T extends { orderIndex: number }>(arr: T[], i: number, j: number): T[] {
+  const next = [...arr]
+  ;[next[i], next[j]] = [next[j], next[i]]
+  return reindex(next)
 }
 
 // ── PDF ───────────────────────────────────────────────────────────────────────
@@ -491,6 +503,44 @@ export default function QuotesView({
     }))
   }
 
+  // Reorder — always reorders local state instantly; the DB write only
+  // fires when the moved rows already exist (quote saved at least once and
+  // both swapped rows have an id). New/unsaved quotes and sections/items
+  // added this session stay local-only until the next "Save quote".
+  function moveSection(index: number, direction: -1 | 1) {
+    const target = index + direction
+    if (target < 0 || target >= sections.length) return
+    const reordered = swapAndReindex(sections, index, target)
+    setSections(reordered)
+    if (view !== 'new') {
+      setQuotes((prev) => prev.map((q) => (q.id === view ? { ...q, sections: reordered } : q)))
+    }
+    const a = reordered[index], b = reordered[target]
+    if (view !== 'new' && a.id && b.id) {
+      reorderQuoteSections([{ id: a.id, orderIndex: a.orderIndex }, { id: b.id, orderIndex: b.orderIndex }])
+        .then((result) => { if (result?.error) setActionError(result.error) })
+        .catch(() => setActionError('Failed to save the new section order.'))
+    }
+  }
+
+  function moveItem(sectionIdx: number, itemIdx: number, direction: -1 | 1) {
+    const section = sections[sectionIdx]
+    const target = itemIdx + direction
+    if (target < 0 || target >= section.items.length) return
+    const reorderedItems = swapAndReindex(section.items, itemIdx, target)
+    const reorderedSections = sections.map((s, idx) => (idx === sectionIdx ? { ...s, items: reorderedItems } : s))
+    setSections(reorderedSections)
+    if (view !== 'new') {
+      setQuotes((prev) => prev.map((q) => (q.id === view ? { ...q, sections: reorderedSections } : q)))
+    }
+    const a = reorderedItems[itemIdx], b = reorderedItems[target]
+    if (view !== 'new' && a.id && b.id) {
+      reorderQuoteLineItems([{ id: a.id, orderIndex: a.orderIndex }, { id: b.id, orderIndex: b.orderIndex }])
+        .then((result) => { if (result?.error) setActionError(result.error) })
+        .catch(() => setActionError('Failed to save the new item order.'))
+    }
+  }
+
   function updateLine<K extends keyof QuoteLineItem>(sectionIdx: number, itemIdx: number, key: K, value: QuoteLineItem[K]) {
     setSections((prev) => prev.map((s, idx) => {
       if (idx !== sectionIdx) return s
@@ -837,6 +887,12 @@ export default function QuotesView({
                       placeholder="Section name (optional)"
                       className="flex-1 rounded border border-border bg-surface px-2 py-1 text-sm font-medium text-fg placeholder:text-fg-muted focus:border-border focus:outline-none"
                     />
+                    <MoveButtons
+                      onUp={() => moveSection(sIdx, -1)}
+                      onDown={() => moveSection(sIdx, 1)}
+                      disabledUp={sIdx === 0}
+                      disabledDown={sIdx === sections.length - 1}
+                    />
                     <button
                       type="button"
                       onClick={() => removeSection(sIdx)}
@@ -859,7 +915,7 @@ export default function QuotesView({
                             <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-2 w-20">Unit</th>
                             <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-2 w-24">Rate</th>
                             <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-2 w-28">Total</th>
-                            <th className="pb-2 w-8"></th>
+                            <th className="pb-2 w-20"></th>
                           </tr>
                         </thead>
                         <tbody>
@@ -909,16 +965,24 @@ export default function QuotesView({
                                   {fmt(lineTotal)}
                                 </td>
                                 <td className="py-1.5 pl-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => removeLine(sIdx, i)}
-                                    disabled={section.items.length === 1}
-                                    className="text-fg-muted hover:text-red-500 disabled:hover:text-fg-muted transition-colors"
-                                  >
-                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                  </button>
+                                  <div className="flex items-center gap-1">
+                                    <MoveButtons
+                                      onUp={() => moveItem(sIdx, i, -1)}
+                                      onDown={() => moveItem(sIdx, i, 1)}
+                                      disabledUp={i === 0}
+                                      disabledDown={i === section.items.length - 1}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => removeLine(sIdx, i)}
+                                      disabled={section.items.length === 1}
+                                      className="text-fg-muted hover:text-red-500 disabled:hover:text-fg-muted transition-colors"
+                                    >
+                                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             )
@@ -1307,6 +1371,42 @@ export default function QuotesView({
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function MoveButtons({
+  onUp, onDown, disabledUp, disabledDown,
+}: {
+  onUp: () => void
+  onDown: () => void
+  disabledUp: boolean
+  disabledDown: boolean
+}) {
+  return (
+    <div className="flex items-center gap-0.5 shrink-0">
+      <button
+        type="button"
+        onClick={onUp}
+        disabled={disabledUp}
+        aria-label="Move up"
+        className="text-fg-muted hover:text-fg-secondary disabled:opacity-30 disabled:hover:text-fg-muted transition-colors"
+      >
+        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        onClick={onDown}
+        disabled={disabledDown}
+        aria-label="Move down"
+        className="text-fg-muted hover:text-fg-secondary disabled:opacity-30 disabled:hover:text-fg-muted transition-colors"
+      >
+        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+        </svg>
+      </button>
     </div>
   )
 }

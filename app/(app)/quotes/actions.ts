@@ -131,6 +131,53 @@ export async function saveQuote(
   return { id: data.id }
 }
 
+// ── Reorder ──────────────────────────────────────────────────────────────────
+// Lightweight, targeted order_index updates for the ↑/↓ reorder buttons —
+// separate from saveQuote's full delete-and-reinsert so a reorder click
+// doesn't require (or wait on) a full quote save. Only ever called for
+// sections/items that already have a DB id (i.e. the quote has been saved
+// at least once) — see QuotesView.tsx.
+
+export async function reorderQuoteSections(
+  updates: { id: string; orderIndex: number }[]
+): Promise<{ error: string } | null> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin' && profile.role !== 'supervisor') {
+    return { error: 'Only admins and supervisors can reorder quotes.' }
+  }
+  if (updates.length === 0) return null
+
+  const supabase = await createClient()
+  const results = await Promise.all(
+    updates.map((u) => supabase.from('quote_sections').update({ order_index: u.orderIndex }).eq('id', u.id))
+  )
+  const failed = results.find((r) => r.error)
+  if (failed?.error) return { error: failed.error.message }
+
+  revalidatePath('/quotes')
+  return null
+}
+
+export async function reorderQuoteLineItems(
+  updates: { id: string; orderIndex: number }[]
+): Promise<{ error: string } | null> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin' && profile.role !== 'supervisor') {
+    return { error: 'Only admins and supervisors can reorder quotes.' }
+  }
+  if (updates.length === 0) return null
+
+  const supabase = await createClient()
+  const results = await Promise.all(
+    updates.map((u) => supabase.from('quote_line_items').update({ order_index: u.orderIndex }).eq('id', u.id))
+  )
+  const failed = results.find((r) => r.error)
+  if (failed?.error) return { error: failed.error.message }
+
+  revalidatePath('/quotes')
+  return null
+}
+
 export async function deleteQuote(
   formData: FormData
 ): Promise<{ error: string } | null> {
