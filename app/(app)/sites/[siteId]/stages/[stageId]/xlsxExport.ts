@@ -26,11 +26,11 @@ const M2_FMT = '0.00'
 
 const HEADERS = [
   'Lot', 'Design', 'Notes', 'Front m²', 'Rear m²', 'Total m²',
-  'Cost per m²', 'Budget', 'Actual', 'Client Extras', 'Total',
+  'Cost per m²', 'Estimate', 'Contract Price', 'Actual', 'Client Extras', 'Total',
 ]
 const NUM_COLS = HEADERS.length
 const M2_COLS = new Set([3, 4, 5])
-const CURRENCY_COLS = new Set([6, 7, 8, 9, 10])
+const CURRENCY_COLS = new Set([6, 7, 8, 9, 10, 11])
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CellStyle = Record<string, any>
@@ -93,7 +93,7 @@ export async function downloadStageEstimatesXlsx(data: StageEstimateExport): Pro
       lot.lotNumber, lot.homeDesign, lot.notes,
       lot.frontM2, lot.rearM2, lot.totalM2,
       lot.costPerM2,
-      lot.budget, lot.actual, lot.clientExtras, lot.total,
+      lot.budget, lot.contractPrice, lot.actual, lot.clientExtras, lot.total,
     ])
     lotRows.push(aoa.length - 1)
   }
@@ -108,7 +108,8 @@ export async function downloadStageEstimatesXlsx(data: StageEstimateExport): Pro
     'TOTAL', null, null,
     sum(lots, (l) => l.frontM2), sum(lots, (l) => l.rearM2), sum(lots, (l) => l.totalM2),
     avgCostPerM2,
-    sum(lots, (l) => l.budget), sum(lots, (l) => l.actual), sum(lots, (l) => l.clientExtras), sum(lots, (l) => l.total),
+    sum(lots, (l) => l.budget), sum(lots, (l) => l.contractPrice ?? 0),
+    sum(lots, (l) => l.actual), sum(lots, (l) => l.clientExtras), sum(lots, (l) => l.total),
   ])
   const totalsRow = aoa.length - 1
 

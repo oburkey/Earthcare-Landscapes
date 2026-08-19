@@ -12,6 +12,7 @@ export type StageEstimateExportLot = {
   totalM2: number
   costPerM2: number | null
   budget: number
+  contractPrice: number | null
   actual: number
   clientExtras: number
   total: number
@@ -109,13 +110,14 @@ export async function getStageEstimatesExport(
 
   const { data: stage } = await supabase
     .from('stages')
-    .select('name, sites!inner(name)')
+    .select('name, default_contract_price, sites!inner(name)')
     .eq('id', stageId)
     .single()
   if (!stage) return { error: 'Stage not found.' }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const site = Array.isArray(stage.sites) ? (stage.sites as any)[0] : (stage.sites as any)
+  const stageDefaultContractPrice = stage.default_contract_price != null ? Number(stage.default_contract_price) : null
 
   const ITEMS_SELECT = `
     item_name, quantity, unit_price_snapshot,
@@ -128,7 +130,7 @@ export async function getStageEstimatesExport(
   const { data: lots, error } = await supabase
     .from('lots')
     .select(`
-      id, lot_number, home_design, notes, is_corner,
+      id, lot_number, home_design, notes, is_corner, contract_price,
       lot_quotes(quote_type, lot_quote_items(${ITEMS_SELECT}))
     `)
     .eq('stage_id', stageId)
@@ -165,13 +167,16 @@ export async function getStageEstimatesExport(
     const isCorner = (lot as { is_corner?: boolean }).is_corner ?? false
     const notes = isCorner ? (rawNotes ? `${rawNotes} · Corner` : 'Corner') : rawNotes
 
+    const ownContractPrice = (lot as { contract_price?: number | null }).contract_price
+    const contractPrice = (ownContractPrice != null ? Number(ownContractPrice) : null) ?? stageDefaultContractPrice
+
     result.push({
       lotNumber: lot.lot_number,
       homeDesign: (lot as { home_design?: string | null }).home_design ?? null,
       notes,
       frontM2, rearM2, totalM2,
       costPerM2: totalM2 > 0 ? budget / totalM2 : null,
-      budget, actual, clientExtras, total,
+      budget, contractPrice, actual, clientExtras, total,
     })
   }
 
