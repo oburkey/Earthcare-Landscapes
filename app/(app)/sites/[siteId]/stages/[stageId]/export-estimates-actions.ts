@@ -3,36 +3,102 @@
 import { requireAuth } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 
-export type StageEstimateExportItem = {
-  key: string
-  name: string
-  unit: string
-  orderIndex: number
-  rate: number | null
-  qtyByLot: Record<string, number>
-}
-
-export type StageEstimateExportSection = {
-  key: string
-  name: string
-  orderIndex: number
-  items: StageEstimateExportItem[]
+export type StageEstimateExportLot = {
+  lotNumber: string
+  homeDesign: string | null
+  notes: string | null
+  frontM2: number
+  rearM2: number
+  totalM2: number
+  costPerM2: number | null
+  budget: number
+  actual: number
+  clientExtras: number
+  total: number
 }
 
 export type StageEstimateExport = {
   siteName: string
   stageName: string
-  lotNumbers: string[]
-  sections: StageEstimateExportSection[]
-  lotTotals: Record<string, number>
-  grandTotal: number
+  lots: StageEstimateExportLot[]
 }
 
-// Admin-only export of every lot's ESTIMATE quant sheet in a stage, shaped
-// into a section -> item -> per-lot-quantity matrix for the Excel export.
-// Only items with a non-zero quantity become rows (matches the convention
-// used elsewhere — e.g. invoices/page.tsx's buildSections — of only showing
-// what was actually entered, not every possible template item).
+// Item names counted toward Front/Rear m² — turf + ground-cover mulch/gravel
+// types. Which of Front/Rear an item counts toward is decided by the
+// section its template row lives in (real section names are
+// "Hardscape Works — Front" / "Softscape Works — Front" / "Rear & Side Lot"
+// — see app/(app)/analytics/lib.ts), so the same item name appearing in
+// both a front and a rear section is attributed correctly per lot.
+const M2_ITEM_NAMES = new Set([
+  'Artificial Turf', 'Artificial turf',
+  'Mulch Limestone 32mm', 'Limestone Mulch', 'Black Mulch',
+  'Laterite compacted gravel', 'Laterite Gravel Mulch',
+  'Recycled Brick',
+])
+
+type RawItem = {
+  item_name: string
+  quantity: number | null
+  unit_price_snapshot: number | null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  quote_template_items: any
+}
+
+function one<T>(rel: T | T[] | null | undefined): T | null {
+  if (!rel) return null
+  return Array.isArray(rel) ? (rel[0] ?? null) : rel
+}
+
+function itemAmount(item: RawItem): number {
+  const qty = Number(item.quantity ?? 0)
+  const tpl = one(item.quote_template_items)
+  const price = Number(item.unit_price_snapshot ?? tpl?.unit_price ?? 0)
+  return qty * price
+}
+
+// is_client_extra on quote_template_sections is the authoritative Providence
+// Works vs Client Extras flag used everywhere else in the app (invoices,
+// analytics) — more reliable than string-matching the section name.
+function isClientExtra(item: RawItem): boolean {
+  const tpl = one(item.quote_template_items)
+  const section = one(tpl?.quote_template_sections)
+  return section?.is_client_extra ?? false
+}
+
+function sectionName(item: RawItem): string {
+  const tpl = one(item.quote_template_items)
+  const section = one(tpl?.quote_template_sections)
+  return section?.name ?? ''
+}
+
+function m2Qty(items: RawItem[] | null | undefined, direction: 'Front' | 'Rear'): number {
+  if (!items) return 0
+  let total = 0
+  for (const item of items) {
+    const tpl = one(item.quote_template_items)
+    const name = item.item_name || tpl?.name || ''
+    if (!M2_ITEM_NAMES.has(name)) continue
+    const sName = sectionName(item)
+    if (!sName.includes(direction) && !name.includes(direction)) continue
+    total += Number(item.quantity ?? 0)
+  }
+  return total
+}
+
+function providenceTotal(items: RawItem[] | null | undefined): number {
+  if (!items) return 0
+  return items.reduce((sum, item) => sum + (isClientExtra(item) ? 0 : itemAmount(item)), 0)
+}
+
+function clientExtrasTotal(items: RawItem[] | null | undefined): number {
+  if (!items) return 0
+  return items.reduce((sum, item) => sum + (isClientExtra(item) ? itemAmount(item) : 0), 0)
+}
+
+// Admin-only export — one summary row per lot: Providence Works Budget
+// (estimate) vs Actual (final) vs Client Extras (final), plus front/rear m²
+// derived from the estimate quant sheet. A lot is included if it has an
+// estimate and/or a final quant sheet; lots with neither are skipped.
 export async function getStageEstimatesExport(
   stageId: string
 ): Promise<{ data?: StageEstimateExport; error?: string }> {
@@ -51,95 +117,67 @@ export async function getStageEstimatesExport(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const site = Array.isArray(stage.sites) ? (stage.sites as any)[0] : (stage.sites as any)
 
-  // lot_quotes!inner + the nested .eq() below restrict to lots that actually
-  // have an estimate quant sheet — lots without one simply don't appear.
+  const ITEMS_SELECT = `
+    item_name, quantity, unit_price_snapshot,
+    quote_template_items(
+      name, unit_price,
+      quote_template_sections(name, is_client_extra)
+    )
+  `
+
   const { data: lots, error } = await supabase
     .from('lots')
     .select(`
-      id, lot_number,
-      lot_quotes!inner(
-        quote_type,
-        lot_quote_items(
-          item_name, unit, quantity, unit_price_snapshot, template_item_id,
-          quote_template_items(
-            name, unit, unit_price, order_index, section_id,
-            quote_template_sections(name, order_index)
-          )
-        )
-      )
+      id, lot_number, home_design, notes,
+      lot_quotes(quote_type, lot_quote_items(${ITEMS_SELECT}))
     `)
     .eq('stage_id', stageId)
-    .eq('lot_quotes.quote_type', 'estimate')
 
   if (error) return { error: error.message }
-  if (!lots || lots.length === 0) return { error: 'No estimate quant sheets found for this stage.' }
+  if (!lots || lots.length === 0) return { error: 'No lots found for this stage.' }
 
   const sortedLots = [...lots].sort((a, b) =>
     a.lot_number.localeCompare(b.lot_number, undefined, { numeric: true })
   )
-  const lotNumbers = sortedLots.map((l) => l.lot_number)
 
-  const sectionMap = new Map<string, StageEstimateExportSection>()
-  const lotTotals: Record<string, number> = {}
+  const result: StageEstimateExportLot[] = []
 
   for (const lot of sortedLots) {
-    lotTotals[lot.lot_number] = 0
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const quotes = (lot.lot_quotes ?? []) as any[]
-    const estimateQuote = quotes[0]
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const items = (estimateQuote?.lot_quote_items ?? []) as any[]
+    const estimateQuote = quotes.find((q) => q.quote_type === 'estimate')
+    const finalQuote = quotes.find((q) => q.quote_type === 'final')
+    if (!estimateQuote && !finalQuote) continue
 
-    for (const item of items) {
-      const qty = Number(item.quantity ?? 0)
-      if (!qty) continue
+    const estimateItems = (estimateQuote?.lot_quote_items ?? []) as RawItem[]
+    const finalItems = (finalQuote?.lot_quote_items ?? []) as RawItem[]
 
-      const tpl = Array.isArray(item.quote_template_items) ? item.quote_template_items[0] : item.quote_template_items
-      const section = tpl
-        ? (Array.isArray(tpl.quote_template_sections) ? tpl.quote_template_sections[0] : tpl.quote_template_sections)
-        : null
+    const frontM2 = m2Qty(estimateItems, 'Front')
+    const rearM2  = m2Qty(estimateItems, 'Rear')
+    const totalM2 = frontM2 + rearM2
 
-      const rate: number | null = item.unit_price_snapshot ?? tpl?.unit_price ?? null
-      lotTotals[lot.lot_number] += qty * (rate ?? 0)
+    const budget       = providenceTotal(estimateItems)
+    const actual       = providenceTotal(finalItems)
+    const clientExtras = clientExtrasTotal(finalItems)
+    const total        = actual + clientExtras
 
-      const sectionKey = tpl?.section_id ?? '__other__'
-      const sectionName = section?.name ?? 'Other'
-      const sectionOrder = section?.order_index ?? 999
-
-      const itemKey = item.template_item_id ?? item.item_name
-      const itemName = item.item_name || tpl?.name || ''
-      const unit = item.unit || tpl?.unit || ''
-      const itemOrder = tpl?.order_index ?? 999
-
-      if (!sectionMap.has(sectionKey)) {
-        sectionMap.set(sectionKey, { key: sectionKey, name: sectionName, orderIndex: sectionOrder, items: [] })
-      }
-      const sec = sectionMap.get(sectionKey)!
-      let row = sec.items.find((i) => i.key === itemKey)
-      if (!row) {
-        row = { key: itemKey, name: itemName, unit, orderIndex: itemOrder, rate: null, qtyByLot: {} }
-        sec.items.push(row)
-      }
-      if (row.rate == null && rate != null) row.rate = rate
-      row.qtyByLot[lot.lot_number] = qty
-    }
+    result.push({
+      lotNumber: lot.lot_number,
+      homeDesign: (lot as { home_design?: string | null }).home_design ?? null,
+      notes: (lot as { notes?: string | null }).notes ?? null,
+      frontM2, rearM2, totalM2,
+      costPerM2: totalM2 > 0 ? actual / totalM2 : null,
+      budget, actual, clientExtras, total,
+    })
   }
 
-  const sections = [...sectionMap.values()]
-    .sort((a, b) => a.orderIndex - b.orderIndex)
-    .map((s) => ({ ...s, items: [...s.items].sort((a, b) => a.orderIndex - b.orderIndex) }))
-
-  const grandTotal = Object.values(lotTotals).reduce((sum, v) => sum + v, 0)
+  if (result.length === 0) return { error: 'No estimate or final quant sheets found for this stage.' }
 
   return {
     data: {
       siteName: site?.name ?? '',
       stageName: stage.name,
-      lotNumbers,
-      sections,
-      lotTotals,
-      grandTotal,
+      lots: result,
     },
   }
 }
