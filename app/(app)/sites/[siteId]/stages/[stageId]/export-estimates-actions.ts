@@ -128,7 +128,7 @@ export async function getStageEstimatesExport(
   const { data: lots, error } = await supabase
     .from('lots')
     .select(`
-      id, lot_number, home_design, notes,
+      id, lot_number, home_design, notes, is_corner,
       lot_quotes(quote_type, lot_quote_items(${ITEMS_SELECT}))
     `)
     .eq('stage_id', stageId)
@@ -161,12 +161,16 @@ export async function getStageEstimatesExport(
     const clientExtras = clientExtrasTotal(finalItems)
     const total        = actual + clientExtras
 
+    const rawNotes = (lot as { notes?: string | null }).notes ?? null
+    const isCorner = (lot as { is_corner?: boolean }).is_corner ?? false
+    const notes = isCorner ? (rawNotes ? `${rawNotes} · Corner` : 'Corner') : rawNotes
+
     result.push({
       lotNumber: lot.lot_number,
       homeDesign: (lot as { home_design?: string | null }).home_design ?? null,
-      notes: (lot as { notes?: string | null }).notes ?? null,
+      notes,
       frontM2, rearM2, totalM2,
-      costPerM2: totalM2 > 0 ? actual / totalM2 : null,
+      costPerM2: totalM2 > 0 ? budget / totalM2 : null,
       budget, actual, clientExtras, total,
     })
   }
