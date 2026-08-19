@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAuth } from '@/lib/auth'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { uploadToR2 } from '@/lib/r2'
@@ -73,7 +74,12 @@ export async function importBulkSitePlans(formData: FormData): Promise<BulkImpor
   const count = parseInt((formData.get('count') as string) ?? '0', 10)
   if (!count || count <= 0) return { imported: 0, errors: [] }
 
-  const supabase = await createClient()
+  // Service-role client, not the session-bound one — this action is already
+  // fully gated to admin above, so bypassing RLS here just removes it as a
+  // possible point of failure for a write that's already been authorized in
+  // application code. Same pattern as materials/stock-deduction.ts's
+  // applyStockDelta.
+  const supabase = createAdminClient()
   const errors: Array<{ filename: string; error: string }> = []
   let imported = 0
 
@@ -99,42 +105,50 @@ export async function importBulkSitePlans(formData: FormData): Promise<BulkImpor
       continue
     }
 
-    const { ext, contentType } = extAndContentType(file)
-    const key = `lot-documents/${lotId}/${crypto.randomUUID()}.${ext}`
-    const documentName = file.name.replace(/\.[^/.]+$/, '')
-
+    // Whole row wrapped in one try/catch (upload + both DB writes) so any
+    // thrown error — R2, Supabase, or otherwise — is logged and turned into
+    // a per-row error instead of crashing the whole action (which previously
+    // surfaced to the browser as the generic "Something went wrong" page).
     try {
+      const { ext, contentType } = extAndContentType(file)
+      const key = `lot-documents/${lotId}/${crypto.randomUUID()}.${ext}`
+      const documentName = file.name.replace(/\.[^/.]+$/, '')
+
       const buffer = Buffer.from(await file.arrayBuffer())
       await uploadToR2(key, buffer, contentType)
+
+      const { error: dbError } = await supabase.from('lot_documents').insert({
+        lot_id:        lotId,
+        storage_path:  key,
+        document_name: documentName,
+        document_type: 'site_plan',
+        uploaded_by:   profile.id,
+      })
+      if (dbError) {
+        console.error('[bulkSitePlanActions] lot_documents insert failed', { filename, lotId, dbError })
+        errors.push({ filename, error: dbError.message })
+        continue
+      }
+
+      const updateHomeDesign = formData.get(`update_home_design_${i}`) === 'true'
+      const homeDesign = (formData.get(`home_design_${i}`) as string)?.trim() || null
+      if (updateHomeDesign && homeDesign) {
+        const { error: hdError } = await supabase
+          .from('lots')
+          .update({ home_design: homeDesign, updated_by: profile.id })
+          .eq('id', lotId)
+        if (hdError) {
+          console.error('[bulkSitePlanActions] home design update failed', { filename, lotId, hdError })
+          errors.push({ filename, error: `Uploaded, but failed to update home design: ${hdError.message}` })
+        }
+      }
+
+      imported++
+      touchedLotPaths.add(`/sites/${siteId}/stages/${stageId}/lots/${lotId}`)
     } catch (e) {
-      errors.push({ filename, error: e instanceof Error ? e.message : 'Upload failed.' })
-      continue
+      console.error('[bulkSitePlanActions] importBulkSitePlans row failed', { filename, lotId, error: e })
+      errors.push({ filename, error: e instanceof Error ? e.message : 'Unexpected error during import.' })
     }
-
-    const { error: dbError } = await supabase.from('lot_documents').insert({
-      lot_id:        lotId,
-      storage_path:  key,
-      document_name: documentName,
-      document_type: 'site_plan',
-      uploaded_by:   profile.id,
-    })
-    if (dbError) {
-      errors.push({ filename, error: dbError.message })
-      continue
-    }
-
-    const updateHomeDesign = formData.get(`update_home_design_${i}`) === 'true'
-    const homeDesign = (formData.get(`home_design_${i}`) as string)?.trim() || null
-    if (updateHomeDesign && homeDesign) {
-      const { error: hdError } = await supabase
-        .from('lots')
-        .update({ home_design: homeDesign, updated_by: profile.id })
-        .eq('id', lotId)
-      if (hdError) errors.push({ filename, error: `Uploaded, but failed to update home design: ${hdError.message}` })
-    }
-
-    imported++
-    touchedLotPaths.add(`/sites/${siteId}/stages/${stageId}/lots/${lotId}`)
   }
 
   for (const path of touchedLotPaths) revalidatePath(path)
