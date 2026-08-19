@@ -42,6 +42,7 @@ export default function BulkSitePlanUpload({ stageId }: Props) {
   const [dragOver, setDragOver] = useState(false)
   const [importing, startImporting] = useTransition()
   const [result, setResult] = useState<BulkImportResult | null>(null)
+  const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Loads as soon as this mode is mounted — it's only ever rendered while
@@ -108,36 +109,48 @@ export default function BulkSitePlanUpload({ stageId }: Props) {
   const readyCount = rows.filter((r) => r.matchedLotId && !r.importedAt).length
   const anyParsedHomeDesign = rows.some((r) => r.parsedHomeDesign && r.matchedLotId && !r.importedAt)
 
+  // One importBulkSitePlans call per file, awaited sequentially — not one
+  // call with every file batched into a single FormData. A batched request
+  // combining several PDFs could exceed Next.js's server-action body size
+  // limit even though each file is individually well under its own cap, and
+  // uploading them all inside one action invocation risked the function
+  // timeout too. One at a time avoids both, and gives real per-file progress.
   function handleImport() {
     const readyRows = rows.filter((r) => r.matchedLotId && !r.importedAt)
     if (readyRows.length === 0) return
 
-    const fd = new FormData()
-    fd.set('count', String(readyRows.length))
-    readyRows.forEach((row, i) => {
-      const lot = lots.find((l) => l.id === row.matchedLotId)
-      if (!lot) return
-      fd.set(`file_${i}`, row.file)
-      fd.set(`lot_id_${i}`, lot.id)
-      fd.set(`site_id_${i}`, lot.siteId)
-      fd.set(`stage_id_${i}`, lot.stageId)
-      fd.set(`update_home_design_${i}`, String(row.updateHomeDesign))
-      fd.set(`home_design_${i}`, row.parsedHomeDesign ?? '')
-    })
-
     startImporting(async () => {
-      const res = await importBulkSitePlans(fd)
-      setResult(res)
-      const errorsByFilename = new Map(res.errors.map((e) => [e.filename, e.error]))
-      const importedRowFilenames = new Set(readyRows.map((r) => r.filename))
-      const now = new Date().toISOString()
-      setRows((prev) => prev.map((r) => {
-        if (!importedRowFilenames.has(r.filename)) return r
-        const rowError = errorsByFilename.get(r.filename) ?? null
-        // Row was attempted this round — mark it imported (with today's date)
-        // unless it came back in the error list.
-        return { ...r, error: rowError, importedAt: rowError ? null : now }
-      }))
+      let totalImported = 0
+      const allErrors: BulkImportResult['errors'] = []
+      setImportProgress({ done: 0, total: readyRows.length })
+
+      for (const row of readyRows) {
+        const lot = lots.find((l) => l.id === row.matchedLotId)
+        if (!lot) continue
+
+        const fd = new FormData()
+        fd.set('count', '1')
+        fd.set('file_0', row.file)
+        fd.set('lot_id_0', lot.id)
+        fd.set('site_id_0', lot.siteId)
+        fd.set('stage_id_0', lot.stageId)
+        fd.set('update_home_design_0', String(row.updateHomeDesign))
+        fd.set('home_design_0', row.parsedHomeDesign ?? '')
+
+        const res = await importBulkSitePlans(fd)
+        totalImported += res.imported
+        allErrors.push(...res.errors)
+
+        const rowError = res.errors[0]?.error ?? null
+        const now = new Date().toISOString()
+        setRows((prev) => prev.map((r) =>
+          r.file === row.file ? { ...r, error: rowError, importedAt: rowError ? null : now } : r
+        ))
+        setResult({ imported: totalImported, errors: allErrors })
+        setImportProgress((prev) => prev ? { done: prev.done + 1, total: prev.total } : null)
+      }
+
+      setImportProgress(null)
       router.refresh()
     })
   }
@@ -290,7 +303,9 @@ export default function BulkSitePlanUpload({ stageId }: Props) {
             onClick={handleImport}
             className="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {importing ? 'Importing…' : `Import ${readyCount} file${readyCount !== 1 ? 's' : ''}`}
+            {importing
+              ? (importProgress ? `Importing ${importProgress.done}/${importProgress.total}…` : 'Importing…')
+              : `Import ${readyCount} file${readyCount !== 1 ? 's' : ''}`}
           </button>
           {(() => {
             const unmatchedCount = rows.filter((r) => !r.matchedLotId && !r.importedAt).length
