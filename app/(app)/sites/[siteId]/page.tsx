@@ -5,7 +5,6 @@ import { getCachedSite } from '@/lib/data'
 import { createClient } from '@/lib/supabase/server'
 import EditSiteForm from './EditSiteForm'
 import SitePlanManager from './SitePlanManager'
-import BulkSitePlanUpload from './BulkSitePlanUpload'
 import StageListActions from './StageListActions'
 import SiteReferenceDocs, { type ReferenceDocRow } from './SiteReferenceDocs'
 import { getR2SignedUrlSafe } from '@/lib/r2'
@@ -171,13 +170,6 @@ export default async function SitePage({ params }: Props) {
             legacyPlanUrl={legacyPlanUrl}
           />
         </div>
-
-        {/* Bulk site plan import — matches lot document PDFs/images to lots by filename */}
-        {isAdmin && (
-          <div>
-            <BulkSitePlanUpload />
-          </div>
-        )}
 
         {/* Stages section */}
         <div>

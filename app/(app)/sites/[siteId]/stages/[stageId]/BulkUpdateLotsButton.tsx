@@ -4,11 +4,18 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { previewBulkUpdateLots, bulkUpdateLots } from './actions'
 import type { BulkUpdateResult, BulkDateMode, BulkPreviewRow } from './actions'
+import BulkSitePlanUpload from '../../BulkSitePlanUpload'
 
 interface Props {
   stageId: string
   siteId:  string
 }
+
+// Local UI mode — adds a fifth "Site Plans" toggle alongside the four
+// BulkDateMode text-import modes. Kept out of BulkDateMode itself since
+// site plan upload doesn't go through previewBulkUpdateLots/bulkUpdateLots
+// at all (it's a completely different flow — drag-and-drop file matching).
+type PanelMode = BulkDateMode | 'site_plans'
 
 const PLACEHOLDER: Record<BulkDateMode, string> = {
   due_only:         '059\t03/04/2026\tBillie Jean\n076\t03/04/2026\n077\t25/03/2026\tCecilia',
@@ -34,7 +41,7 @@ export default function BulkUpdateLotsButton({ stageId, siteId }: Props) {
   const router = useRouter()
   const [open, setOpen]     = useState(false)
   const [text, setText]     = useState('')
-  const [mode, setMode]     = useState<BulkDateMode>('due_only')
+  const [mode, setMode]     = useState<PanelMode>('due_only')
   const [preview, setPreview] = useState<BulkPreviewRow[] | null>(null)
   const [result, setResult]   = useState<BulkUpdateResult | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -62,13 +69,14 @@ export default function BulkUpdateLotsButton({ stageId, siteId }: Props) {
     setResult(null)
   }
 
-  function handleModeChange(value: BulkDateMode) {
+  function handleModeChange(value: PanelMode) {
     setMode(value)
     setPreview(null)
     setResult(null)
   }
 
   function handlePreview() {
+    if (mode === 'site_plans') return
     startTransition(async () => {
       const rows = await previewBulkUpdateLots(stageId, text, mode)
       setPreview(rows)
@@ -77,6 +85,7 @@ export default function BulkUpdateLotsButton({ stageId, siteId }: Props) {
   }
 
   function handleConfirm() {
+    if (mode === 'site_plans') return
     startTransition(async () => {
       const r = await bulkUpdateLots(stageId, siteId, text, mode)
       setResult(r)
@@ -117,8 +126,8 @@ export default function BulkUpdateLotsButton({ stageId, siteId }: Props) {
       </div>
 
       {/* Format toggle */}
-      <div className="flex gap-1 rounded-lg border border-border p-1 w-fit">
-        {(['due_only', 'start_and_due', 'start_only', 'home_design_only'] as const).map((m) => (
+      <div className="flex gap-1 rounded-lg border border-border p-1 w-fit flex-wrap">
+        {(['due_only', 'start_and_due', 'start_only', 'home_design_only', 'site_plans'] as const).map((m) => (
           <button
             key={m}
             type="button"
@@ -130,131 +139,138 @@ export default function BulkUpdateLotsButton({ stageId, siteId }: Props) {
             {m === 'due_only' ? 'Due date only'
               : m === 'start_and_due' ? 'Start + Due date'
               : m === 'start_only' ? 'Start date only'
-              : 'Home Design only'}
+              : m === 'home_design_only' ? 'Home Design only'
+              : 'Site Plans'}
           </button>
         ))}
       </div>
 
-      <p className="text-xs text-fg-muted">
-        {HELP_TEXT[mode]} Lots that exist will be updated; lots that don&apos;t exist will be created.
-      </p>
-
-      <textarea
-        value={text}
-        onChange={e => handleTextChange(e.target.value)}
-        placeholder={PLACEHOLDER[mode]}
-        rows={6}
-        disabled={isPending}
-        className="w-full rounded-lg border border-border px-3 py-2 text-sm font-mono text-fg placeholder:text-fg-muted focus:border-border focus:outline-none resize-y disabled:opacity-60 bg-surface"
-      />
-
-      {/* Preview table */}
-      {preview && preview.length > 0 && (
-        <div className="rounded-lg border border-border overflow-hidden">
-          <div className="overflow-x-auto max-h-72 overflow-y-auto">
-            <table className="w-full text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-border bg-surface-raised text-fg-muted sticky top-0">
-                  <th className="text-left font-medium px-2.5 py-1.5 whitespace-nowrap">Lot</th>
-                  {(mode === 'start_and_due' || mode === 'start_only') && (
-                    <th className="text-left font-medium px-2.5 py-1.5 whitespace-nowrap">Start Date</th>
-                  )}
-                  {mode !== 'start_only' && mode !== 'home_design_only' && (
-                    <th className="text-left font-medium px-2.5 py-1.5 whitespace-nowrap">Due Date</th>
-                  )}
-                  <th className="text-left font-medium px-2.5 py-1.5 whitespace-nowrap">Home Design</th>
-                  <th className="text-left font-medium px-2.5 py-1.5 whitespace-nowrap">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {preview.map((row, i) => (
-                  <tr key={i} className="border-b border-border-subtle last:border-0">
-                    <td className="px-2.5 py-1.5 text-fg-secondary whitespace-nowrap">{row.lotNumber ?? '—'}</td>
-                    {(mode === 'start_and_due' || mode === 'start_only') && (
-                      <td className="px-2.5 py-1.5 text-fg-secondary whitespace-nowrap">{formatDateDisplay(row.startDate)}</td>
-                    )}
-                    {mode !== 'start_only' && mode !== 'home_design_only' && (
-                      <td className="px-2.5 py-1.5 text-fg-secondary whitespace-nowrap">{formatDateDisplay(row.dueDate)}</td>
-                    )}
-                    <td className="px-2.5 py-1.5 text-fg-secondary whitespace-nowrap">{row.homeDesign ?? '—'}</td>
-                    <td className="px-2.5 py-1.5 whitespace-nowrap">
-                      {row.error ? (
-                        <span className="font-medium text-red-600" title={row.error}>✗ {row.error}</span>
-                      ) : row.action === 'create' ? (
-                        <span className="font-medium text-accent-fg">+ Create</span>
-                      ) : (
-                        <span className="font-medium text-green-700 dark:text-green-400">✓ Update</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {result && (
-        <div className="space-y-2">
-          <p className="text-sm text-fg-secondary">
-            <span className="font-semibold text-accent-fg">{result.updated} updated</span>
-            {', '}
-            <span className="font-semibold text-accent-fg">{result.created} created</span>
-            {result.errors.length > 0 && (
-              <span className="text-fg-muted">{', '}{result.errors.length} error{result.errors.length !== 1 ? 's' : ''}</span>
-            )}
+      {mode === 'site_plans' ? (
+        <BulkSitePlanUpload stageId={stageId} />
+      ) : (
+        <>
+          <p className="text-xs text-fg-muted">
+            {HELP_TEXT[mode]} Lots that exist will be updated; lots that don&apos;t exist will be created.
           </p>
-          {result.errors.length > 0 && (
-            <div className="rounded-lg bg-red-50 border border-red-100 px-3 py-2 space-y-1">
-              {result.errors.map((e, i) => (
-                <p key={i} className="text-xs text-red-700">{e}</p>
-              ))}
+
+          <textarea
+            value={text}
+            onChange={e => handleTextChange(e.target.value)}
+            placeholder={PLACEHOLDER[mode]}
+            rows={6}
+            disabled={isPending}
+            className="w-full rounded-lg border border-border px-3 py-2 text-sm font-mono text-fg placeholder:text-fg-muted focus:border-border focus:outline-none resize-y disabled:opacity-60 bg-surface"
+          />
+
+          {/* Preview table */}
+          {preview && preview.length > 0 && (
+            <div className="rounded-lg border border-border overflow-hidden">
+              <div className="overflow-x-auto max-h-72 overflow-y-auto">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-border bg-surface-raised text-fg-muted sticky top-0">
+                      <th className="text-left font-medium px-2.5 py-1.5 whitespace-nowrap">Lot</th>
+                      {(mode === 'start_and_due' || mode === 'start_only') && (
+                        <th className="text-left font-medium px-2.5 py-1.5 whitespace-nowrap">Start Date</th>
+                      )}
+                      {mode !== 'start_only' && mode !== 'home_design_only' && (
+                        <th className="text-left font-medium px-2.5 py-1.5 whitespace-nowrap">Due Date</th>
+                      )}
+                      <th className="text-left font-medium px-2.5 py-1.5 whitespace-nowrap">Home Design</th>
+                      <th className="text-left font-medium px-2.5 py-1.5 whitespace-nowrap">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.map((row, i) => (
+                      <tr key={i} className="border-b border-border-subtle last:border-0">
+                        <td className="px-2.5 py-1.5 text-fg-secondary whitespace-nowrap">{row.lotNumber ?? '—'}</td>
+                        {(mode === 'start_and_due' || mode === 'start_only') && (
+                          <td className="px-2.5 py-1.5 text-fg-secondary whitespace-nowrap">{formatDateDisplay(row.startDate)}</td>
+                        )}
+                        {mode !== 'start_only' && mode !== 'home_design_only' && (
+                          <td className="px-2.5 py-1.5 text-fg-secondary whitespace-nowrap">{formatDateDisplay(row.dueDate)}</td>
+                        )}
+                        <td className="px-2.5 py-1.5 text-fg-secondary whitespace-nowrap">{row.homeDesign ?? '—'}</td>
+                        <td className="px-2.5 py-1.5 whitespace-nowrap">
+                          {row.error ? (
+                            <span className="font-medium text-red-600" title={row.error}>✗ {row.error}</span>
+                          ) : row.action === 'create' ? (
+                            <span className="font-medium text-accent-fg">+ Create</span>
+                          ) : (
+                            <span className="font-medium text-green-700 dark:text-green-400">✓ Update</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
-        </div>
-      )}
 
-      <div className="flex items-center gap-3">
-        {!preview && !result && (
-          <button
-            type="button"
-            onClick={handlePreview}
-            disabled={isPending || !text.trim()}
-            className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-50 transition-colors"
-          >
-            {isPending ? 'Parsing…' : 'Preview'}
-          </button>
-        )}
-        {preview && (
-          <>
-            <button
-              type="button"
-              onClick={handleConfirm}
-              disabled={isPending || validRowCount === 0}
-              className="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50 transition-colors"
-            >
-              {isPending ? 'Importing…' : `Confirm import (${validRowCount})`}
-            </button>
-            <button
-              type="button"
-              onClick={() => setPreview(null)}
-              disabled={isPending}
-              className="text-sm text-fg-muted hover:text-fg-secondary transition-colors"
-            >
-              Back to edit
-            </button>
-          </>
-        )}
-        {result && (result.updated > 0 || result.created > 0) && (
-          <button
-            type="button"
-            onClick={handleClose}
-            className="text-sm text-fg-muted hover:text-fg-secondary transition-colors"
-          >
-            Done
-          </button>
-        )}
-      </div>
+          {result && (
+            <div className="space-y-2">
+              <p className="text-sm text-fg-secondary">
+                <span className="font-semibold text-accent-fg">{result.updated} updated</span>
+                {', '}
+                <span className="font-semibold text-accent-fg">{result.created} created</span>
+                {result.errors.length > 0 && (
+                  <span className="text-fg-muted">{', '}{result.errors.length} error{result.errors.length !== 1 ? 's' : ''}</span>
+                )}
+              </p>
+              {result.errors.length > 0 && (
+                <div className="rounded-lg bg-red-50 border border-red-100 px-3 py-2 space-y-1">
+                  {result.errors.map((e, i) => (
+                    <p key={i} className="text-xs text-red-700">{e}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center gap-3">
+            {!preview && !result && (
+              <button
+                type="button"
+                onClick={handlePreview}
+                disabled={isPending || !text.trim()}
+                className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-50 transition-colors"
+              >
+                {isPending ? 'Parsing…' : 'Preview'}
+              </button>
+            )}
+            {preview && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleConfirm}
+                  disabled={isPending || validRowCount === 0}
+                  className="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50 transition-colors"
+                >
+                  {isPending ? 'Importing…' : `Confirm import (${validRowCount})`}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreview(null)}
+                  disabled={isPending}
+                  className="text-sm text-fg-muted hover:text-fg-secondary transition-colors"
+                >
+                  Back to edit
+                </button>
+              </>
+            )}
+            {result && (result.updated > 0 || result.created > 0) && (
+              <button
+                type="button"
+                onClick={handleClose}
+                className="text-sm text-fg-muted hover:text-fg-secondary transition-colors"
+              >
+                Done
+              </button>
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }

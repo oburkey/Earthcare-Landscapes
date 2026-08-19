@@ -6,46 +6,34 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { uploadToR2 } from '@/lib/r2'
 import type { MatchableLot } from './bulkSitePlanParser'
 
-// Matching pool spans every active site, not just the one the bulk-upload
-// panel was opened from — a single batch commonly mixes filenames from
-// several developments (different prefixes), and filenames carry their own
-// site identifier, so there's no reason to restrict the match candidates.
-export async function getLotsForBulkMatch(): Promise<MatchableLot[]> {
+// Matching pool is scoped to a single stage — the bulk upload panel lives
+// inside BulkUpdateLotsButton on the stage page, one stage at a time.
+export async function getLotsForBulkMatch(stageId: string): Promise<MatchableLot[]> {
   const profile = await requireAuth()
   if (profile.role !== 'admin') return []
 
   const supabase = await createClient()
   const { data, error } = await supabase
-    .from('sites')
-    .select(`
-      id, name, completed_at,
-      stages(id, name, completed_at,
-        lots(id, lot_number, home_design)
-      )
-    `)
-    .is('completed_at', null)
-    .order('name')
+    .from('lots')
+    .select('id, lot_number, home_design, stages!inner(id, name, sites!inner(id, name))')
+    .eq('stage_id', stageId)
+    .order('lot_number')
 
   if (error || !data) return []
 
-  const lots: MatchableLot[] = []
-  for (const site of data) {
-    for (const stage of site.stages ?? []) {
-      if (stage.completed_at) continue
-      for (const lot of stage.lots ?? []) {
-        lots.push({
-          id:         lot.id,
-          lotNumber:  lot.lot_number,
-          siteId:     site.id,
-          siteName:   site.name,
-          stageId:    stage.id,
-          stageName:  stage.name,
-          homeDesign: lot.home_design ?? null,
-        })
-      }
+  return data.map((lot) => {
+    const stage = Array.isArray(lot.stages) ? lot.stages[0] : lot.stages as { id: string; name: string; sites: unknown }
+    const site = Array.isArray(stage.sites) ? stage.sites[0] : stage.sites as { id: string; name: string }
+    return {
+      id:         lot.id,
+      lotNumber:  lot.lot_number,
+      siteId:     site.id,
+      siteName:   site.name,
+      stageId:    stage.id,
+      stageName:  stage.name,
+      homeDesign: lot.home_design ?? null,
     }
-  }
-  return lots
+  })
 }
 
 const ACCEPTED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'heic', 'heif']
