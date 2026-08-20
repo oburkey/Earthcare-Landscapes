@@ -141,11 +141,37 @@ function claimSheetBody(
 ): string {
   const date = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
 
-  const grand = lot.contractPrice ?? (lot.standardAmount + lot.clientExtrasAmount)
+  // Contract price replaces the Providence Works subtotal only — client
+  // extras always come from the quant sheet regardless of contract pricing.
+  const grand = (lot.contractPrice ?? lot.standardAmount) + lot.clientExtrasAmount
 
-  let tableContent: string
+  const extras = lot.showClientExtras ? lot.sections.filter((s) => s.isClientExtra) : []
+  let secIdx = 0
+  function sectionItemRows(section: LotSection): string {
+    secIdx++
+    const prefix = section.isClientExtra ? 'E' : String(secIdx)
+    const items = section.items.map((item, i) => `
+      <tr>
+        <td class="code">${prefix}.${i + 1}</td>
+        <td>${item.name}</td>
+        <td class="r">${fmtQty(item.quantity)}</td>
+        <td class="u">${item.unit}</td>
+        <td class="r">${item.rate > 0 ? fmt(item.rate) : '—'}</td>
+        <td class="r">${item.rate > 0 ? fmt(item.total) : '—'}</td>
+      </tr>`).join('')
+    const sectionSubtotal = items
+      ? `<tr class="secsub"><td colspan="5">Subtotal</td><td class="r">${fmt(section.subtotal)}</td></tr>`
+      : ''
+    return `
+      <tr class="sec"><td colspan="6">${section.name}</td></tr>
+      ${items}
+      ${sectionSubtotal}`
+  }
+
+  let standardRows: string
+  let providenceSubtotal: string
   if (lot.contractPrice != null) {
-    tableContent = `
+    standardRows = `
       <tr>
         <td class="code">1</td>
         <td>Contract Price</td>
@@ -153,59 +179,30 @@ function claimSheetBody(
         <td class="u">Lot</td>
         <td class="r">${fmt(lot.contractPrice)}</td>
         <td class="r">${fmt(lot.contractPrice)}</td>
-      </tr>
-      <tr class="grand">
-        <td colspan="5">Grand Total (ex GST)</td>
-        <td class="r">${fmt(grand)}</td>
       </tr>`
+    providenceSubtotal = ''
   } else {
     const standard = lot.sections.filter((s) => !s.isClientExtra)
-    const extras   = lot.showClientExtras ? lot.sections.filter((s) => s.isClientExtra) : []
-    let secIdx = 0
-    function sectionItemRows(section: LotSection): string {
-      secIdx++
-      const prefix = section.isClientExtra ? 'E' : String(secIdx)
-      const items = section.items.map((item, i) => `
-        <tr>
-          <td class="code">${prefix}.${i + 1}</td>
-          <td>${item.name}</td>
-          <td class="r">${fmtQty(item.quantity)}</td>
-          <td class="u">${item.unit}</td>
-          <td class="r">${item.rate > 0 ? fmt(item.rate) : '—'}</td>
-          <td class="r">${item.rate > 0 ? fmt(item.total) : '—'}</td>
-        </tr>`).join('')
-      const sectionSubtotal = items
-        ? `<tr class="secsub"><td colspan="5">Subtotal</td><td class="r">${fmt(section.subtotal)}</td></tr>`
-        : ''
-      return `
-        <tr class="sec"><td colspan="6">${section.name}</td></tr>
-        ${items}
-        ${sectionSubtotal}`
-    }
-
-    // Each section gets its own subtotal row (sectionItemRows above), plus
-    // two aggregate subtotals — Providence Works (standard sections) and
-    // Client Extras — using the already-computed lot totals.
-    const standardRows = standard.map(sectionItemRows).join('')
-    const providenceSubtotal = standard.length > 0 ? `
+    standardRows = standard.map(sectionItemRows).join('')
+    providenceSubtotal = standard.length > 0 ? `
       <tr class="sub">
         <td colspan="5">Subtotal — Providence Works</td>
         <td class="r">${fmt(lot.standardAmount)}</td>
       </tr>` : ''
-
-    const extrasRows = extras.map(sectionItemRows).join('')
-    const extrasSubtotal = extras.length > 0 ? `
-      <tr class="sub">
-        <td colspan="5">Subtotal — Client Extras</td>
-        <td class="r">${fmt(lot.clientExtrasAmount)}</td>
-      </tr>` : ''
-
-    tableContent = `${standardRows}${providenceSubtotal}${extrasRows}${extrasSubtotal}
-      <tr class="grand">
-        <td colspan="5">Grand Total (ex GST)</td>
-        <td class="r">${fmt(grand)}</td>
-      </tr>`
   }
+
+  const extrasRows = extras.map(sectionItemRows).join('')
+  const extrasSubtotal = extras.length > 0 ? `
+    <tr class="sub">
+      <td colspan="5">Subtotal — Client Extras</td>
+      <td class="r">${fmt(lot.clientExtrasAmount)}</td>
+    </tr>` : ''
+
+  const tableContent = `${standardRows}${providenceSubtotal}${extrasRows}${extrasSubtotal}
+    <tr class="grand">
+      <td colspan="5">Grand Total (ex GST)</td>
+      <td class="r">${fmt(grand)}</td>
+    </tr>`
 
   return `
 <div class="invoice-page">
@@ -265,18 +262,18 @@ function stageSummaryBody(
 ): string {
   const date     = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
   const totStd   = stage.lots.reduce((s, l) => s + (l.contractPrice != null ? 0 : l.standardAmount), 0)
-  const totExtra = stage.lots.reduce((s, l) => s + (l.contractPrice != null ? 0 : l.clientExtrasAmount), 0)
+  const totExtra = stage.lots.reduce((s, l) => s + l.clientExtrasAmount, 0)
   const totContract = stage.lots.reduce((s, l) => s + (l.contractPrice ?? 0), 0)
   const totAmt   = totStd + totExtra + totContract
 
   const rows = stage.lots.map((lot) => {
     const inv   = invoicedMap[lot.id] ?? lot.invoiced
-    const total = lot.contractPrice ?? (lot.standardAmount + lot.clientExtrasAmount)
+    const total = (lot.contractPrice ?? lot.standardAmount) + lot.clientExtrasAmount
     return `<tr>
       <td>Lot ${lot.lotNumber}${lot.contractPrice != null ? ' <span style="color:#7c3aed;font-size:9px;font-weight:600">CONTRACT</span>' : ''}</td>
       <td class="c">${lot.buildComplete ? '✓' : '—'}</td>
       <td class="r">${lot.contractPrice != null ? '—' : fmt(lot.standardAmount)}</td>
-      <td class="r">${lot.contractPrice != null ? '—' : (lot.clientExtrasAmount > 0 ? fmt(lot.clientExtrasAmount) : '—')}</td>
+      <td class="r">${lot.clientExtrasAmount > 0 ? fmt(lot.clientExtrasAmount) : '—'}</td>
       <td class="r" style="font-weight:600">${fmt(total)}</td>
       <td class="c">${inv ? '✓' : ''}</td>
     </tr>`
@@ -876,7 +873,7 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
               <div className="border-t border-border-subtle divide-y divide-border-subtle">
                 {site.stages.map((stage) => {
                   const totStd        = stage.lots.reduce((s, l) => s + (l.contractPrice != null ? 0 : l.standardAmount), 0)
-                  const totExtra      = stage.lots.reduce((s, l) => s + (l.contractPrice != null ? 0 : l.clientExtrasAmount), 0)
+                  const totExtra      = stage.lots.reduce((s, l) => s + l.clientExtrasAmount, 0)
                   const totContract   = stage.lots.reduce((s, l) => s + (l.contractPrice ?? 0), 0)
                   const totAmt             = totStd + totExtra + totContract
                   const totEstimate        = stage.lots.reduce((s, l) => s + (l.estimateTotal ?? 0), 0)
@@ -953,7 +950,7 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                           </thead>
                           <tbody>
                             {stage.lots.map((lot) => {
-                              const total    = lot.contractPrice ?? (lot.standardAmount + lot.clientExtrasAmount)
+                              const total    = (lot.contractPrice ?? lot.standardAmount) + lot.clientExtrasAmount
                               const invoiced = invoicedMap[lot.id] ?? lot.invoiced
                               const selected = selectedLots.has(lot.id)
                               const genning  = generating.has(lot.id)
@@ -992,7 +989,7 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                                     {lot.contractPrice != null ? <span className="text-fg-muted">—</span> : fmt(lot.standardAmount)}
                                   </td>
                                   <td className="py-2.5 px-3 text-right tabular-nums text-fg-secondary">
-                                    {lot.contractPrice != null ? <span className="text-fg-muted">—</span> : (lot.clientExtrasAmount > 0 ? fmt(lot.clientExtrasAmount) : <span className="text-fg-muted">—</span>)}
+                                    {lot.clientExtrasAmount > 0 ? fmt(lot.clientExtrasAmount) : <span className="text-fg-muted">—</span>}
                                   </td>
                                   <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg">{fmt(total)}</td>
                                   <td className="py-2.5 px-3 text-center" onClick={e => e.stopPropagation()}>
@@ -1052,7 +1049,7 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                             })}
 
                             <tr className="border-t-2 border-border bg-surface-raised">
-                              <td colSpan={5} className="py-2.5 pr-6 font-semibold text-fg-secondary">Stage Total</td>
+                              <td colSpan={4} className="py-2.5 pr-6 font-semibold text-fg-secondary">Stage Total</td>
                               <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg-muted">{totEstimate > 0 ? fmt(totEstimate) : <span className="text-fg-muted">—</span>}</td>
                               <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg-secondary">{fmt(totStd)}</td>
                               <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg-secondary">
