@@ -179,11 +179,9 @@ export async function getStageEstimatesExport(
 
     const budget = providenceTotal(estimateItems)
     const actual = providenceTotal(finalItems)
-    // Prefer the final quant sheet's client extras; contract-priced (NLV)
-    // lots often never get a final filled in at all (their $ total doesn't
-    // depend on it), so without this fallback clientExtrasTotal(finalItems)
-    // silently returns 0 for them even when the estimate has real extras.
-    const clientExtras = clientExtrasTotal(finalQuote ? finalItems : estimateItems)
+    // This is an estimates export — client extras always come from the
+    // estimate quant sheet, same as Budget and the m² columns.
+    const clientExtras = clientExtrasTotal(estimateItems)
     const total        = actual + clientExtras
 
     const rawNotes = (lot as { notes?: string | null }).notes ?? null

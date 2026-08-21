@@ -186,7 +186,7 @@ function claimSheetBody(
     standardRows = standard.map(sectionItemRows).join('')
     providenceSubtotal = standard.length > 0 ? `
       <tr class="sub">
-        <td colspan="5">Subtotal — Providence Works</td>
+        <td colspan="5">Providence Works Subtotal</td>
         <td class="r">${fmt(lot.standardAmount)}</td>
       </tr>` : ''
   }
@@ -194,7 +194,7 @@ function claimSheetBody(
   const extrasRows = extras.map(sectionItemRows).join('')
   const extrasSubtotal = extras.length > 0 ? `
     <tr class="sub">
-      <td colspan="5">Subtotal — Client Extras</td>
+      <td colspan="5">Client Extras Subtotal</td>
       <td class="r">${fmt(lot.clientExtrasAmount)}</td>
     </tr>` : ''
 
