@@ -303,7 +303,7 @@ export default function LotQuantities({
     return v !== undefined && v !== '' ? parseFloat(v) : null
   }
 
-  function handleSave(submitStatus: 'draft' | 'submitted') {
+  function handleSave() {
     setError(null)
     setSaved(false)
 
@@ -321,7 +321,7 @@ export default function LotQuantities({
     startTransition(async () => {
       const result = await saveLotQuote({
         lotId, siteId, stageId, quoteType,
-        status: submitStatus,
+        status: 'submitted',
         notes,
         items,
       })
@@ -330,8 +330,7 @@ export default function LotQuantities({
     })
   }
 
-  const currentStatus = activeQuote?.status ?? 'draft'
-  const isApproved    = currentStatus === 'approved'
+  const isApproved = activeQuote?.status === 'approved'
   // Estimate is admin-only to edit (defense in depth — the tab is hidden from
   // non-admins entirely, and the server also rejects non-admin estimate saves).
   const canEditActiveTab    = canManage && (quoteType !== 'estimate' || isAdmin)
@@ -389,16 +388,11 @@ export default function LotQuantities({
           ))}
       </div>
 
-      {/* Status badge */}
-      {activeQuote && (
+      {/* Status badge — draft/submitted distinction removed; Approved still matters (locks editing) */}
+      {isApproved && (
         <div>
-          <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
-            currentStatus === 'approved'  ? 'bg-accent-dim text-accent-fg' :
-            currentStatus === 'submitted' ? 'bg-blue-100 text-blue-700'   :
-            'bg-surface-raised text-fg-muted'
-          }`}>
-            {currentStatus === 'approved' ? 'Approved' :
-             currentStatus === 'submitted' ? 'Submitted' : 'Draft'}
+          <span className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-accent-dim text-accent-fg">
+            Approved
           </span>
         </div>
       )}
@@ -670,24 +664,14 @@ export default function LotQuantities({
 
       {/* Actions */}
       {canEditActiveTab && !isApproved && (
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={() => handleSave('draft')}
-            disabled={isPending}
-            className="flex-1 rounded-lg border border-border px-4 py-3 text-sm font-medium text-fg-secondary hover:bg-surface-raised disabled:opacity-50"
-          >
-            {isPending ? 'Saving…' : 'Save draft'}
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSave('submitted')}
-            disabled={isPending}
-            className="flex-1 rounded-lg bg-green-700 px-4 py-3 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50"
-          >
-            {isPending ? 'Submitting…' : 'Submit'}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={isPending}
+          className="w-full rounded-lg bg-green-700 px-4 py-3 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50"
+        >
+          {isPending ? 'Saving…' : 'Save'}
+        </button>
       )}
 
       </>)}
