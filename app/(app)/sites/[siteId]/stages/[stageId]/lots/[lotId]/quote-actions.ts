@@ -129,6 +129,34 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
     if (insertError) return { error: insertError.message }
   }
 
+  // Sync the persistent lots.is_corner flag from the quant sheet's "Corner
+  // lot" toggle (quote_template_items.auto_calc_formula = 'corner_lot_flag')
+  // — whichever quote type was just saved. Replaces the old manual "Is
+  // corner lot" checkbox on the Edit Lot form; this toggle is now the single
+  // source of truth, kept in sync automatically on every save. Best-effort —
+  // never blocks the quant sheet save itself if it fails.
+  try {
+    const { data: cornerTemplateItem } = await supabase
+      .from('quote_template_items')
+      .select('id')
+      .eq('auto_calc_formula', 'corner_lot_flag')
+      .maybeSingle()
+
+    if (cornerTemplateItem) {
+      const cornerItem = items.find((i) => i.template_item_id === cornerTemplateItem.id)
+      const isCorner = cornerItem?.quantity === 1
+      const { error: cornerError } = await supabase
+        .from('lots')
+        .update({ is_corner: isCorner, updated_by: profile.id })
+        .eq('id', lotId)
+      if (cornerError) {
+        console.error('[lots/quote-actions] is_corner sync failed (non-blocking):', cornerError)
+      }
+    }
+  } catch (err) {
+    console.error('[lots/quote-actions] is_corner sync failed (non-blocking):', err)
+  }
+
   // When saving an estimate, auto-copy fine grading values to the final quote
   // if the final quote doesn't already have that item entered.
   if (quoteType === 'estimate') {

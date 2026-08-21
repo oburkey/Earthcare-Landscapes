@@ -16,9 +16,7 @@ interface Props {
   currentNotes: string | null
   currentDueDate: string | null
   currentScheduledDate: string | null
-  currentIsCorner?: boolean
   canManage: boolean
-  canSupervise?: boolean
   isAdmin?: boolean
   isContractPricing?: boolean
   contractPrice?: number | null
@@ -33,9 +31,7 @@ export default function EditLotForm({
   currentNotes,
   currentDueDate,
   currentScheduledDate,
-  currentIsCorner,
   canManage,
-  canSupervise,
   isAdmin,
   isContractPricing,
   contractPrice,
@@ -139,21 +135,6 @@ export default function EditLotForm({
             Fixed price for this lot (overrides quant sheet total)
           </p>
         </div>
-      )}
-
-      {/* Corner lot — supervisor/admin only */}
-      {canSupervise && (
-        <label htmlFor="is_corner" className="flex items-center gap-2 cursor-pointer select-none">
-          <input
-            id="is_corner"
-            name="is_corner"
-            type="checkbox"
-            value="true"
-            defaultChecked={currentIsCorner}
-            className="h-4 w-4 rounded border-border text-green-700 focus:ring-green-600"
-          />
-          <span className="text-sm font-medium text-fg-secondary">Is corner lot</span>
-        </label>
       )}
 
       {state?.error && (

@@ -74,7 +74,7 @@ export default async function LotPage({ params }: Props) {
       .from('lots')
       .select(`
         id, lot_number, status, due_date, scheduled_date, completion_date, notes, home_design,
-        build_complete, invoiced, has_client_extras, extras_notes, contract_price, is_corner,
+        build_complete, invoiced, has_client_extras, extras_notes, contract_price,
         pending_review, approved_for_invoicing, delayed, delay_reason, expected_completion_date,
         stages!inner(id, name, is_contract_pricing, default_contract_price, sites!inner(id, name, has_client_extras))
       `)
@@ -165,7 +165,6 @@ export default async function LotPage({ params }: Props) {
   const delayReason            = lotAny?.delay_reason            ?? null
   const expectedCompletionDate = lotAny?.expected_completion_date ?? null
   const homeDesign             = lotAny?.home_design             ?? null
-  const isCorner                = lotAny?.is_corner                ?? false
 
   const stage = Array.isArray(lot.stages) ? lot.stages[0] : lot.stages as { id: string; name: string; sites: unknown }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -584,9 +583,7 @@ export default async function LotPage({ params }: Props) {
               currentNotes={lot.notes}
               currentDueDate={lot.due_date}
               currentScheduledDate={lot.scheduled_date}
-              currentIsCorner={isCorner}
               canManage={canManage}
-              canSupervise={canSupervise}
               isAdmin={isAdmin}
               isContractPricing={stageIsContractPricing}
               contractPrice={contractPrice}

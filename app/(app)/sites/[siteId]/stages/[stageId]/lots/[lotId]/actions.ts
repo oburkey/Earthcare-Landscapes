@@ -489,11 +489,6 @@ export async function updateLot(
     }
   }
 
-  // Corner lot flag — supervisors and admins only
-  if (profile.role === 'supervisor' || profile.role === 'admin') {
-    updates.is_corner = formData.get('is_corner') === 'true'
-  }
-
   const supabase = await createClient()
   const { error } = await supabase.from('lots').update(updates).eq('id', lotId)
 
