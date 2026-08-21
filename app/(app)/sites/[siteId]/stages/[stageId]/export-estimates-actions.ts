@@ -96,6 +96,25 @@ function clientExtrasTotal(items: RawItem[] | null | undefined): number {
   return items.reduce((sum, item) => sum + (isClientExtra(item) ? itemAmount(item) : 0), 0)
 }
 
+// Same "best quote" selection as invoices/page.tsx's bestQuoteScore — a lot
+// should only ever have one row per quote_type (enforced by a unique
+// constraint), but if more than one somehow exists (e.g. stale data from
+// before that constraint existed), naively taking the first match could
+// silently grab an empty/stale row while invoices' status-based selection
+// picks the populated one. Matching that logic here keeps the two consistent.
+function bestQuoteScore(q: { status?: string | null }): number {
+  return q.status === 'approved' ? 3 : q.status === 'submitted' ? 2 : 1
+}
+
+function pickBestQuote<T extends { quote_type: string; status?: string | null }>(
+  quotes: T[],
+  quoteType: string
+): T | null {
+  const matches = quotes.filter((q) => q.quote_type === quoteType)
+  if (matches.length === 0) return null
+  return [...matches].sort((a, b) => bestQuoteScore(b) - bestQuoteScore(a))[0]
+}
+
 // Admin-only export — one summary row per lot: Providence Works Budget
 // (estimate) vs Actual (final) vs Client Extras (final), plus front/rear m²
 // derived from the estimate quant sheet. A lot is included if it has an
@@ -131,7 +150,7 @@ export async function getStageEstimatesExport(
     .from('lots')
     .select(`
       id, lot_number, home_design, notes, is_corner, contract_price,
-      lot_quotes(quote_type, lot_quote_items(${ITEMS_SELECT}))
+      lot_quotes(quote_type, status, lot_quote_items(${ITEMS_SELECT}))
     `)
     .eq('stage_id', stageId)
 
@@ -147,8 +166,8 @@ export async function getStageEstimatesExport(
   for (const lot of sortedLots) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const quotes = (lot.lot_quotes ?? []) as any[]
-    const estimateQuote = quotes.find((q) => q.quote_type === 'estimate')
-    const finalQuote = quotes.find((q) => q.quote_type === 'final')
+    const estimateQuote = pickBestQuote(quotes, 'estimate')
+    const finalQuote = pickBestQuote(quotes, 'final')
     if (!estimateQuote && !finalQuote) continue
 
     const estimateItems = (estimateQuote?.lot_quote_items ?? []) as RawItem[]
