@@ -400,6 +400,13 @@ export default function LotQuantities({
       {/* Sections */}
       {sections.map((section) => {
         if (!showClientExtras && section.isClientExtra) return null
+        let sectionSubtotal = 0
+        for (const item of section.items) {
+          if (item.unit_price == null) continue
+          const qty = getItemQty(item)
+          if (qty == null || isNaN(qty)) continue
+          sectionSubtotal += qty * item.unit_price
+        }
         return (
         <div key={section.id} className="rounded-xl border border-border bg-surface overflow-hidden">
 
@@ -608,6 +615,14 @@ export default function LotQuantities({
               </div>
             )
           })}
+
+          {/* Section subtotal — admin only, matching the $ column visibility rule */}
+          {isAdmin && sectionSubtotal > 0 && (
+            <div className="flex items-center justify-end gap-2 px-4 py-2 bg-surface-raised">
+              <span className="text-xs font-medium text-fg-muted">Subtotal</span>
+              <span className="text-sm font-semibold text-fg-secondary tabular-nums">${sectionSubtotal.toFixed(2)}</span>
+            </div>
+          )}
         </div>
         )
       })}

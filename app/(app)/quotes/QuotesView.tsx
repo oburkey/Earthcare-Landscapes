@@ -391,6 +391,19 @@ export default function QuotesView({
 }) {
   const [quotes, setQuotes]     = useState<QuoteRow[]>(initialQuotes)
   const [filter, setFilter]     = useState<Filter>('all')
+  // 'all' | 'unlinked' | a site id — persisted so the chosen site sticks
+  // across visits. Lazy-init reads localStorage directly; since this only
+  // ever affects a client-side filter (not the initial server-rendered
+  // list), there's no SSR/hydration mismatch to worry about.
+  const [siteFilter, setSiteFilter] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'all'
+    return window.localStorage.getItem('quotes.siteFilter') ?? 'all'
+  })
+
+  function handleSiteFilterChange(value: string) {
+    setSiteFilter(value)
+    window.localStorage.setItem('quotes.siteFilter', value)
+  }
 
   // 'list' | 'new' | quote id being edited
   const [view, setView]         = useState<'list' | 'new' | string>('list')
@@ -1147,7 +1160,13 @@ export default function QuotesView({
 
   // ── List view ──────────────────────────────────────────────────────────────
 
-  const filtered = quotes.filter((q) => filter === 'all' || q.status === filter)
+  const filtered = quotes
+    .filter((q) => filter === 'all' || q.status === filter)
+    .filter((q) => {
+      if (siteFilter === 'all') return true
+      if (siteFilter === 'unlinked') return !q.siteId
+      return q.siteId === siteFilter
+    })
 
   return (
     <div className="space-y-5">
@@ -1164,6 +1183,21 @@ export default function QuotesView({
             New quote
           </button>
         )}
+      </div>
+
+      {/* Site filter */}
+      <div className="flex justify-start">
+        <select
+          value={siteFilter}
+          onChange={(e) => handleSiteFilterChange(e.target.value)}
+          className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-border focus:outline-none"
+        >
+          <option value="all">All sites</option>
+          <option value="unlinked">Unlinked</option>
+          {sites.map((s) => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </select>
       </div>
 
       {/* Table-not-found banner */}
