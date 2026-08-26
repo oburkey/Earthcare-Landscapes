@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useTransition } from 'react'
+import { Fragment, useState, useMemo, useTransition } from 'react'
 import { saveLotQuote } from './quote-actions'
 import type { QuoteItemPayload, QuoteType } from './quote-actions'
 
@@ -398,7 +398,16 @@ export default function LotQuantities({
       )}
 
       {/* Sections */}
-      {sections.map((section) => {
+      {(() => {
+        let providenceWorksTotal = 0
+        for (const item of allItems) {
+          if (item.isClientExtra) continue
+          if (item.unit_price == null) continue
+          const qty = getItemQty(item)
+          if (qty == null || isNaN(qty)) continue
+          providenceWorksTotal += qty * item.unit_price
+        }
+        return sections.map((section) => {
         if (!showClientExtras && section.isClientExtra) return null
         let sectionSubtotal = 0
         for (const item of section.items) {
@@ -408,7 +417,8 @@ export default function LotQuantities({
           sectionSubtotal += qty * item.unit_price
         }
         return (
-        <div key={section.id} className="rounded-xl border border-border bg-surface overflow-hidden">
+        <Fragment key={section.id}>
+        <div className="rounded-xl border border-border bg-surface overflow-hidden">
 
           {/* Section header */}
           <div className="px-4 py-2.5 bg-surface-raised border-b border-border">
@@ -624,8 +634,21 @@ export default function LotQuantities({
             </div>
           )}
         </div>
+
+        {/* Providence Works Total — sum of all non-client-extra sections,
+            sits right after Rear & Side Lot (the last such section) and
+            before Client Extras. Styled more prominently than the per-section
+            subtotals above since it's the key summary figure before extras. */}
+        {isAdmin && section.name === REAR_SECTION && providenceWorksTotal > 0 && (
+          <div className="rounded-xl border border-border bg-surface px-4 py-3 flex items-center justify-between">
+            <span className="text-sm font-bold text-fg-secondary">Providence Works Total</span>
+            <span className="text-lg font-extrabold text-fg tabular-nums">${providenceWorksTotal.toFixed(2)}</span>
+          </div>
+        )}
+        </Fragment>
         )
-      })}
+        })
+      })()}
 
       {/* Admin: grand total */}
       {isAdmin && (() => {
