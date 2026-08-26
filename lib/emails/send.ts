@@ -10,12 +10,18 @@ const FROM   = process.env.RESEND_FROM ?? 'Earthcare Landscapes <noreply@earthca
 
 export async function getScheduleEmailRecipients(reportType: 'weekly' | 'monthly'): Promise<string[]> {
   const db = createAdminClient()
-  const { data } = await db
+  const { data, error } = await db
     .from('email_recipients')
     .select('email')
     .in('email_type', [reportType, 'both'])
     .order('email', { ascending: true })
-  return (data ?? []).map((r: { email: string }) => r.email)
+  if (error) {
+    console.error(`[emails/send] Failed to fetch ${reportType} recipients:`, error.message)
+    return []
+  }
+  const emails = (data ?? []).map((r: { email: string }) => r.email)
+  console.log(`[emails/send] Fetched ${emails.length} ${reportType} recipient(s).`)
+  return emails
 }
 
 export async function sendScheduleEmail({
@@ -27,8 +33,12 @@ export async function sendScheduleEmail({
   subject: string
   html: string
 }): Promise<{ error?: string }> {
-  if (to.length === 0) return {}
+  if (to.length === 0) {
+    console.warn(`[emails/send] No recipients — skipping Resend.send() for "${subject}".`)
+    return {}
+  }
 
+  console.log(`[emails/send] Calling Resend.send() for ${to.length} recipient(s) — "${subject}".`)
   const { error } = await resend.emails.send({
     from: FROM,
     to,
@@ -36,6 +46,10 @@ export async function sendScheduleEmail({
     html,
   })
 
-  if (error) return { error: error.message }
+  if (error) {
+    console.error('[emails/send] Resend.send() failed:', error.message)
+    return { error: error.message }
+  }
+  console.log('[emails/send] Resend.send() succeeded.')
   return {}
 }
