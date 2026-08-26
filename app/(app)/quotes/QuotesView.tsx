@@ -44,6 +44,13 @@ export type SiteOption = {
   name: string
 }
 
+export type QuotePreset = {
+  id: string
+  name: string
+  description: string | null
+  sections: QuoteSection[]
+}
+
 export type ConversionInfo = {
   extraJobId: string
   stageName: string
@@ -379,18 +386,21 @@ export async function downloadPDF(
 export default function QuotesView({
   initialQuotes,
   sites,
+  presets,
   canEdit,
   tableExists,
   initialConversions,
 }: {
   initialQuotes: QuoteRow[]
   sites: SiteOption[]
+  presets: QuotePreset[]
   canEdit: boolean
   tableExists: boolean
   initialConversions: ConversionMap
 }) {
   const [quotes, setQuotes]     = useState<QuoteRow[]>(initialQuotes)
   const [filter, setFilter]     = useState<Filter>('all')
+  const [pickerOpen, setPickerOpen] = useState(false)
   // 'all' | 'unlinked' | a site id — persisted so the chosen site sticks
   // across visits. Lazy-init reads localStorage directly; since this only
   // ever affects a client-side filter (not the initial server-rendered
@@ -459,7 +469,28 @@ export default function QuotesView({
     setSections([{ name: '', orderIndex: 0, items: [{ description: 'Administration & Preliminary', qty: 1, unit: 'item', rate: 500, orderIndex: 0 }] }])
     setNotes('')
     setFormStages([]); setConvertValidation(false); setIncludeGst(false)
-    setActionError(null); setView('new')
+    setActionError(null); setView('new'); setPickerOpen(false)
+  }
+
+  // Copies a template's sections/items into a fresh quote — same shape as
+  // openNew() otherwise. Templates carry no ids, so reindex() also doubles
+  // as the "strip any stray ids" step (there are none, but it's the same
+  // helper used everywhere else to normalize order_index after edits).
+  function applyPreset(preset: QuotePreset) {
+    setSiteId(''); setStageId(''); setReference(''); setDescription('')
+    setStatus('draft')
+    setSections(
+      preset.sections.length > 0
+        ? reindex(preset.sections.map((s) => ({
+            name: s.name,
+            orderIndex: 0,
+            items: s.items.length > 0 ? reindex(s.items.map((i) => ({ ...i, id: undefined }))) : [emptyLine(0)],
+          })))
+        : [emptySection(0)]
+    )
+    setNotes('')
+    setFormStages([]); setConvertValidation(false); setIncludeGst(false)
+    setActionError(null); setView('new'); setPickerOpen(false)
   }
 
   function openEdit(q: QuoteRow) {
@@ -1177,7 +1208,7 @@ export default function QuotesView({
         {canEdit && (
           <button
             type="button"
-            onClick={openNew}
+            onClick={() => setPickerOpen(true)}
             className="rounded-lg bg-green-700 px-3.5 py-2 text-sm font-medium text-white hover:bg-green-800 active:bg-green-900 transition-colors"
           >
             New quote
@@ -1339,6 +1370,43 @@ export default function QuotesView({
 
       {actionError && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{actionError}</p>
+      )}
+
+      {/* New quote — template picker */}
+      {pickerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-xl border border-border bg-surface p-5 shadow-lg space-y-3">
+            <h2 className="text-lg font-semibold text-fg">New quote</h2>
+            <p className="text-sm text-fg-muted">Start from a template or begin with a blank quote.</p>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={openNew}
+                className="w-full text-left rounded-lg border border-border px-3.5 py-2.5 hover:bg-surface-raised transition-colors"
+              >
+                <span className="text-sm font-medium text-fg">Start blank</span>
+              </button>
+              {presets.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => applyPreset(p)}
+                  className="w-full text-left rounded-lg border border-border px-3.5 py-2.5 hover:bg-surface-raised transition-colors"
+                >
+                  <span className="text-sm font-medium text-fg">{p.name}</span>
+                  {p.description && <p className="text-xs text-fg-muted mt-0.5">{p.description}</p>}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setPickerOpen(false)}
+              className="text-sm text-fg-muted hover:text-fg-secondary transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Conversion modal */}

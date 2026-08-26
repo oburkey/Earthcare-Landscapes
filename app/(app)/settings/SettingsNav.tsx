@@ -7,6 +7,7 @@ const TABS = [
   { href: '/settings/materials', label: 'Materials Template' },
   { href: '/settings/house-types', label: 'House Types' },
   { href: '/settings/schedule-emails', label: 'Schedule Emails' },
+  { href: '/settings/quote-templates', label: 'Quote Templates' },
 ]
 
 export default function SettingsNav() {

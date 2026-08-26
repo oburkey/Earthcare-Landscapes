@@ -1,6 +1,6 @@
 import { requireAuth, requireRole } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import QuotesView, { type QuoteRow, type SiteOption, type ConversionMap } from './QuotesView'
+import QuotesView, { type QuoteRow, type SiteOption, type QuotePreset, type ConversionMap } from './QuotesView'
 
 export const metadata = { title: 'Quotes — Earthcare Landscapes' }
 
@@ -88,6 +88,46 @@ export default async function QuotesPage() {
     tableExists = false
   }
 
+  // Quote templates for the "New quote" picker — graceful fallback if the
+  // migration hasn't been run yet.
+  let presets: QuotePreset[] = []
+  try {
+    const { data: presetsRaw, error: presetsError } = await supabase
+      .from('quote_presets')
+      .select('id, name, description, order_index, quote_preset_sections(name, order_index, quote_preset_items(description, qty, unit, rate, order_index))')
+      .order('order_index')
+
+    if (!presetsError && presetsRaw) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      presets = (presetsRaw as any[]).map((p) => ({
+        id: p.id,
+        name: p.name,
+        description: p.description ?? null,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        sections: ((p.quote_preset_sections ?? []) as any[])
+          .slice()
+          .sort((a, b) => a.order_index - b.order_index)
+          .map((s, sIdx) => ({
+            name: s.name,
+            orderIndex: sIdx,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            items: ((s.quote_preset_items ?? []) as any[])
+              .slice()
+              .sort((a, b) => a.order_index - b.order_index)
+              .map((i, iIdx) => ({
+                description: i.description ?? '',
+                qty:         Number(i.qty ?? 0),
+                unit:        i.unit ?? '',
+                rate:        Number(i.rate ?? 0),
+                orderIndex:  iIdx,
+              })),
+          })),
+      }))
+    }
+  } catch {
+    presets = []
+  }
+
   const canEdit = profile.role === 'admin'
 
   // Fetch conversion data — which quotes have been converted to extra jobs
@@ -122,6 +162,7 @@ export default async function QuotesPage() {
         <QuotesView
           initialQuotes={quotes}
           sites={sites}
+          presets={presets}
           canEdit={canEdit}
           tableExists={tableExists}
           initialConversions={conversions}
