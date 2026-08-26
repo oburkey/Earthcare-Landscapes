@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 interface Props {
   stageId: string
@@ -6,7 +6,10 @@ interface Props {
 }
 
 export default async function MaterialsSummary({ stageId, siteId }: Props) {
-  const supabase = await createClient()
+  // Service-role client — Estimate quant sheets are admin-only under RLS, but
+  // this summary only ever surfaces plant counts/material quantities (never
+  // dollar amounts), so it's safe to read regardless of the viewer's role.
+  const supabase = createAdminClient()
 
   const [{ data: itemsData }, { data: lotsData }] = await Promise.all([
     supabase
@@ -49,11 +52,17 @@ export default async function MaterialsSummary({ stageId, siteId }: Props) {
     lot_quote_items: { template_item_id: string; quantity: number | null }[]
   }
 
-  // Budget is the primary source (leading_hand+ can see it, unlike Estimate
-  // which is admin-only) — falls back to Final if no Budget has been entered.
+  // Budget is the primary source, falling back to Final, then Estimate if
+  // neither has been entered yet. Estimate used to be excluded here because
+  // it's admin-only under RLS and the session-bound client couldn't read it
+  // for supervisors — now that this component reads via the service-role
+  // client above, that restriction no longer applies.
   function sourceQuote(quotes: LotQuote[]) {
     if (!quotes || quotes.length === 0) return null
-    return quotes.find((q) => q.quote_type === 'budget') ?? quotes.find((q) => q.quote_type === 'final') ?? null
+    return quotes.find((q) => q.quote_type === 'budget')
+      ?? quotes.find((q) => q.quote_type === 'final')
+      ?? quotes.find((q) => q.quote_type === 'estimate')
+      ?? null
   }
 
   // Aggregate: template_item_id → total quantity across all lots
