@@ -11,6 +11,6 @@ jobs:
     steps:
       - name: Send weekly email
         run: |
-          curl -sf -X POST "${{ secrets.APP_URL }}/api/send-weekly-email" \
+          curl -sfL -X POST "${{ secrets.APP_URL }}/api/send-weekly-email" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "Content-Type: application/json"

@@ -15,6 +15,6 @@ jobs:
     steps:
       - name: Send monthly email
         run: |
-          curl -sf -X POST "${{ secrets.APP_URL }}/api/send-monthly-email" \
+          curl -sfL -X POST "${{ secrets.APP_URL }}/api/send-monthly-email" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "Content-Type: application/json"
