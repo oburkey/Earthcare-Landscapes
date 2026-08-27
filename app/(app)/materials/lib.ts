@@ -9,6 +9,7 @@
 export const FRONT_BED_ITEMS = ['Mulch Limestone 32mm', 'Black Mulch', 'White Mulch']
 export const REAR_BED_ITEMS = ['Limestone Mulch', 'Black Mulch']
 export const STREET_TREE_90L_ITEM = 'Feature Trees 90L'
+export const PLANTED_ITEMS = ['130/140mm plants', '200mm plants', '300mm plants']
 
 export const DEFAULT_FRONT_RATIO = 2.0
 export const DEFAULT_REAR_RATIO = 1.75
@@ -22,7 +23,7 @@ const POT_SIZE_LABELS: Record<string, string> = {
 // ── Input shapes (from getCachedMaterialsPlanningData / getCachedPlantRatioSettings) ──
 
 type QuoteItem = { item_name: string; quantity: number | null }
-type LotQuote = { is_estimated: boolean; lot_quote_items: QuoteItem[] | null }
+type LotQuote = { is_estimated: boolean; quote_type: string; lot_quote_items: QuoteItem[] | null }
 type Site = { id: string; name: string }
 type LotDocument = { storage_path: string; document_type: string; created_at: string }
 
@@ -81,6 +82,7 @@ export type LotMaterial = {
   frontPlants: number
   rearPlants: number
   totalPlants: number
+  planted: number | null
   streetTrees90L: number
   sitePlanPath: string | null
 }
@@ -108,6 +110,7 @@ export type SiteMaterialGroup = {
     frontPlants: number
     rearPlants: number
     totalPlants: number
+    planted: number
     potSplit: PotSplitLine[]
     streetTrees90L: number
   }
@@ -191,7 +194,7 @@ function newSiteGroup(site: Site): SiteMaterialGroup {
     siteName: site.name,
     lots: [],
     extraJobs: [],
-    totals: { frontM2: 0, rearM2: 0, frontPlants: 0, rearPlants: 0, totalPlants: 0, potSplit: [], streetTrees90L: 0 },
+    totals: { frontM2: 0, rearM2: 0, frontPlants: 0, rearPlants: 0, totalPlants: 0, planted: 0, potSplit: [], streetTrees90L: 0 },
   }
 }
 
@@ -227,15 +230,24 @@ export function buildMaterialsPlan(
       const frontPlants = Math.round(frontM2 * frontRatio)
       const rearPlants = Math.round(rearM2 * rearRatio)
 
+      // Actual plants installed, from the FINAL quant sheet — distinct from
+      // the estimate-derived frontPlants/rearPlants above (those are a ratio
+      // applied to garden bed m², not a count of planted items). null when no
+      // final quant sheet has been submitted for this lot yet.
+      const finalQuote = lot.lot_quotes?.find((q) => q.quote_type === 'final')
+      const planted = finalQuote ? sumByItemName(finalQuote.lot_quote_items, PLANTED_ITEMS) : null
+
       group.lots.push({
         id: lot.id,
         lotNumber: lot.lot_number,
         dueDate: lot.due_date,
         frontM2, rearM2, frontPlants, rearPlants,
         totalPlants: frontPlants + rearPlants,
+        planted,
         streetTrees90L,
         sitePlanPath: latestSitePlanPath(lot.lot_documents),
       })
+      if (planted != null) group.totals.planted += planted
       group.totals.frontM2 += frontM2
       group.totals.rearM2 += rearM2
       group.totals.streetTrees90L += streetTrees90L

@@ -241,6 +241,11 @@ async function _materialsTemplate(db: Db) {
 // Lots and extra jobs due within [startDate, endDate), with their ESTIMATE
 // quote line items (lots) and template-matched line items (extra jobs), for
 // the materials planning page. Used to compute garden bed m² / plant counts.
+// Also carries quote_type so the FINAL quote (actual plants installed) can be
+// picked out alongside the estimate — both come back in this one query, no
+// separate fetch or elevated client needed (this function already runs under
+// the service-role client when SUPABASE_SERVICE_ROLE_KEY is set, same as
+// every other withCache-wrapped query in this file).
 async function _materialsPlanningData(db: Db, startDate: string, endDate: string) {
   const [{ data: lots }, { data: jobs }] = await Promise.all([
     db
@@ -248,7 +253,7 @@ async function _materialsPlanningData(db: Db, startDate: string, endDate: string
       .select(`
         id, lot_number, due_date,
         stages!inner(id, name, sites!inner(id, name)),
-        lot_quotes(is_estimated, lot_quote_items(item_name, quantity)),
+        lot_quotes(is_estimated, quote_type, lot_quote_items(item_name, quantity)),
         lot_documents(storage_path, document_type, created_at)
       `)
       .not('due_date', 'is', null)

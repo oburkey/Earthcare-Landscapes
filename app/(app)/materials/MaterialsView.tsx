@@ -158,6 +158,9 @@ function SiteCard({ site, lotSitePlanUrls }: { site: SiteMaterialGroup; lotSiteP
             Plants: <span className="font-medium text-fg-secondary">{site.totals.totalPlants}</span>
             {' '}(front {site.totals.frontPlants} / rear {site.totals.rearPlants})
           </p>
+          <p className="mt-1 text-xs text-fg-muted">
+            Planted: <span className="font-medium text-fg-secondary">{site.totals.planted}</span>
+          </p>
           {site.totals.potSplit.length > 0 && (
             <p className="mt-1 text-xs text-fg-muted">Pot sizes: {potSplitText(site)}</p>
           )}
@@ -183,6 +186,7 @@ function SiteCard({ site, lotSitePlanUrls }: { site: SiteMaterialGroup; lotSiteP
                 <th className="text-right font-medium pb-1 pr-2">Front m²</th>
                 <th className="text-right font-medium pb-1 pr-2">Rear m²</th>
                 <th className="text-right font-medium pb-1 pr-2">Plants</th>
+                <th className="text-right font-medium pb-1 pr-2">Planted</th>
                 <th className="text-right font-medium pb-1 pr-2">Street trees 90L</th>
                 <th className="pb-1"></th>
               </tr>
@@ -194,6 +198,7 @@ function SiteCard({ site, lotSitePlanUrls }: { site: SiteMaterialGroup; lotSiteP
                   <td className="py-1 pr-2 text-right text-fg-muted">{fmtM2(lot.frontM2)}</td>
                   <td className="py-1 pr-2 text-right text-fg-muted">{fmtM2(lot.rearM2)}</td>
                   <td className="py-1 pr-2 text-right text-fg-muted">{lot.totalPlants}</td>
+                  <td className="py-1 pr-2 text-right text-fg-muted">{lot.planted != null ? lot.planted : '—'}</td>
                   <td className="py-1 pr-2 text-right text-fg-muted">{lot.streetTrees90L > 0 ? lot.streetTrees90L : '—'}</td>
                   <td className="py-1 text-right">
                     {lotSitePlanUrls[lot.id] && (
@@ -210,6 +215,7 @@ function SiteCard({ site, lotSitePlanUrls }: { site: SiteMaterialGroup; lotSiteP
                   <td className="py-1 pr-2 text-right text-fg-muted">{fmtM2(job.frontM2)}</td>
                   <td className="py-1 pr-2 text-right text-fg-muted">{fmtM2(job.rearM2)}</td>
                   <td className="py-1 pr-2 text-right text-fg-muted">{job.totalPlants}</td>
+                  <td className="py-1 pr-2 text-right text-fg-muted">—</td>
                   <td className="py-1 pr-2 text-right text-fg-muted">{job.streetTrees90L > 0 ? job.streetTrees90L : '—'}</td>
                   <td className="py-1"></td>
                 </tr>
