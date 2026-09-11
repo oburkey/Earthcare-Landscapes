@@ -22,6 +22,7 @@ export default function PhotoUpload({ action, hiddenFields }: Props) {
   const formRef = useRef<HTMLFormElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [compressing, setCompressing] = useState(false)
+  const [progress, setProgress] = useState<{ current: number; total: number } | null>(null)
   const [uploading, startUpload] = useTransition()
 
   const busy = compressing || uploading
@@ -31,14 +32,21 @@ export default function PhotoUpload({ action, hiddenFields }: Props) {
     setError(null)
 
     const formData = new FormData(e.currentTarget)
-    const file = formData.get('photo') as File
+    const files = (formData.getAll('photo') as File[]).filter((f) => f && f.size > 0)
 
-    if (!file || file.size === 0) { setError('No file selected.'); return }
+    if (files.length === 0) { setError('No file selected.'); return }
+
+    // Shared fields applied to every photo in the batch
+    const photoType     = formData.get('photo_type') as string
+    const photoCategory = formData.get('photo_category') as string
+    const notes         = formData.get('notes') as string
 
     setCompressing(true)
-    let compressed: File
+    const compressedFiles: File[] = []
     try {
-      compressed = await compressImage(file, 1920, 800 * 1024)
+      for (const file of files) {
+        compressedFiles.push(await compressImage(file, 1920, 800 * 1024))
+      }
     } catch {
       setError('Failed to compress image.')
       setCompressing(false)
@@ -46,13 +54,29 @@ export default function PhotoUpload({ action, hiddenFields }: Props) {
     }
     setCompressing(false)
 
-    formData.set('photo', compressed, compressed.name)
-
     startUpload(async () => {
-      const result = await action(formData)
-      if (result?.error) {
-        setError(result.error)
-      } else {
+      const errors: string[] = []
+
+      for (let i = 0; i < compressedFiles.length; i++) {
+        setProgress({ current: i + 1, total: compressedFiles.length })
+
+        const single = new FormData()
+        for (const [name, value] of Object.entries(hiddenFields)) single.set(name, value)
+        single.set('photo_type', photoType)
+        single.set('photo_category', photoCategory)
+        single.set('notes', notes)
+        single.set('photo', compressedFiles[i], compressedFiles[i].name)
+
+        const result = await action(single)
+        if (result?.error) errors.push(`${compressedFiles[i].name}: ${result.error}`)
+      }
+
+      setProgress(null)
+
+      if (errors.length > 0) {
+        setError(errors.join(' '))
+      }
+      if (errors.length < compressedFiles.length) {
         formRef.current?.reset()
         router.refresh()
       }
@@ -87,7 +111,7 @@ export default function PhotoUpload({ action, hiddenFields }: Props) {
       </div>
 
       <div>
-        <p className="text-sm font-medium text-fg-secondary mb-2">Category</p>
+        <p className="text-sm font-medium text-fg-secondary mb-2">Category <span className="font-normal text-fg-muted">(applied to all selected photos)</span></p>
         <select
           name="photo_category"
           defaultValue="general"
@@ -101,11 +125,12 @@ export default function PhotoUpload({ action, hiddenFields }: Props) {
       </div>
 
       <div>
-        <p className="text-sm font-medium text-fg-secondary mb-2">Photo</p>
+        <p className="text-sm font-medium text-fg-secondary mb-2">Photo(s)</p>
         <input
           type="file"
           name="photo"
           accept="image/*"
+          multiple
           required
           disabled={busy}
           className="block w-full text-sm text-fg-muted
@@ -119,7 +144,7 @@ export default function PhotoUpload({ action, hiddenFields }: Props) {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-fg-secondary mb-2">Note (optional)</label>
+        <label className="block text-sm font-medium text-fg-secondary mb-2">Note (optional) <span className="font-normal text-fg-muted">(applied to all selected photos)</span></label>
         <input
           type="text"
           name="notes"
@@ -138,7 +163,11 @@ export default function PhotoUpload({ action, hiddenFields }: Props) {
         disabled={busy}
         className="w-full rounded-lg bg-green-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-green-800 active:bg-green-900 disabled:opacity-50 transition-colors"
       >
-        {compressing ? 'Compressing…' : uploading ? 'Uploading…' : 'Upload photo'}
+        {compressing
+          ? 'Compressing…'
+          : uploading
+            ? (progress ? `Uploading ${progress.current}/${progress.total}…` : 'Uploading…')
+            : 'Upload photo(s)'}
       </button>
     </form>
   )
