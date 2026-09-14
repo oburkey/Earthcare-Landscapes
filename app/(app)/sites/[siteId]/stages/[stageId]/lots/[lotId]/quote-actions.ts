@@ -104,6 +104,31 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
     oldItemsSnapshot = data ?? []
   }
 
+  // admin_only sections (e.g. Preliminaries) are hidden from the quant sheet
+  // form for non-admins, so a non-admin's submitted items never include
+  // them. Since saving does a full delete-then-reinsert below, preserve any
+  // existing admin_only-section rows that the submitted payload doesn't
+  // cover, so a non-admin save can't silently wipe admin-entered data.
+  const submittedTemplateItemIds = new Set(items.map((i) => i.template_item_id))
+  const { data: existingItems } = await supabase
+    .from('lot_quote_items')
+    .select('template_item_id, item_name, unit, quantity, unit_price_snapshot, quote_template_items(quote_template_sections(admin_only))')
+    .eq('quote_id', quoteId)
+  const preservedAdminOnlyItems = (existingItems ?? [])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .filter((row: any) =>
+      (row.quote_template_items?.quote_template_sections?.admin_only ?? false)
+      && !submittedTemplateItemIds.has(row.template_item_id)
+    )
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((row: any) => ({
+      template_item_id:    row.template_item_id,
+      item_name:           row.item_name,
+      unit:                row.unit,
+      quantity:            row.quantity,
+      unit_price_snapshot: row.unit_price_snapshot,
+    }))
+
   // Replace all items (delete then insert)
   const { error: deleteError } = await supabase
     .from('lot_quote_items')
@@ -113,6 +138,7 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
 
   const toInsert = items
     .filter((i) => i.quantity !== null)
+    .concat(preservedAdminOnlyItems)
     .map((i) => ({
       quote_id:           quoteId,
       template_item_id:   i.template_item_id,
