@@ -873,6 +873,9 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
               <div className="border-t border-border-subtle divide-y divide-border-subtle">
                 {site.stages.map((stage) => {
                   const totStd        = stage.lots.reduce((s, l) => s + (l.contractPrice != null ? 0 : l.standardAmount), 0)
+                  // Final Amount always shows the quant sheet total, even for contract-priced
+                  // lots — unlike totStd (which excludes them to avoid double-counting totAmt).
+                  const totStdDisplay = stage.lots.reduce((s, l) => s + l.standardAmount, 0)
                   const totExtra      = stage.lots.reduce((s, l) => s + l.clientExtrasAmount, 0)
                   const totContract   = stage.lots.reduce((s, l) => s + (l.contractPrice ?? 0), 0)
                   const totAmt             = totStd + totExtra + totContract
@@ -986,7 +989,7 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                                     {lot.estimateTotal != null ? fmt(lot.estimateTotal) : <span className="text-fg-muted">—</span>}
                                   </td>
                                   <td className="py-2.5 px-3 text-right tabular-nums text-fg-secondary">
-                                    {lot.contractPrice != null ? <span className="text-fg-muted">—</span> : fmt(lot.standardAmount)}
+                                    {fmt(lot.standardAmount)}
                                   </td>
                                   <td className="py-2.5 px-3 text-right tabular-nums text-fg-secondary">
                                     {lot.clientExtrasAmount > 0 ? fmt(lot.clientExtrasAmount) : <span className="text-fg-muted">—</span>}
@@ -1051,7 +1054,7 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                             <tr className="border-t-2 border-border bg-surface-raised">
                               <td colSpan={4} className="py-2.5 pr-6 font-semibold text-fg-secondary">Stage Total</td>
                               <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg-muted">{totEstimate > 0 ? fmt(totEstimate) : <span className="text-fg-muted">—</span>}</td>
-                              <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg-secondary">{fmt(totStd)}</td>
+                              <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg-secondary">{fmt(totStdDisplay)}</td>
                               <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg-secondary">
                                 {totExtra > 0 ? fmt(totExtra) : <span className="text-fg-muted">—</span>}
                               </td>
