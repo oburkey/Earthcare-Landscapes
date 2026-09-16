@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useState, useMemo, useTransition } from 'react'
+import { Fragment, useState, useMemo, useEffect, useRef, useTransition } from 'react'
 import { saveLotQuote } from './quote-actions'
 import type { QuoteItemPayload, QuoteType } from './quote-actions'
 
@@ -197,6 +197,27 @@ export default function LotQuantities({
   const [saved, setSaved]           = useState(false)
   const [isPending, startTransition] = useTransition()
 
+  // Auto-save: 5s after the last change, silently save in the background.
+  // dirtyRef tracks whether there's anything new to save since the last
+  // successful save; latestRef mirrors the latest state so the deferred
+  // save (fired from a setTimeout) never reads a stale closure.
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const autoSaveHideRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const dirtyRef         = useRef(false)
+  const latestRef        = useRef({ values, variantSel, notes, quoteType })
+
+  useEffect(() => {
+    latestRef.current = { values, variantSel, notes, quoteType }
+  })
+
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+      if (autoSaveHideRef.current) clearTimeout(autoSaveHideRef.current)
+    }
+  }, [])
+
   const cornerFlagItem = useMemo(
     () => allItems.find((i) => i.auto_calc_formula === 'corner_lot_flag'),
     [allItems]
@@ -246,11 +267,15 @@ export default function LotQuantities({
 
   function recalculatePlants() {
     setSaved(false)
+    scheduleAutoSave()
     setValues((prev) => ({ ...prev, ...computePlantValues(prev) }))
   }
 
   function switchMode(type: QuoteType) {
     const quote = quoteForType(type)
+    clearAutoSaveTimer()
+    dirtyRef.current = false
+    setAutoSaveStatus('idle')
     setQuoteType(type)
     setValues(initValues(quote))
     setVariantSel(initVariantSel(quote, variantGroups))
@@ -261,11 +286,13 @@ export default function LotQuantities({
 
   function toggle(itemId: string) {
     setSaved(false)
+    scheduleAutoSave()
     setValues((prev) => ({ ...prev, [itemId]: prev[itemId] === '1' ? '0' : '1' }))
   }
 
   function setVal(itemId: string, value: string) {
     setSaved(false)
+    scheduleAutoSave()
     setValues((prev) => {
       const next = { ...prev, [itemId]: value }
 
@@ -287,28 +314,35 @@ export default function LotQuantities({
 
   function selectVariant(groupName: string, itemId: string) {
     setSaved(false)
+    scheduleAutoSave()
     setVariantSel((prev) => ({ ...prev, [groupName]: itemId }))
   }
 
-  function getItemQty(item: TemplateItem): number | null {
+  function getItemQty(
+    item: TemplateItem,
+    valsOverride?: Record<string, string>,
+    variantOverride?: Record<string, string>
+  ): number | null {
+    const vals    = valsOverride ?? values
+    const variant = variantOverride ?? variantSel
     if (item.unit === 'ITEM') return 1
-    if (item.unit === 'toggle') return values[item.id] === '1' ? 1 : 0
+    if (item.unit === 'toggle') return vals[item.id] === '1' ? 1 : 0
     const m = item.auto_calc_formula?.match(/^variant_group:(.+)$/)
     if (m) {
-      if (variantSel[m[1]] !== item.id) return null
-      const v = values[item.id]
+      if (variant[m[1]] !== item.id) return null
+      const v = vals[item.id]
       return v !== undefined && v !== '' ? parseFloat(v) : null
     }
-    const v = values[item.id]
+    const v = vals[item.id]
     return v !== undefined && v !== '' ? parseFloat(v) : null
   }
 
-  function handleSave() {
-    setError(null)
-    setSaved(false)
-
-    const items: QuoteItemPayload[] = allItems.map((item) => {
-      const qty = getItemQty(item)
+  function buildItemsPayload(
+    valsOverride?: Record<string, string>,
+    variantOverride?: Record<string, string>
+  ): QuoteItemPayload[] {
+    return allItems.map((item) => {
+      const qty = getItemQty(item, valsOverride, variantOverride)
       return {
         template_item_id:    item.id,
         item_name:           item.name,
@@ -317,6 +351,60 @@ export default function LotQuantities({
         unit_price_snapshot: item.unit_price ?? null,
       }
     })
+  }
+
+  function clearAutoSaveTimer() {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current)
+      autoSaveTimerRef.current = null
+    }
+  }
+
+  async function performAutoSave() {
+    autoSaveTimerRef.current = null
+    if (!dirtyRef.current || isApproved || !canEditActiveTab) return
+    if (autoSaveHideRef.current) {
+      clearTimeout(autoSaveHideRef.current)
+      autoSaveHideRef.current = null
+    }
+    setAutoSaveStatus('saving')
+    const { values: v, variantSel: vs, notes: n, quoteType: qt } = latestRef.current
+    const result = await saveLotQuote({
+      lotId, siteId, stageId,
+      quoteType: qt,
+      status: 'submitted',
+      notes: n,
+      items: buildItemsPayload(v, vs),
+    })
+    if (result?.error) {
+      setAutoSaveStatus('error')
+    } else {
+      dirtyRef.current = false
+      setAutoSaveStatus('saved')
+      autoSaveHideRef.current = setTimeout(() => setAutoSaveStatus('idle'), 2000)
+    }
+  }
+
+  // Called on every quant sheet edit — (re)starts the 5s debounce timer.
+  function scheduleAutoSave() {
+    dirtyRef.current = true
+    if (isApproved || !canEditActiveTab) return
+    clearAutoSaveTimer()
+    autoSaveTimerRef.current = setTimeout(() => { void performAutoSave() }, 5000)
+  }
+
+  function handleSave() {
+    // Manual save takes priority over any pending auto-save.
+    clearAutoSaveTimer()
+    if (autoSaveHideRef.current) {
+      clearTimeout(autoSaveHideRef.current)
+      autoSaveHideRef.current = null
+    }
+    setAutoSaveStatus('idle')
+    setError(null)
+    setSaved(false)
+
+    const items = buildItemsPayload()
 
     startTransition(async () => {
       const result = await saveLotQuote({
@@ -326,7 +414,7 @@ export default function LotQuantities({
         items,
       })
       if (result?.error) setError(result.error)
-      else setSaved(true)
+      else { setSaved(true); dirtyRef.current = false }
     })
   }
 
@@ -369,23 +457,44 @@ export default function LotQuantities({
       {open && (<>
 
       {/* Estimate / Budget / Final toggle — Estimate hidden entirely for non-admins */}
-      <div className="flex items-center gap-1 bg-surface-raised rounded-lg p-1 self-start w-fit">
-        {(['estimate', 'budget', 'final'] as const)
-          .filter((type) => type !== 'estimate' || isAdmin)
-          .map((type) => (
-            <button
-              key={type}
-              type="button"
-              onClick={() => switchMode(type)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                quoteType === type
-                  ? 'bg-surface text-fg shadow-sm'
-                  : 'text-fg-muted hover:text-fg-secondary'
-              }`}
-            >
-              {type === 'estimate' ? 'Estimate' : type === 'budget' ? 'Budget' : 'Final'}
-            </button>
-          ))}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-1 bg-surface-raised rounded-lg p-1 self-start w-fit">
+          {(['estimate', 'budget', 'final'] as const)
+            .filter((type) => type !== 'estimate' || isAdmin)
+            .map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => switchMode(type)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  quoteType === type
+                    ? 'bg-surface text-fg shadow-sm'
+                    : 'text-fg-muted hover:text-fg-secondary'
+                }`}
+              >
+                {type === 'estimate' ? 'Estimate' : type === 'budget' ? 'Budget' : 'Final'}
+              </button>
+            ))}
+        </div>
+
+        {/* Auto-save status — subtle, top-right of the quant sheet section */}
+        {autoSaveStatus !== 'idle' && (
+          <span
+            className={`shrink-0 text-xs font-medium ${
+              autoSaveStatus === 'error'
+                ? 'text-amber-600'
+                : autoSaveStatus === 'saved'
+                  ? 'text-accent-fg'
+                  : 'text-fg-muted'
+            }`}
+          >
+            {autoSaveStatus === 'saving'
+              ? 'Saving…'
+              : autoSaveStatus === 'saved'
+                ? 'Saved'
+                : 'Auto-save failed — please save manually'}
+          </span>
+        )}
       </div>
 
       {/* Status badge — draft/submitted distinction removed; Approved still matters (locks editing) */}
@@ -674,7 +783,7 @@ export default function LotQuantities({
           <label className="block text-sm font-medium text-fg-secondary mb-1">Notes</label>
           <textarea
             value={notes}
-            onChange={(e) => setNotes(e.target.value)}
+            onChange={(e) => { setSaved(false); scheduleAutoSave(); setNotes(e.target.value) }}
             rows={3}
             placeholder="Any notes about this quantity takeoff…"
             className="block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg placeholder:text-fg-muted shadow-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 resize-none"
