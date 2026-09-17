@@ -142,8 +142,18 @@ export type LotDrillDownRow = {
   // (final - budget) / budget * 100 — how closely actual work tracked to
   // budget. null unless both a budget and a final total exist.
   budgetVsFinalPct: number | null
+  // (final - estimate) / estimate * 100 — how far the actual final quant
+  // total came in from what was estimated. Shown for contract-priced lots
+  // alongside contractVariance, since estimate vs final is a different
+  // comparison from final vs contract.
+  estimateVsFinalPct: number | null
   varianceCategories: LotVarianceCategory[] | null
   contractPrice: number | null
+  // finalTotal (actual final quant sheet total) minus contractPrice — how
+  // actual costs compare to the fixed contract price. Positive = over,
+  // negative = under. Null unless both a contract price and a final total exist.
+  contractVariance: number | null
+  contractVariancePct: number | null
   subcontractorCost: number
   subcontractorBreakdown: SubcontractorCostLine[]
   margin: number | null
@@ -425,16 +435,25 @@ function buildLotCalcs(
       stageId: lot.stage_id,
       buildComplete: lot.build_complete,
       invoiced: lot.invoiced,
-      finalTotal: hasContractPrice ? cp : (finalQuote ? quoteTotal(finalQuote.lot_quote_items) : null),
-      estimateTotal: hasContractPrice ? null : (estimateQuote ? quoteTotal(estimateQuote.lot_quote_items) : null),
+      // finalTotal is always the actual final quant sheet total (Providence
+      // Works), never the contract price — contractPrice is its own field
+      // below, so contract-priced lots can show both side by side.
+      finalTotal: finalQuote ? quoteTotal(finalQuote.lot_quote_items) : null,
+      // estimateTotal, like finalTotal, is always the real quant total — the
+      // drill-down shows it alongside the contract price for NLV lots too.
+      estimateTotal: estimateQuote ? quoteTotal(estimateQuote.lot_quote_items) : null,
       budgetTotal: hasContractPrice ? null : (budgetQuote ? quoteTotal(budgetQuote.lot_quote_items) : null),
       bestTotal: hasContractPrice ? cp : (best ? quoteTotal(best.lot_quote_items) : null),
       hasQuoteData: hasContractPrice || quotesForLot.length > 0,
-      estimateCats: hasContractPrice ? null : (estimateQuote ? computeCategoryQuantities(estimateQuote.lot_quote_items) : null),
-      finalCats: hasContractPrice ? null : (finalQuote ? computeCategoryQuantities(finalQuote.lot_quote_items) : null),
-      estimatePlantSizes: hasContractPrice ? null : (estimateQuote ? computePlantSizeQuantities(estimateQuote.lot_quote_items) : null),
-      budgetPlantSizes: hasContractPrice ? null : (budgetQuote ? computePlantSizeQuantities(budgetQuote.lot_quote_items) : null),
-      finalPlantSizes: hasContractPrice ? null : (finalQuote ? computePlantSizeQuantities(finalQuote.lot_quote_items) : null),
+      // Category/plant-size quantities feed the materials & quote accuracy
+      // section and must never be suppressed by contract pricing — the
+      // quant sheet data exists independently of whether the lot is invoiced
+      // off a contract price or the quant total.
+      estimateCats: estimateQuote ? computeCategoryQuantities(estimateQuote.lot_quote_items) : null,
+      finalCats: finalQuote ? computeCategoryQuantities(finalQuote.lot_quote_items) : null,
+      estimatePlantSizes: estimateQuote ? computePlantSizeQuantities(estimateQuote.lot_quote_items) : null,
+      budgetPlantSizes: budgetQuote ? computePlantSizeQuantities(budgetQuote.lot_quote_items) : null,
+      finalPlantSizes: finalQuote ? computePlantSizeQuantities(finalQuote.lot_quote_items) : null,
       contractPrice: cp,
       subcontractorCost,
       subcontractorBreakdown: subBreakdown,
@@ -573,6 +592,23 @@ function budgetVsFinalVariance(lot: LotCalc): number | null {
   return ((lot.finalTotal - lot.budgetTotal) / lot.budgetTotal) * 100
 }
 
+// Estimate vs final $ variance for a single lot — how far the actual final
+// quant total came in from what was estimated. Only meaningful once both exist.
+function estimateVsFinalVariance(lot: LotCalc): number | null {
+  if (lot.estimateTotal == null || lot.finalTotal == null || lot.estimateTotal <= 0) return null
+  return ((lot.finalTotal - lot.estimateTotal) / lot.estimateTotal) * 100
+}
+
+// The dollar amount actually invoiced for a lot. Contract price takes
+// priority — NLV work bills the fixed contract price, not the quant total,
+// which is now tracked separately as finalTotal (see buildLotCalcs). Falls
+// back to the real final quant total, then the best-scored quote, matching
+// the pre-existing "prefer final over best-scored" behaviour for
+// Providence-style (non-contract) lots.
+function invoicedAmount(lot: LotCalc): number | null {
+  return lot.contractPrice ?? lot.finalTotal ?? lot.bestTotal
+}
+
 // ── Aggregate summaries (shared by drill-down & comparison) ────────────────────
 
 function buildAggregateSummary(lots: LotCalc[]): AggregateSummary {
@@ -584,7 +620,7 @@ function buildAggregateSummary(lots: LotCalc[]): AggregateSummary {
   let pipelineRevenue = 0
   let revenueLotCount = 0
   for (const lot of lots) {
-    const invoicedTotal = lot.finalTotal ?? lot.bestTotal
+    const invoicedTotal = invoicedAmount(lot)
     if (lot.invoiced && invoicedTotal !== null) {
       invoicedRevenue += invoicedTotal
       revenueLotCount++
@@ -646,7 +682,7 @@ export function buildAnalyticsData(input: {
   const invoicedLots = lotsWithQuotes.filter((l) => l.invoiced)
   const invoicedTotal = sum(
     invoicedLots
-      .map((l) => l.finalTotal ?? l.bestTotal)
+      .map((l) => invoicedAmount(l))
       .filter((v): v is number => v !== null)
   )
 
@@ -655,11 +691,11 @@ export function buildAnalyticsData(input: {
   const pipelineTotal = sum(pipelineEligible.map((l) => l.bestTotal!))
 
   const compareLots = invoicedLots.filter(
-    (l) => l.finalTotal !== null && l.estimateTotal !== null && l.estimateTotal > 0
+    (l) => invoicedAmount(l) !== null && l.estimateTotal !== null && l.estimateTotal > 0
   )
   let avgComparison: AnalyticsData['revenue']['avgComparison'] = null
   if (compareLots.length > 0) {
-    const avgInvoiced = sum(compareLots.map((l) => l.finalTotal!)) / compareLots.length
+    const avgInvoiced = sum(compareLots.map((l) => invoicedAmount(l)!)) / compareLots.length
     const avgEstimated = sum(compareLots.map((l) => l.estimateTotal!)) / compareLots.length
     avgComparison = {
       avgInvoiced,
@@ -675,7 +711,7 @@ export function buildAnalyticsData(input: {
     let pipeline = 0
     for (const lot of lotsWithQuotes) {
       if (!lot.dueDate || monthKey(lot.dueDate) !== key) continue
-      const invoicedTotal = lot.finalTotal ?? lot.bestTotal
+      const invoicedTotal = invoicedAmount(lot)
       if (lot.invoiced && invoicedTotal !== null) invoiced += invoicedTotal
       else if (!lot.invoiced && lot.bestTotal !== null) pipeline += lot.bestTotal
     }
@@ -765,6 +801,12 @@ export function buildAnalyticsData(input: {
           .map((lot) => {
             const margin = lot.contractPrice != null ? lot.contractPrice - lot.subcontractorCost : null
             const marginPct = margin != null && lot.contractPrice! > 0 ? (margin / lot.contractPrice!) * 100 : null
+            const contractVariance = lot.contractPrice != null && lot.finalTotal != null
+              ? lot.finalTotal - lot.contractPrice
+              : null
+            const contractVariancePct = contractVariance != null && lot.contractPrice! > 0
+              ? (contractVariance / lot.contractPrice!) * 100
+              : null
             return {
               id: lot.id,
               lotNumber: lot.lotNumber,
@@ -776,8 +818,11 @@ export function buildAnalyticsData(input: {
               budgetTotal: lot.budgetTotal,
               finalTotal: lot.finalTotal,
               budgetVsFinalPct: budgetVsFinalVariance(lot),
+              estimateVsFinalPct: estimateVsFinalVariance(lot),
               varianceCategories: lotVarianceCategories(lot),
               contractPrice: lot.contractPrice,
+              contractVariance,
+              contractVariancePct,
               subcontractorCost: lot.subcontractorCost,
               subcontractorBreakdown: lot.subcontractorBreakdown,
               margin,

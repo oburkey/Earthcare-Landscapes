@@ -13,6 +13,18 @@ function MarginText({ margin, marginPct }: { margin: number; marginPct: number |
   )
 }
 
+// Contract variance: positive = actual final total came in over the fixed
+// contract price (bad), negative = under (good) — opposite polarity to
+// MarginText, so it gets its own color rule.
+function VarianceText({ variance, variancePct }: { variance: number; variancePct: number | null }) {
+  return (
+    <span className={variance <= 0 ? 'text-green-700' : 'text-red-600'}>
+      {fmtCurrency(variance)}
+      {variancePct != null && <span className="ml-1 text-fg-muted">({fmtPct(variancePct, 0)})</span>}
+    </span>
+  )
+}
+
 // ── Quote-based lot row (Providence-style) — final price + variance detail ────
 
 function LotRow({ lot }: { lot: LotDrillDownRow }) {
@@ -105,6 +117,28 @@ function NlvLotRow({ lot }: { lot: LotDrillDownRow }) {
           {lot.contractPrice !== null ? fmtCurrency(lot.contractPrice) : '—'}
         </td>
         <td className="px-2 py-2 text-right text-fg-muted">
+          {lot.estimateTotal !== null ? fmtCurrency(lot.estimateTotal) : '—'}
+        </td>
+        <td className="px-2 py-2 text-right text-fg-secondary">
+          {lot.finalTotal !== null ? fmtCurrency(lot.finalTotal) : '—'}
+        </td>
+        <td className="px-2 py-2 text-right">
+          {lot.contractVariance !== null ? (
+            <VarianceText variance={lot.contractVariance} variancePct={lot.contractVariancePct} />
+          ) : (
+            <span className="text-fg-muted">—</span>
+          )}
+        </td>
+        <td className="px-2 py-2 text-right">
+          {lot.estimateVsFinalPct !== null ? (
+            <span className={lot.estimateVsFinalPct <= 0 ? 'text-green-700' : 'text-red-600'}>
+              {fmtPct(lot.estimateVsFinalPct, 0)}
+            </span>
+          ) : (
+            <span className="text-fg-muted">—</span>
+          )}
+        </td>
+        <td className="px-2 py-2 text-right text-fg-muted">
           {lot.subcontractorCost > 0 ? fmtCurrency(lot.subcontractorCost) : '—'}
         </td>
         <td className="px-2 py-2 pr-4 text-right">
@@ -130,7 +164,7 @@ function NlvLotRow({ lot }: { lot: LotDrillDownRow }) {
       </tr>
       {expanded && hasBreakdown && (
         <tr className="border-t border-border-subtle bg-surface-raised/50">
-          <td colSpan={9} className="px-4 py-2.5">
+          <td colSpan={13} className="px-4 py-2.5">
             <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-fg-muted">
               Subcontractor costs
             </p>
@@ -189,6 +223,10 @@ function StageRow({ stage, expanded, onToggle }: { stage: StageAnalytics; expand
                   <th className="text-left font-medium px-2 py-2">Build</th>
                   <th className="text-left font-medium px-2 py-2">Invoiced</th>
                   <th className="text-right font-medium px-2 py-2">Contract price</th>
+                  <th className="text-right font-medium px-2 py-2">Estimate</th>
+                  <th className="text-right font-medium px-2 py-2">Final amount</th>
+                  <th className="text-right font-medium px-2 py-2">Variance (final vs contract)</th>
+                  <th className="text-right font-medium px-2 py-2">Estimate vs final</th>
                   <th className="text-right font-medium px-2 py-2">Subcontractor cost</th>
                   <th className="text-right font-medium px-2 py-2 pr-4">Margin</th>
                   <th className="w-8 px-2 py-2" />
