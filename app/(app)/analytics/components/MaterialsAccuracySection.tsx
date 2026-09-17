@@ -1,10 +1,18 @@
 import { fmtNumber, fmtPct } from '../format'
-import { CATEGORY_LABELS, type AnalyticsData, type PlantSize } from '../lib'
+import { type AnalyticsData, type PlantSize } from '../lib'
 
 const PLANT_SIZE_LABELS: Record<PlantSize, string> = {
   '130/140mm plants': '130/140mm',
   '200mm plants': '200mm',
   '300mm plants': '300mm',
+}
+
+// Signed quantity for the variance column, e.g. "+14" / "-3" — fmtNumber
+// already renders the "-" for negatives via toLocaleString, so only the "+"
+// for positives needs adding here.
+function signedQty(n: number): string {
+  const formatted = fmtNumber(n, 1)
+  return n > 0 ? `+${formatted}` : formatted
 }
 
 export default function MaterialsAccuracySection({
@@ -13,30 +21,56 @@ export default function MaterialsAccuracySection({
   materials: AnalyticsData['materials']
   isAdmin: boolean
 }) {
-  const { variance, plantRatios, plantBreakdown } = materials
-  const categoryKeys = Object.keys(CATEGORY_LABELS) as (keyof typeof CATEGORY_LABELS)[]
+  const { plantRatios, plantBreakdown, accuracyRows, lotCount } = materials
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {categoryKeys.map((key) => {
-          const stat = variance[key]
-          return (
-            <div key={key} className="rounded-xl border border-border bg-surface p-4">
-              <p className="text-xs font-medium text-fg-muted">{CATEGORY_LABELS[key]}</p>
-              {stat.avgPct === null ? (
-                <p className="mt-1 text-sm text-fg-muted">No comparable lots</p>
-              ) : (
-                <>
-                  <p className="mt-1 text-2xl font-semibold text-fg">{fmtPct(stat.avgPct)}</p>
-                  <p className="mt-1 text-xs text-fg-muted">
-                    avg. final vs estimate, {stat.n} lot{stat.n === 1 ? '' : 's'}
-                  </p>
-                </>
-              )}
+      <div className="rounded-xl border border-border bg-surface overflow-hidden">
+        <div className="px-4 py-3 border-b border-border-subtle">
+          <h3 className="text-sm font-semibold text-fg-secondary">Materials accuracy — estimate vs final</h3>
+        </div>
+        {accuracyRows.length === 0 ? (
+          <p className="px-4 py-4 text-sm text-fg-muted">No comparable lots.</p>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-fg-muted">
+                    <th className="text-left font-medium px-4 py-2">Material</th>
+                    <th className="text-right font-medium px-2 py-2">Estimate</th>
+                    <th className="text-right font-medium px-2 py-2">Final</th>
+                    <th className="text-right font-medium px-2 py-2 pr-4">Variance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {accuracyRows.map((row) => (
+                    <tr key={row.key} className="border-t border-border-subtle">
+                      <td className="px-4 py-2 text-fg-secondary">{row.label}</td>
+                      <td className="px-2 py-2 text-right text-fg-muted">
+                        {fmtNumber(row.estimateQty, 1)} {row.unit}
+                      </td>
+                      <td className="px-2 py-2 text-right text-fg-muted">
+                        {fmtNumber(row.finalQty, 1)} {row.unit}
+                      </td>
+                      <td className="px-2 py-2 pr-4 text-right">
+                        <span className={row.variance <= 0 ? 'text-green-700' : 'text-red-600'}>
+                          {signedQty(row.variance)} {row.unit}
+                          {row.variancePct != null && (
+                            <span className="ml-1 text-fg-muted">({fmtPct(row.variancePct, 0)})</span>
+                          )}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          )
-        })}
+            <p className="px-4 py-2 text-xs text-fg-muted border-t border-border-subtle">
+              {lotCount === 1 ? 'Exact values — 1 lot' : `Averaged across ${lotCount} lot${lotCount === 1 ? '' : 's'}`}
+            </p>
+          </>
+        )}
       </div>
 
       <div className="rounded-xl border border-border bg-surface p-4">

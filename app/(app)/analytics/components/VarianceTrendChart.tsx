@@ -54,7 +54,9 @@ export default function VarianceTrendChart({ trend }: { trend: VarianceTrendPoin
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
       <h3 className="text-sm font-semibold text-fg-secondary">Variance trend</h3>
-      <p className="mt-1 text-xs text-fg-muted">Average % difference (final vs estimate), by due date month</p>
+      <p className="mt-1 text-xs text-fg-muted">
+        % difference (final vs estimate) per lot, ordered by when its final quant sheet was completed
+      </p>
       <div className="mt-3 h-64">
         <Line
           data={data}

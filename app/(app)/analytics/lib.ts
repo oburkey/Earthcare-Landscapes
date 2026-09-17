@@ -80,6 +80,7 @@ export type QuoteRow = {
   lot_id: string
   quote_type: 'estimate' | 'budget' | 'final'
   status: string
+  last_edited_at: string | null
   lot_quote_items: QuoteItemRow[] | null
 }
 
@@ -186,6 +187,22 @@ export type PlantSizeBreakdownRow = {
   budgetVsFinalPct: number | null
 }
 
+// One row of the materials-accuracy table — estimate vs final, averaged
+// (or, for a single-lot scope, exact) across every lot in the current
+// site/stage/lot filter that has both an estimate and a final quantity for
+// this material. lotCount is how many lots contributed, so the UI can label
+// the figures "avg across N lots" vs "exact" for a single lot.
+export type MaterialAccuracyRow = {
+  key: string
+  label: string
+  unit: string
+  estimateQty: number
+  finalQty: number
+  variance: number
+  variancePct: number | null
+  lotCount: number
+}
+
 export type MaterialsSection = {
   variance: MaterialsVariance
   trend: VarianceTrendPoint[]
@@ -196,6 +213,10 @@ export type MaterialsSection = {
     actualRear: number | null
   }
   plantBreakdown: PlantSizeBreakdownRow[]
+  accuracyRows: MaterialAccuracyRow[]
+  // Total lots in this section's scope — shown at the bottom of the
+  // materials-accuracy table so it's clear what's being averaged.
+  lotCount: number
 }
 
 // Lightweight site/stage/lot list for the materials-accuracy filter sidebar —
@@ -346,6 +367,36 @@ function computePlantSizeQuantities(items: QuoteItemRow[] | null | undefined): R
   return result
 }
 
+// Plant quantities split by BOTH side (front/rear) and pot size (130/140mm,
+// 200mm) — needed for the materials-accuracy table, which shows each
+// side/size combination as its own row. Unlike computePlantSizeQuantities
+// (sizes combined across sides) or computeCategoryQuantities.plantsFront/
+// plantsRear (sizes combined per side), this tracks both dimensions at once.
+export type PlantSideSizeQuantities = {
+  front130: number
+  front200: number
+  rear130: number
+  rear200: number
+}
+
+function computePlantSideSizeQuantities(items: QuoteItemRow[] | null | undefined): PlantSideSizeQuantities {
+  const result: PlantSideSizeQuantities = { front130: 0, front200: 0, rear130: 0, rear200: 0 }
+  if (!items) return result
+  for (const item of items) {
+    const qty = Number(item.quantity ?? 0)
+    const tpl = one(item.quote_template_items)
+    const side = tpl?.plant_category
+    if (item.item_name === '130/140mm plants') {
+      if (side === 'front') result.front130 += qty
+      else if (side === 'rear') result.rear130 += qty
+    } else if (item.item_name === '200mm plants') {
+      if (side === 'front') result.front200 += qty
+      else if (side === 'rear') result.rear200 += qty
+    }
+  }
+  return result
+}
+
 function computeCategoryQuantities(items: QuoteItemRow[] | null | undefined): CategoryQuantities {
   const cats: CategoryQuantities = { turf: 0, gardenBedFront: 0, gardenBedRear: 0, edging: 0, plantsFront: 0, plantsRear: 0 }
   if (!items) return cats
@@ -387,6 +438,11 @@ type LotCalc = {
   estimatePlantSizes: Record<PlantSize, number> | null
   budgetPlantSizes: Record<PlantSize, number> | null
   finalPlantSizes: Record<PlantSize, number> | null
+  estimatePlantSideSizes: PlantSideSizeQuantities | null
+  finalPlantSideSizes: PlantSideSizeQuantities | null
+  // When the final quant sheet was last saved — drives the variance trend's
+  // chronological ordering (see buildMaterialsSection).
+  finalLastEditedAt: string | null
   contractPrice: number | null
   subcontractorCost: number
   subcontractorBreakdown: SubcontractorCostLine[]
@@ -454,6 +510,9 @@ function buildLotCalcs(
       estimatePlantSizes: estimateQuote ? computePlantSizeQuantities(estimateQuote.lot_quote_items) : null,
       budgetPlantSizes: budgetQuote ? computePlantSizeQuantities(budgetQuote.lot_quote_items) : null,
       finalPlantSizes: finalQuote ? computePlantSizeQuantities(finalQuote.lot_quote_items) : null,
+      estimatePlantSideSizes: estimateQuote ? computePlantSideSizeQuantities(estimateQuote.lot_quote_items) : null,
+      finalPlantSideSizes: finalQuote ? computePlantSideSizeQuantities(finalQuote.lot_quote_items) : null,
+      finalLastEditedAt: finalQuote?.last_edited_at ?? null,
       contractPrice: cp,
       subcontractorCost,
       subcontractorBreakdown: subBreakdown,
@@ -512,24 +571,95 @@ function computePlantBreakdown(lots: LotCalc[]): PlantSizeBreakdownRow[] {
   return rows
 }
 
-// Builds the variance / trend / plant-ratio bundle for a set of lots against
-// a shared month axis (`months`) — used for the global "all sites" view and,
-// filtered to a subset of lotCalcs, for the per-site and per-stage views in
-// the materials-accuracy filter sidebar.
+// One definition per row of the materials-accuracy table. Edging stays a
+// single combined front+rear row (matching computeCategoryQuantities); plants
+// split by side because front/rear planting density differs materially.
+const MATERIAL_ROW_DEFS: {
+  key: string
+  label: string
+  unit: string
+  getEstimate: (l: LotCalc) => number | null
+  getFinal: (l: LotCalc) => number | null
+}[] = [
+  { key: 'turf', label: 'Turf', unit: 'm²',
+    getEstimate: (l) => l.estimateCats?.turf ?? null, getFinal: (l) => l.finalCats?.turf ?? null },
+  { key: 'gardenBedFront', label: 'Garden bed (front)', unit: 'm²',
+    getEstimate: (l) => l.estimateCats?.gardenBedFront ?? null, getFinal: (l) => l.finalCats?.gardenBedFront ?? null },
+  { key: 'gardenBedRear', label: 'Garden bed (rear)', unit: 'm²',
+    getEstimate: (l) => l.estimateCats?.gardenBedRear ?? null, getFinal: (l) => l.finalCats?.gardenBedRear ?? null },
+  { key: 'edging', label: 'Edging', unit: 'lm',
+    getEstimate: (l) => l.estimateCats?.edging ?? null, getFinal: (l) => l.finalCats?.edging ?? null },
+  { key: 'plantsFront130', label: 'Plants (front 140mm)', unit: 'No.',
+    getEstimate: (l) => l.estimatePlantSideSizes?.front130 ?? null, getFinal: (l) => l.finalPlantSideSizes?.front130 ?? null },
+  { key: 'plantsFront200', label: 'Plants (front 200mm)', unit: 'No.',
+    getEstimate: (l) => l.estimatePlantSideSizes?.front200 ?? null, getFinal: (l) => l.finalPlantSideSizes?.front200 ?? null },
+  { key: 'plantsRear130', label: 'Plants (rear 140mm)', unit: 'No.',
+    getEstimate: (l) => l.estimatePlantSideSizes?.rear130 ?? null, getFinal: (l) => l.finalPlantSideSizes?.rear130 ?? null },
+  { key: 'plantsRear200', label: 'Plants (rear 200mm)', unit: 'No.',
+    getEstimate: (l) => l.estimatePlantSideSizes?.rear200 ?? null, getFinal: (l) => l.finalPlantSideSizes?.rear200 ?? null },
+]
+
+// Averages (or, for a single lot, returns exact) estimate/final quantities
+// per material — one row per material that has data, skipping the rest.
+// A lot only contributes to a row if its estimate for that material is > 0
+// (same "meaningful comparison" gate as computeVariance), avoiding both
+// divide-by-zero and rows padded out by lots that never estimated the item.
+function computeMaterialAccuracyRows(lots: LotCalc[]): MaterialAccuracyRow[] {
+  const rows: MaterialAccuracyRow[] = []
+  for (const def of MATERIAL_ROW_DEFS) {
+    let estSum = 0, finSum = 0, n = 0
+    for (const lot of lots) {
+      const est = def.getEstimate(lot)
+      const fin = def.getFinal(lot)
+      if (est == null || fin == null || est <= 0) continue
+      estSum += est
+      finSum += fin
+      n++
+    }
+    if (n === 0) continue
+    const estimateQty = estSum / n
+    const finalQty = finSum / n
+    const variance = finalQty - estimateQty
+    rows.push({
+      key: def.key,
+      label: def.label,
+      unit: def.unit,
+      estimateQty,
+      finalQty,
+      variance,
+      variancePct: estimateQty > 0 ? (variance / estimateQty) * 100 : null,
+      lotCount: n,
+    })
+  }
+  return rows
+}
+
+// Builds the variance / trend / plant-ratio bundle for a set of lots — used
+// for the global "all sites" view and, filtered to a subset of lotCalcs, for
+// the per-site, per-stage and per-lot views in the materials-accuracy filter
+// sidebar.
 function buildMaterialsSection(
   lotCalcs: LotCalc[],
-  months: MonthPoint[],
   configuredFront: number,
   configuredRear: number
 ): MaterialsSection {
   const variance = computeVariance(lotCalcs)
 
-  const trend: VarianceTrendPoint[] = months.map(({ key, label }) => {
-    const monthLots = lotCalcs.filter((l) => l.dueDate && monthKey(l.dueDate) === key)
-    const v = computeVariance(monthLots)
+  // Trend is one point per lot (not per calendar month) — only lots with
+  // BOTH an estimate and a final quant sheet qualify (estimateCats/finalCats
+  // are only non-null once that quote type actually exists — see
+  // buildLotCalcs), ordered chronologically by when the final quant sheet
+  // was last saved, oldest first, so it reads as accuracy over completed
+  // lots in the order they were finished.
+  const trendLots = lotCalcs
+    .filter((l) => l.estimateCats && l.finalCats && l.finalLastEditedAt != null)
+    .sort((a, b) => new Date(a.finalLastEditedAt!).getTime() - new Date(b.finalLastEditedAt!).getTime())
+
+  const trend: VarianceTrendPoint[] = trendLots.map((lot) => {
+    const v = computeVariance([lot])
     return {
-      key,
-      label,
+      key: lot.id,
+      label: lot.lotNumber,
       turf: v.turf.avgPct,
       gardenBedFront: v.gardenBedFront.avgPct,
       gardenBedRear: v.gardenBedRear.avgPct,
@@ -555,6 +685,8 @@ function buildMaterialsSection(
     trend,
     plantRatios: { configuredFront, configuredRear, actualFront, actualRear },
     plantBreakdown: computePlantBreakdown(lotCalcs),
+    accuracyRows: computeMaterialAccuracyRows(lotCalcs),
+    lotCount: lotCalcs.length,
   }
 }
 
@@ -747,7 +879,7 @@ export function buildAnalyticsData(input: {
   // silently disappear from accuracy figures while still being visible when
   // drilling into its site/stage.
   const globalRatios = resolveRatios(null, plantRatioSettings)
-  const materials = buildMaterialsSection(drillLotCalcs, revenueMonths, globalRatios.front, globalRatios.rear)
+  const materials = buildMaterialsSection(drillLotCalcs, globalRatios.front, globalRatios.rear)
 
   // Per-site / per-stage / per-lot breakdowns for the materials-accuracy
   // filter sidebar — same drillLotCalcs as above/the drill-down, so
@@ -760,14 +892,14 @@ export function buildAnalyticsData(input: {
     const siteRatios = resolveRatios(site.id, plantRatioSettings)
 
     const siteLotCalcs = drillLotCalcs.filter((l) => siteStages.some((s) => s.id === l.stageId))
-    materialsBySite[site.id] = buildMaterialsSection(siteLotCalcs, revenueMonths, siteRatios.front, siteRatios.rear)
+    materialsBySite[site.id] = buildMaterialsSection(siteLotCalcs, siteRatios.front, siteRatios.rear)
 
     const stageOptions = siteStages.map((stage) => {
       const stageLotCalcs = drillLotCalcs.filter((l) => l.stageId === stage.id)
-      materialsByStage[stage.id] = buildMaterialsSection(stageLotCalcs, revenueMonths, siteRatios.front, siteRatios.rear)
+      materialsByStage[stage.id] = buildMaterialsSection(stageLotCalcs, siteRatios.front, siteRatios.rear)
 
       for (const lot of stageLotCalcs) {
-        materialsByLot[lot.id] = buildMaterialsSection([lot], revenueMonths, siteRatios.front, siteRatios.rear)
+        materialsByLot[lot.id] = buildMaterialsSection([lot], siteRatios.front, siteRatios.rear)
       }
 
       const lotOptions = [...stageLotCalcs]
