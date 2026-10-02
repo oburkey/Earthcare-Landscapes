@@ -24,6 +24,11 @@ export type QuoteSection = {
   name: string
   orderIndex: number
   items: QuoteLineItem[]
+  // Manual override for this section's subtotal — null/undefined means use
+  // the calculated sum of items. Optional so call sites that build a
+  // QuoteSection without an override (presets, the extra-job source-quote
+  // PDF) don't need to be touched.
+  overrideSubtotal?: number | null
 }
 
 export type QuoteRow = {
@@ -38,6 +43,9 @@ export type QuoteRow = {
   sections: QuoteSection[]
   notes: string
   createdAt: string
+  // Manual override for the quote's grand total — null means use the
+  // calculated sum of (possibly overridden) section subtotals.
+  overrideTotal: number | null
 }
 
 export type SiteOption = {
@@ -74,10 +82,13 @@ function calcItemsTotal(items: QuoteLineItem[]): number {
 }
 
 function calcSectionSubtotal(section: QuoteSection): number {
-  return calcItemsTotal(section.items)
+  return section.overrideSubtotal ?? calcItemsTotal(section.items)
 }
 
-function calcGrandTotal(sections: QuoteSection[]): number {
+// `overrideTotal` wins outright when set; otherwise it's the sum of each
+// section's subtotal (which itself may be overridden).
+function calcGrandTotal(sections: QuoteSection[], overrideTotal?: number | null): number {
+  if (overrideTotal != null) return overrideTotal
   return sections.reduce((sum, s) => sum + calcSectionSubtotal(s), 0)
 }
 
@@ -105,7 +116,7 @@ function emptyLine(orderIndex: number): QuoteLineItem {
 }
 
 function emptySection(orderIndex: number): QuoteSection {
-  return { name: '', orderIndex, items: [emptyLine(0)] }
+  return { name: '', orderIndex, items: [emptyLine(0)], overrideSubtotal: null }
 }
 
 // Renumbers orderIndex to match array position — called after any
@@ -197,10 +208,11 @@ export function buildQuoteHtml(
   sections: QuoteSection[],
   notes: string,
   logoSrc: string,
-  includeGst: boolean
+  includeGst: boolean,
+  overrideTotal: number | null = null
 ): string {
   const date = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
-  const grandTotal = calcGrandTotal(sections)
+  const grandTotal = calcGrandTotal(sections, overrideTotal)
   const showSectionSubtotals = sections.length >= 2
 
   const rows = sections.map((s) => quoteSectionRows(s, includeGst, showSectionSubtotals)).join('')
@@ -274,7 +286,7 @@ function buildCombinedQuotesPdf(selectedQuotes: QuoteRow[], logoSrc: string): st
   let grandTotal = 0
 
   const quoteBlocks = selectedQuotes.map((q, idx) => {
-    const quoteTotal = calcGrandTotal(q.sections)
+    const quoteTotal = calcGrandTotal(q.sections, q.overrideTotal)
     grandTotal += quoteTotal
     const showSectionSubtotals = q.sections.length >= 2
 
@@ -427,6 +439,7 @@ export default function QuotesView({
   const [status, setStatus]           = useState<'draft' | 'sent' | 'accepted'>('draft')
   const [sections, setSections]       = useState<QuoteSection[]>([emptySection(0)])
   const [notes, setNotes]             = useState('')
+  const [overrideTotal, setOverrideTotal] = useState<number | null>(null)
   const [formStages, setFormStages]   = useState<{ id: string; name: string }[]>([])
   const [loadingFormStages, setLoadingFormStages] = useState(false)
   const [convertValidation, setConvertValidation] = useState(false)
@@ -467,8 +480,9 @@ export default function QuotesView({
   function openNew() {
     setSiteId(''); setStageId(''); setReference(''); setDescription('')
     setStatus('draft')
-    setSections([{ name: '', orderIndex: 0, items: [{ description: 'Administration & Preliminary', qty: 1, unit: 'item', rate: 500, orderIndex: 0 }] }])
+    setSections([{ name: '', orderIndex: 0, items: [{ description: 'Administration & Preliminary', qty: 1, unit: 'item', rate: 500, orderIndex: 0 }], overrideSubtotal: null }])
     setNotes('')
+    setOverrideTotal(null)
     setFormStages([]); setConvertValidation(false); setIncludeGst(false)
     setActionError(null); setView('new'); setPickerOpen(false)
   }
@@ -486,10 +500,12 @@ export default function QuotesView({
             name: s.name,
             orderIndex: 0,
             items: s.items.length > 0 ? reindex(s.items.map((i) => ({ ...i, id: undefined }))) : [emptyLine(0)],
+            overrideSubtotal: null,
           })))
         : [emptySection(0)]
     )
     setNotes('')
+    setOverrideTotal(null)
     setFormStages([]); setConvertValidation(false); setIncludeGst(false)
     setActionError(null); setView('new'); setPickerOpen(false)
   }
@@ -502,6 +518,7 @@ export default function QuotesView({
     setStatus(q.status)
     setSections(q.sections.length > 0 ? q.sections : [emptySection(0)])
     setNotes(q.notes)
+    setOverrideTotal(q.overrideTotal ?? null)
     setConvertValidation(false)
     setIncludeGst(false)
     setActionError(null)
@@ -533,6 +550,13 @@ export default function QuotesView({
 
   function renameSection(sectionIdx: number, name: string) {
     setSections((prev) => prev.map((s, idx) => idx === sectionIdx ? { ...s, name } : s))
+  }
+
+  // Empty input clears the override (reverts to the calculated subtotal).
+  function updateSectionOverride(sectionIdx: number, value: string) {
+    const parsed = value === '' ? null : parseFloat(value)
+    const overrideSubtotal = parsed === null || isNaN(parsed) ? null : parsed
+    setSections((prev) => prev.map((s, idx) => idx === sectionIdx ? { ...s, overrideSubtotal } : s))
   }
 
   function addLine(sectionIdx: number) {
@@ -618,6 +642,7 @@ export default function QuotesView({
     fd.set('status', status)
     fd.set('sections', JSON.stringify(sections))
     fd.set('notes', notes)
+    fd.set('override_total', overrideTotal != null ? String(overrideTotal) : '')
 
     const result = await saveQuote(fd)
     setSaving(false)
@@ -633,14 +658,14 @@ export default function QuotesView({
     if (view === 'new') {
       const newId = ('id' in (result ?? {})) ? (result as { id: string }).id : crypto.randomUUID()
       setQuotes((prev) => [
-        { id: newId, siteId: siteId || null, siteName: resolvedSiteName, stageId: stageId || null, stageName: resolvedStageName, reference, description, status, sections, notes, createdAt: new Date().toISOString() },
+        { id: newId, siteId: siteId || null, siteName: resolvedSiteName, stageId: stageId || null, stageName: resolvedStageName, reference, description, status, sections, notes, createdAt: new Date().toISOString(), overrideTotal },
         ...prev,
       ])
     } else {
       setQuotes((prev) =>
         prev.map((q) =>
           q.id === view
-            ? { ...q, siteId: siteId || null, siteName: resolvedSiteName, stageId: stageId || null, stageName: resolvedStageName, reference, description, status, sections, notes }
+            ? { ...q, siteId: siteId || null, siteName: resolvedSiteName, stageId: stageId || null, stageName: resolvedStageName, reference, description, status, sections, notes, overrideTotal }
             : q
         )
       )
@@ -783,14 +808,18 @@ export default function QuotesView({
   function handleDownloadPDF() {
     const resolvedSiteName = sites.find((s) => s.id === siteId)?.name ?? null
     const filename = slug(resolvedSiteName, reference || 'Quote') + '.pdf'
-    const html = buildQuoteHtml(resolvedSiteName, reference, description, sections, notes, LOGO_DATA_URL, includeGst)
+    const html = buildQuoteHtml(resolvedSiteName, reference, description, sections, notes, LOGO_DATA_URL, includeGst, overrideTotal)
     setPdfGenerating(true)
     downloadPDF(html, filename, setActionError, () => setPdfGenerating(false))
   }
 
   // ── Totals ─────────────────────────────────────────────────────────────────
+  // calculatedGrandTotal ignores the grand-total override (but still reflects
+  // any per-section overrides) — shown muted next to the effective total when
+  // overridden, so the builder never hides what it would otherwise be.
 
-  const grandTotal = calcGrandTotal(sections)
+  const calculatedGrandTotal = calcGrandTotal(sections)
+  const grandTotal = calcGrandTotal(sections, overrideTotal)
 
   // ── Builder view ───────────────────────────────────────────────────────────
 
@@ -1036,14 +1065,27 @@ export default function QuotesView({
                       </table>
                     </div>
 
-                    {showSubtotal && (
-                      <div className="flex justify-end border-t border-border-subtle pt-2">
-                        <div className="flex items-center gap-3 text-sm">
+                    <div className="flex items-center justify-between gap-3 flex-wrap border-t border-border-subtle pt-2">
+                      <label className="flex items-center gap-2 text-xs text-fg-muted">
+                        Override subtotal
+                        <input
+                          type="number" step="any"
+                          value={section.overrideSubtotal ?? ''}
+                          onChange={(e) => updateSectionOverride(sIdx, e.target.value)}
+                          placeholder="auto"
+                          className="w-28 rounded border border-border bg-surface px-2 py-1 text-sm text-fg text-right tabular-nums placeholder:text-fg-muted focus:border-border focus:outline-none"
+                        />
+                      </label>
+                      {(showSubtotal || section.overrideSubtotal != null) && (
+                        <div className="flex items-center gap-2 text-sm">
                           <span className="text-fg-muted">Subtotal</span>
                           <span className="font-semibold tabular-nums text-fg-secondary">{fmt(sectionSubtotal)}</span>
+                          {section.overrideSubtotal != null && (
+                            <span className="text-xs text-fg-muted tabular-nums">(calc {fmt(calcItemsTotal(section.items))})</span>
+                          )}
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
 
                     <button
                       type="button"
@@ -1086,10 +1128,29 @@ export default function QuotesView({
 
           {/* Totals */}
           <div className="flex justify-end border-t border-border-subtle pt-4">
-            <div className="w-64 space-y-1.5 text-sm">
-              <div className="flex justify-between font-semibold text-fg">
+            <div className="w-72 space-y-2 text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-xs text-fg-muted">Override total</label>
+                <input
+                  type="number" step="any"
+                  value={overrideTotal ?? ''}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    const parsed = v === '' ? null : parseFloat(v)
+                    setOverrideTotal(parsed === null || isNaN(parsed) ? null : parsed)
+                  }}
+                  placeholder="auto"
+                  className="w-28 rounded border border-border bg-surface px-2 py-1 text-sm text-fg text-right tabular-nums placeholder:text-fg-muted focus:border-border focus:outline-none"
+                />
+              </div>
+              <div className="flex items-center justify-between font-semibold text-fg">
                 <span>Total (ex GST)</span>
-                <span className="tabular-nums">{fmt(grandTotal)}</span>
+                <span className="flex items-baseline gap-2">
+                  <span className="tabular-nums">{fmt(grandTotal)}</span>
+                  {overrideTotal != null && (
+                    <span className="text-xs font-normal text-fg-muted tabular-nums">(calc {fmt(calculatedGrandTotal)})</span>
+                  )}
+                </span>
               </div>
             </div>
           </div>
@@ -1276,7 +1337,7 @@ export default function QuotesView({
       ) : (
         <div className="rounded-xl border border-border bg-surface overflow-hidden divide-y divide-border-subtle">
           {filtered.map((q) => {
-            const rowSubtotal = calcGrandTotal(q.sections)
+            const rowSubtotal = calcGrandTotal(q.sections, q.overrideTotal)
             const date = new Date(q.createdAt).toLocaleDateString('en-AU', {
               day: 'numeric', month: 'short', year: 'numeric',
             })

@@ -16,6 +16,7 @@ type SavedSection = {
   name: string
   orderIndex: number
   items: SavedSectionItem[]
+  overrideSubtotal?: number | null
 }
 
 // Replaces all of a quote's sections + items with the given set — same
@@ -35,7 +36,12 @@ async function replaceSections(
   for (const section of sections) {
     const { data: sectionRow, error: sectionError } = await supabase
       .from('quote_sections')
-      .insert({ quote_id: quoteId, name: section.name, order_index: section.orderIndex })
+      .insert({
+        quote_id:          quoteId,
+        name:              section.name,
+        order_index:       section.orderIndex,
+        override_subtotal: section.overrideSubtotal ?? null,
+      })
       .select('id')
       .single()
     if (sectionError || !sectionRow) return { error: sectionError?.message ?? 'Failed to save section.' }
@@ -77,6 +83,10 @@ export async function saveQuote(
   const rawSections = formData.get('sections') as string
   const notes       = ((formData.get('notes') as string) ?? '').trim()
 
+  const rawOverrideTotal = (formData.get('override_total') as string) ?? ''
+  const parsedOverrideTotal = rawOverrideTotal === '' ? null : parseFloat(rawOverrideTotal)
+  const overrideTotal = parsedOverrideTotal === null || isNaN(parsedOverrideTotal) ? null : parsedOverrideTotal
+
   let sections: SavedSection[]
   try {
     sections = JSON.parse(rawSections || '[]')
@@ -90,13 +100,14 @@ export async function saveQuote(
     const { error } = await supabase
       .from('quotes')
       .update({
-        site_id:     siteId,
-        stage_id:    stageId,
+        site_id:       siteId,
+        stage_id:      stageId,
         reference,
         description,
         status,
         notes,
-        updated_at:  new Date().toISOString(),
+        override_total: overrideTotal,
+        updated_at:    new Date().toISOString(),
       })
       .eq('id', id)
     if (error) return { error: error.message }
@@ -111,13 +122,14 @@ export async function saveQuote(
   const { data, error } = await supabase
     .from('quotes')
     .insert({
-      site_id:    siteId,
-      stage_id:   stageId,
+      site_id:        siteId,
+      stage_id:       stageId,
       reference,
       description,
       status,
       notes,
-      created_by: profile.id,
+      override_total: overrideTotal,
+      created_by:     profile.id,
     })
     .select('id')
     .single()
