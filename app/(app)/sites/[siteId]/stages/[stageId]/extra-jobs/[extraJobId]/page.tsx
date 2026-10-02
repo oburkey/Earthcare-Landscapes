@@ -146,19 +146,22 @@ export default async function ExtraJobPage({ params }: Props) {
     after:  photos.filter((p) => p.photo_type === 'after'),
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const dueDate = (job as any).due_date as string | null
+
   return (
     <div className="min-h-screen bg-bg">
-      <div className="mx-auto max-w-lg px-4 py-6 space-y-5">
+      <div className="mx-auto max-w-4xl px-4 py-6 space-y-5">
 
         {/* Breadcrumb */}
         <nav className="flex items-center gap-1.5 text-sm text-fg-muted flex-wrap">
           <Link href="/sites" className="hover:text-fg-secondary">Sites</Link>
           <span>/</span>
-          <Link href={`/sites/${siteId}`} className="hover:text-fg-secondary truncate max-w-[80px]">{site.name}</Link>
+          <Link href={`/sites/${siteId}`} className="hover:text-fg-secondary truncate max-w-[80px] sm:max-w-[200px]">{site.name}</Link>
           <span>/</span>
-          <Link href={`/sites/${siteId}/stages/${stageId}`} className="hover:text-fg-secondary truncate max-w-[80px]">{stage.name}</Link>
+          <Link href={`/sites/${siteId}/stages/${stageId}`} className="hover:text-fg-secondary truncate max-w-[80px] sm:max-w-[200px]">{stage.name}</Link>
           <span>/</span>
-          <span className="text-fg-secondary font-medium truncate max-w-[100px]">{job.title}</span>
+          <span className="text-fg-secondary font-medium truncate max-w-[100px] sm:max-w-[280px]">{job.title}</span>
         </nav>
 
         {/* Header */}
@@ -181,27 +184,22 @@ export default async function ExtraJobPage({ params }: Props) {
           hiddenFields={{ extra_job_id: extraJobId, site_id: siteId, stage_id: stageId }}
         />
 
-        {/* Info card */}
-        {job.description && (
-          <div className="rounded-xl border border-border bg-surface px-4 py-3">
-            <p className="text-xs font-medium text-fg-muted mb-1">Description</p>
-            <p className="text-sm text-fg-secondary">{job.description}</p>
-          </div>
-        )}
-
-        {job.notes && (
-          <div className="rounded-xl border border-border bg-surface px-4 py-3">
-            <p className="text-xs font-medium text-fg-muted mb-1">Notes</p>
-            <p className="text-sm text-fg-secondary whitespace-pre-wrap">{job.notes}</p>
-          </div>
-        )}
-
-        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-        {(job as any).due_date && (
-          <div className="rounded-xl border border-border bg-surface px-4 py-3">
-            <p className="text-xs font-medium text-fg-muted mb-1">Due date</p>
-            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            <p className="text-sm text-fg-secondary">{formatDate((job as any).due_date)}</p>
+        {/* Details — single card of label/value rows, same pattern as the lot detail page */}
+        {(job.description || job.notes || dueDate) && (
+          <div className="rounded-xl border border-border bg-surface divide-y divide-border-subtle overflow-hidden">
+            {dueDate && <InfoRow label="Due date" value={formatDate(dueDate)} />}
+            {job.description && (
+              <div className="px-4 py-3">
+                <p className="text-xs font-medium text-fg-muted mb-1">Description</p>
+                <p className="text-sm text-fg-secondary">{job.description}</p>
+              </div>
+            )}
+            {job.notes && (
+              <div className="px-4 py-3">
+                <p className="text-xs font-medium text-fg-muted mb-1">Notes</p>
+                <p className="text-sm text-fg-secondary whitespace-pre-wrap">{job.notes}</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -239,7 +237,7 @@ export default async function ExtraJobPage({ params }: Props) {
                       {PHOTO_TYPE_LABELS[type]}
                       <span className="ml-1.5 font-normal text-fg-muted">({group.length})</span>
                     </p>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
                       {group.map((photo) => (
                         <div key={photo.id} className="space-y-1">
                           <a
@@ -346,6 +344,15 @@ export default async function ExtraJobPage({ params }: Props) {
         </div>
 
       </div>
+    </div>
+  )
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between px-4 py-3 gap-4">
+      <span className="text-sm text-fg-muted shrink-0">{label}</span>
+      <span className="text-sm text-right text-fg">{value}</span>
     </div>
   )
 }

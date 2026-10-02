@@ -1,7 +1,6 @@
 import { requireAuth, requireRole } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import InvoicesView from './InvoicesView'
-import ApprovedPanel from './ApprovedPanel'
+import InvoicesPageClient from './InvoicesPageClient'
 import InvoiceHistory from './InvoiceHistory'
 import type { SiteData, StageData, LotRow, LotSection, ExtraJobRow } from './InvoicesView'
 import type { ApprovedLot, ApprovedExtraJob, ApprovedProgressClaim } from './ApprovedPanel'
@@ -493,8 +492,12 @@ export default async function InvoicesPage() {
     <div className="min-h-screen bg-bg">
       <div className="mx-auto max-w-6xl px-4 py-6 space-y-5">
         <h1 className="text-xl font-semibold text-fg">Invoices</h1>
-        <ApprovedPanel lots={approvedLots} extraJobs={approvedExtraJobs} progressClaims={approvedProgressClaims} />
-        <InvoicesView sites={sites} isAdmin={true} />
+        <InvoicesPageClient
+          sites={sites}
+          approvedLots={approvedLots}
+          approvedExtraJobs={approvedExtraJobs}
+          approvedProgressClaims={approvedProgressClaims}
+        />
         <InvoiceHistory runs={invoiceHistory} />
       </div>
     </div>

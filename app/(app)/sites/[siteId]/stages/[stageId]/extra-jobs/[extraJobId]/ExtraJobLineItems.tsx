@@ -187,15 +187,26 @@ export default function ExtraJobLineItems({
 
       <div className="rounded-xl border border-border bg-surface overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
+          <table className="w-full text-sm border-collapse table-fixed">
+            {/* Description is the only column with no explicit width, so under
+                table-fixed it absorbs all remaining space — the other columns
+                stay compact regardless of container width. */}
+            <colgroup>
+              <col />
+              <col className="w-20" />
+              <col className="w-20" />
+              {isAdmin && <col className="w-24" />}
+              {isAdmin && <col className="w-28" />}
+              {canManage && <col className="w-10" />}
+            </colgroup>
             <thead>
               <tr className="border-b border-border">
-                <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide px-3 py-2 min-w-[160px]">Description</th>
-                <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide px-2 py-2 w-16">Qty</th>
-                <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide px-2 py-2 w-16">Unit</th>
-                {isAdmin && <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide px-2 py-2 w-20">Rate</th>}
-                {isAdmin && <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide px-2 py-2 w-24">Total</th>}
-                {canManage && <th className="w-10 px-2 py-2"></th>}
+                <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide px-3 py-2">Description</th>
+                <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide px-2 py-2">Qty</th>
+                <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide px-2 py-2">Unit</th>
+                {isAdmin && <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide px-2 py-2">Rate</th>}
+                {isAdmin && <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide px-2 py-2">Total</th>}
+                {canManage && <th className="px-2 py-2"></th>}
               </tr>
             </thead>
             <tbody>

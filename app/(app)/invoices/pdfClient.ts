@@ -76,18 +76,29 @@ export const CLAIM_STYLES = `
 .html2pdf__container .note { margin-top: 20px; font-size: 9px; color: #999; }
 </style>`
 
-export function lotClaimHtml(lot: ClaimLotData): string {
+export function lotClaimHtml(lot: ClaimLotData, hidePricing: boolean = false): string {
   const date  = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
   // Contract price replaces the Providence Works subtotal only — client
   // extras always come from the quant sheet regardless of contract pricing.
   const grand = (lot.contractPrice ?? lot.standardAmount) + lot.clientExtrasAmount
 
-  const extras = lot.showClientExtras ? lot.sections.filter((s) => s.isClientExtra) : []
+  // When hidePricing, a client-extras section with no actual line items
+  // (e.g. a template section the lot never used) is dropped entirely rather
+  // than showing an empty header with nothing under it.
+  const extras = lot.showClientExtras
+    ? lot.sections.filter((s) => s.isClientExtra && (!hidePricing || s.items.length > 0))
+    : []
   let secIdx = 0
   function sectionItemRows(section: LotSection): string {
     secIdx++
     const prefix = section.isClientExtra ? 'E' : String(secIdx)
-    const items  = section.items.map((item, i) => `
+    const items  = section.items.map((item, i) => hidePricing ? `
+      <tr>
+        <td class="r" style="color:#888;font-size:10px">${prefix}.${i + 1}</td>
+        <td>${item.name}</td>
+        <td class="r">${fmtQty(item.quantity)}</td>
+        <td class="u">${item.unit}</td>
+      </tr>` : `
       <tr>
         <td class="r" style="color:#888;font-size:10px">${prefix}.${i + 1}</td>
         <td>${item.name}</td>
@@ -96,11 +107,11 @@ export function lotClaimHtml(lot: ClaimLotData): string {
         <td class="r">${item.rate > 0 ? fmt(item.rate) : '—'}</td>
         <td class="r">${item.rate > 0 ? fmt(item.total) : '—'}</td>
       </tr>`).join('')
-    const sectionSubtotal = items
+    const sectionSubtotal = (!hidePricing && items)
       ? `<tr class="secsub"><td colspan="5">Subtotal</td><td class="r">${fmt(section.subtotal)}</td></tr>`
       : ''
     return `
-      <tr class="sec"><td colspan="6">${section.name}</td></tr>
+      <tr class="sec"><td colspan="${hidePricing ? 4 : 6}">${section.name}</td></tr>
       ${items}
       ${sectionSubtotal}`
   }
@@ -108,24 +119,27 @@ export function lotClaimHtml(lot: ClaimLotData): string {
   let standardRows: string
   let providenceSubtotal: string
   if (lot.contractPrice != null) {
-    standardRows = `
-      <tr><td></td><td>Contract Price</td><td class="r">1</td><td class="u">Lot</td><td class="r">${fmt(lot.contractPrice)}</td><td class="r">${fmt(lot.contractPrice)}</td></tr>`
+    standardRows = hidePricing
+      ? `<tr><td></td><td>Contract Price</td><td class="r">1</td><td class="u">Lot</td></tr>`
+      : `<tr><td></td><td>Contract Price</td><td class="r">1</td><td class="u">Lot</td><td class="r">${fmt(lot.contractPrice)}</td><td class="r">${fmt(lot.contractPrice)}</td></tr>`
     providenceSubtotal = ''
   } else {
     const standard = lot.sections.filter((s) => !s.isClientExtra)
     standardRows = standard.map(sectionItemRows).join('')
-    providenceSubtotal = standard.length > 0
+    providenceSubtotal = (!hidePricing && standard.length > 0)
       ? `<tr class="sub"><td colspan="5">Providence Works Subtotal</td><td class="r">${fmt(lot.standardAmount)}</td></tr>`
       : ''
   }
 
   const extrasRows = extras.map(sectionItemRows).join('')
-  const extrasSubtotal = extras.length > 0
+  const extrasSubtotal = (!hidePricing && extras.length > 0)
     ? `<tr class="sub"><td colspan="5">Client Extras Subtotal</td><td class="r">${fmt(lot.clientExtrasAmount)}</td></tr>`
     : ''
 
-  const tableContent = `${standardRows}${providenceSubtotal}${extrasRows}${extrasSubtotal}
+  const grandRow = hidePricing ? '' : `
     <tr class="grand"><td colspan="5">Grand Total (ex GST)</td><td class="r">${fmt(grand)}</td></tr>`
+
+  const tableContent = `${standardRows}${providenceSubtotal}${extrasRows}${extrasSubtotal}${grandRow}`
 
   return `
 <div class="invoice-page">
@@ -143,7 +157,7 @@ export function lotClaimHtml(lot: ClaimLotData): string {
     <thead><tr>
       <th>Code</th><th>Description</th>
       <th class="r">Qty</th><th>Unit</th>
-      <th class="r">Rate</th><th class="r">Total (ex GST)</th>
+      ${hidePricing ? '' : '<th class="r">Rate</th><th class="r">Total (ex GST)</th>'}
     </tr></thead>
     <tbody>${tableContent}</tbody>
   </table>
@@ -248,8 +262,10 @@ async function renderHtmlToPdfBlob(html: string): Promise<Blob> {
 }
 
 // Renders a single lot's claim sheet to a PDF Blob via html2pdf.js.
-export async function generateClaimPdfBlob(lot: ClaimLotData): Promise<Blob> {
-  return renderHtmlToPdfBlob(CLAIM_STYLES + lotClaimHtml(lot))
+// hidePricing defaults to false so existing callers (invoice snapshots,
+// InvoiceHistory's regeneration fallback) keep full pricing unchanged.
+export async function generateClaimPdfBlob(lot: ClaimLotData, hidePricing: boolean = false): Promise<Blob> {
+  return renderHtmlToPdfBlob(CLAIM_STYLES + lotClaimHtml(lot, hidePricing))
 }
 
 // Renders a single extra job's claim sheet to a PDF Blob via html2pdf.js.

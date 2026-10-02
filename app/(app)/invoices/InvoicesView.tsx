@@ -137,7 +137,8 @@ function claimSheetBody(
   stageName: string,
   lot: LotRow,
   invoiced: boolean,
-  logoSrc: string
+  logoSrc: string,
+  hidePricing: boolean = false
 ): string {
   const date = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
 
@@ -145,12 +146,23 @@ function claimSheetBody(
   // extras always come from the quant sheet regardless of contract pricing.
   const grand = (lot.contractPrice ?? lot.standardAmount) + lot.clientExtrasAmount
 
-  const extras = lot.showClientExtras ? lot.sections.filter((s) => s.isClientExtra) : []
+  // When hidePricing, a client-extras section with no actual line items
+  // (e.g. a template section the lot never used) is dropped entirely rather
+  // than showing an empty header with nothing under it.
+  const extras = lot.showClientExtras
+    ? lot.sections.filter((s) => s.isClientExtra && (!hidePricing || s.items.length > 0))
+    : []
   let secIdx = 0
   function sectionItemRows(section: LotSection): string {
     secIdx++
     const prefix = section.isClientExtra ? 'E' : String(secIdx)
-    const items = section.items.map((item, i) => `
+    const items = section.items.map((item, i) => hidePricing ? `
+      <tr>
+        <td class="code">${prefix}.${i + 1}</td>
+        <td>${item.name}</td>
+        <td class="r">${fmtQty(item.quantity)}</td>
+        <td class="u">${item.unit}</td>
+      </tr>` : `
       <tr>
         <td class="code">${prefix}.${i + 1}</td>
         <td>${item.name}</td>
@@ -159,11 +171,11 @@ function claimSheetBody(
         <td class="r">${item.rate > 0 ? fmt(item.rate) : '—'}</td>
         <td class="r">${item.rate > 0 ? fmt(item.total) : '—'}</td>
       </tr>`).join('')
-    const sectionSubtotal = items
+    const sectionSubtotal = (!hidePricing && items)
       ? `<tr class="secsub"><td colspan="5">Subtotal</td><td class="r">${fmt(section.subtotal)}</td></tr>`
       : ''
     return `
-      <tr class="sec"><td colspan="6">${section.name}</td></tr>
+      <tr class="sec"><td colspan="${hidePricing ? 4 : 6}">${section.name}</td></tr>
       ${items}
       ${sectionSubtotal}`
   }
@@ -171,7 +183,13 @@ function claimSheetBody(
   let standardRows: string
   let providenceSubtotal: string
   if (lot.contractPrice != null) {
-    standardRows = `
+    standardRows = hidePricing ? `
+      <tr>
+        <td class="code">1</td>
+        <td>Contract Price</td>
+        <td class="r">1</td>
+        <td class="u">Lot</td>
+      </tr>` : `
       <tr>
         <td class="code">1</td>
         <td>Contract Price</td>
@@ -184,7 +202,7 @@ function claimSheetBody(
   } else {
     const standard = lot.sections.filter((s) => !s.isClientExtra)
     standardRows = standard.map(sectionItemRows).join('')
-    providenceSubtotal = standard.length > 0 ? `
+    providenceSubtotal = (!hidePricing && standard.length > 0) ? `
       <tr class="sub">
         <td colspan="5">Providence Works Subtotal</td>
         <td class="r">${fmt(lot.standardAmount)}</td>
@@ -192,17 +210,19 @@ function claimSheetBody(
   }
 
   const extrasRows = extras.map(sectionItemRows).join('')
-  const extrasSubtotal = extras.length > 0 ? `
+  const extrasSubtotal = (!hidePricing && extras.length > 0) ? `
     <tr class="sub">
       <td colspan="5">Client Extras Subtotal</td>
       <td class="r">${fmt(lot.clientExtrasAmount)}</td>
     </tr>` : ''
 
-  const tableContent = `${standardRows}${providenceSubtotal}${extrasRows}${extrasSubtotal}
+  const grandRow = hidePricing ? '' : `
     <tr class="grand">
       <td colspan="5">Grand Total (ex GST)</td>
       <td class="r">${fmt(grand)}</td>
     </tr>`
+
+  const tableContent = `${standardRows}${providenceSubtotal}${extrasRows}${extrasSubtotal}${grandRow}`
 
   return `
 <div class="invoice-page">
@@ -223,7 +243,7 @@ function claimSheetBody(
       <tr>
         <th>Code</th><th>Description</th>
         <th class="r">Qty</th><th>Unit</th>
-        <th class="r">Rate</th><th class="r">Total (ex GST)</th>
+        ${hidePricing ? '' : '<th class="r">Rate</th><th class="r">Total (ex GST)</th>'}
       </tr>
     </thead>
     <tbody>
@@ -471,7 +491,7 @@ async function downloadPDF(
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; isAdmin: boolean }) {
+export default function InvoicesView({ sites, isAdmin, hidePricing }: { sites: SiteData[]; isAdmin: boolean; hidePricing: boolean }) {
   const router = useRouter()
   const [expandedSites, setExpandedSites] = useState<Set<string>>(new Set())
   // Stages start collapsed by default
@@ -707,7 +727,7 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
     const filename = slug(site.name, stageName, 'Lot', lot.lotNumber, 'Claim') + '.pdf'
     startGen(genId)
     const logoSrc = LOGO_DATA_URL
-    const content = CLAIM_STYLES + claimSheetBody(site, stageName, lot, invoicedMap[lot.id] ?? lot.invoiced, logoSrc)
+    const content = CLAIM_STYLES + claimSheetBody(site, stageName, lot, invoicedMap[lot.id] ?? lot.invoiced, logoSrc, hidePricing)
     downloadPDF(content, filename, setActionError, () => endGen(genId), true)
   }
 
@@ -764,7 +784,7 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
 
     // Build combined content: one lot body per page
     const bodies = selected.map(({ site, stageName, lot }, i) =>
-      `<div${i > 0 ? ' class="page-break"' : ''}>${claimSheetBody(site, stageName, lot, invoicedMap[lot.id] ?? lot.invoiced, logoSrc)}</div>`
+      `<div${i > 0 ? ' class="page-break"' : ''}>${claimSheetBody(site, stageName, lot, invoicedMap[lot.id] ?? lot.invoiced, logoSrc, hidePricing)}</div>`
     )
     const content = CLAIM_STYLES + bodies.join('')
 
@@ -1078,7 +1098,6 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                                   <tr className="border-b border-border">
                                     <th className="pb-2 pl-4 pr-3 w-8"></th>
                                     <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 pr-6 whitespace-nowrap">Job</th>
-                                    <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 pr-6 whitespace-nowrap">Home Design</th>
                                     <th className="text-right text-xs font-semibold text-fg-muted uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Quoted Amount</th>
                                     <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Final Amount</th>
                                     <th className="text-center text-xs font-semibold text-amber-600 uppercase tracking-wide pb-2 px-3 whitespace-nowrap">Pending</th>
@@ -1125,7 +1144,6 @@ export default function InvoicesView({ sites, isAdmin }: { sites: SiteData[]; is
                                             <span className="text-sm text-fg-secondary truncate">{job.title}</span>
                                           </div>
                                         </td>
-                                        <td className="py-2.5 pr-6 text-fg-muted whitespace-nowrap">—</td>
                                         <td className="py-2.5 px-3 text-right tabular-nums text-fg-muted">
                                           {job.quotedAmount != null ? fmt(job.quotedAmount) : <span className="text-fg-muted">—</span>}
                                         </td>
