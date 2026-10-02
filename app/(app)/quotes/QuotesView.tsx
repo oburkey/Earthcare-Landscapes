@@ -6,6 +6,7 @@ import {
   reorderQuoteSections, reorderQuoteLineItems,
 } from './actions'
 import { LOGO_DATA_URL } from '@/lib/pdfAssets'
+import { LABOUR_HOURLY_RATE, BOBCAT_HOURLY_RATE } from '@/lib/pricingPresets'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -902,17 +903,17 @@ export default function QuotesView({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => addPreset('Bobcat', 90)}
+                  onClick={() => addPreset('Bobcat', BOBCAT_HOURLY_RATE)}
                   className="rounded-lg border border-border px-2.5 py-1 text-xs font-medium text-fg-muted hover:bg-surface-raised transition-colors"
                 >
-                  + Bobcat $90/hr
+                  {`+ Bobcat $${BOBCAT_HOURLY_RATE}/hr`}
                 </button>
                 <button
                   type="button"
-                  onClick={() => addPreset('Labour', 65)}
+                  onClick={() => addPreset('Labour', LABOUR_HOURLY_RATE)}
                   className="rounded-lg border border-border px-2.5 py-1 text-xs font-medium text-fg-muted hover:bg-surface-raised transition-colors"
                 >
-                  + Labour $65/hr
+                  {`+ Labour $${LABOUR_HOURLY_RATE}/hr`}
                 </button>
               </div>
             </div>

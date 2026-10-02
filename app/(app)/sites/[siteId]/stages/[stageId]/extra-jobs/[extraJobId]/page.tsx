@@ -7,7 +7,8 @@ import type { ExtraJobStatus } from '@/types/database'
 import { EXTRA_JOB_STATUS_CONFIG, PHOTO_TYPE_LABELS, formatDate, PHOTO_CATEGORY_LABELS, PHOTO_CATEGORY_BADGE_CLASS } from '@/lib/lotStatus'
 import { uploadExtraJobPhoto, setExtraJobDelayed, clearExtraJobDelayed } from './actions'
 import EditExtraJobForm from './EditExtraJobForm'
-import ExtraJobPricing from './ExtraJobPricing'
+import ExtraJobLineItems from './ExtraJobLineItems'
+import { getExtraJobPresetRates, MULCH_PRESET_OPTIONS } from './pricing-actions'
 import PhotoUpload from '@/app/_components/PhotoUpload'
 import DelayControl from '@/app/_components/DelayControl'
 import SourceQuotePdf from './SourceQuotePdf'
@@ -43,8 +44,8 @@ export default async function ExtraJobPage({ params }: Props) {
   const [
     { data: job },
     { data: photoRows },
-    { data: sectionsData },
     { data: existingItems },
+    presetRates,
   ] = await Promise.all([
     supabase
       .from('extra_jobs')
@@ -63,19 +64,11 @@ export default async function ExtraJobPage({ params }: Props) {
       .eq('extra_job_id', extraJobId)
       .order('created_at', { ascending: true }),
     supabase
-      .from('quote_template_sections')
-      .select(`
-        id, name, order_index,
-        quote_template_items(id, name, unit, unit_price, is_auto_calculated, order_index)
-      `)
-      .eq('is_active', true)
-      .eq('is_client_extra', false)
-      .order('order_index', { ascending: true }),
-    supabase
       .from('extra_job_quote_items')
-      .select('template_item_id, description, unit, quantity, unit_price, item_type, sort_order')
+      .select('id, template_item_id, description, unit, quantity, unit_price, item_type, sort_order, quote_template_items(name, unit_price)')
       .eq('extra_job_id', extraJobId)
       .order('sort_order', { ascending: true }),
+    getExtraJobPresetRates(),
   ])
 
   if (!job) notFound()
@@ -285,34 +278,48 @@ export default async function ExtraJobPage({ params }: Props) {
           )}
         </div>
 
-        {/* Quantities */}
+        {/* Line items */}
         <div>
-          <h2 className="text-base font-semibold text-fg-secondary mb-3">Quantities</h2>
-          <ExtraJobPricing
+          <h2 className="text-base font-semibold text-fg-secondary mb-3">Line items</h2>
+          <ExtraJobLineItems
             extraJobId={extraJobId}
             siteId={siteId}
             stageId={stageId}
-            isAdmin={isAdmin}
-            sections={(sectionsData ?? []).map((s) => ({
-              id:          s.id,
-              name:        s.name,
-              order_index: s.order_index,
-              items: [...((s.quote_template_items as unknown[]) as {
-                id: string; name: string; unit: string; unit_price: number | null;
-                is_auto_calculated: boolean; order_index: number
-              }[] ?? [])]
-                .sort((a, b) => a.order_index - b.order_index)
-                .map((item) => ({ ...item, unit_price: isAdmin ? item.unit_price : null })),
-            }))}
-            existingItems={(existingItems ?? []).map((i) => ({
-              template_item_id: i.template_item_id ?? null,
-              description:      i.description ?? null,
-              unit:             i.unit,
-              quantity:         i.quantity !== null ? Number(i.quantity) : null,
-              unit_price:       isAdmin && i.unit_price !== null ? Number(i.unit_price) : null,
-              item_type:        i.item_type,
-            }))}
             canManage={canManage}
+            isAdmin={isAdmin}
+            existingLines={(existingItems ?? []).map((i) => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const tplRaw = (i as any).quote_template_items
+              const tpl = Array.isArray(tplRaw) ? tplRaw[0] : tplRaw
+              // Old quant-sheet rows stored template items by reference with no
+              // description of their own — resolve the name from the template
+              // so existing extra jobs still display correctly as line items.
+              const description = i.item_type === 'template'
+                ? (tpl?.name ?? i.description ?? '')
+                : (i.description ?? '')
+              const resolvedRate = i.unit_price !== null
+                ? Number(i.unit_price)
+                : (tpl?.unit_price != null ? Number(tpl.unit_price) : null)
+              return {
+                id:          i.id,
+                description,
+                qty:         i.quantity !== null ? Number(i.quantity) : null,
+                unit:        i.unit,
+                rate:        isAdmin ? resolvedRate : null,
+              }
+            })}
+            presets={{
+              labourRate:   isAdmin ? presetRates.labour : null,
+              bobcatRate:   isAdmin ? presetRates.bobcat : null,
+              edgingRate:   isAdmin ? presetRates.edging : null,
+              turfRate:     isAdmin ? presetRates.turf   : null,
+              mulchOptions: MULCH_PRESET_OPTIONS.map((opt) => ({
+                key:      opt.key,
+                label:    opt.label,
+                itemName: opt.itemName,
+                rate:     isAdmin ? (presetRates[opt.key] ?? null) : null,
+              })),
+            }}
           />
         </div>
 

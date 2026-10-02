@@ -39,7 +39,11 @@ export type MaterialsLotRow = {
 }
 
 type TemplateItemRef = { name: string }
-type ExtraJobItem = { quantity: number | null; quote_template_items: TemplateItemRef | TemplateItemRef[] | null }
+type ExtraJobItem = {
+  quantity: number | null
+  description: string | null
+  quote_template_items: TemplateItemRef | TemplateItemRef[] | null
+}
 
 export type MaterialsExtraJobRow = {
   id: string
@@ -166,7 +170,11 @@ function sumExtraJobItems(items: ExtraJobItem[] | null | undefined, names: strin
     .filter((i) => {
       const ref = i.quote_template_items
       const tpl = Array.isArray(ref) ? ref[0] : ref
-      return tpl && names.includes(tpl.name)
+      // Plain line items (no linked template item) carry their own
+      // description — match against that so mulch quantities quick-added
+      // from the line items table still count toward garden bed area.
+      const name = tpl?.name ?? i.description
+      return name && names.includes(name)
     })
     .reduce((sum, i) => sum + (i.quantity ?? 0), 0)
 }

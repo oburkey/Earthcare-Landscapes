@@ -66,12 +66,6 @@ export function renderMonthlyEmailHtml(data: MonthlyEmailData): string {
     bodyHtml: `${safetyStats}<p style="margin:16px 0 6px;font-size:13px;font-weight:700;color:#444444;">Incidents this month</p>${incidentsHtml}`,
   })
 
-  // 7. New staff
-  const newStaffHtml = data.newStaff.length === 0
-    ? emptyState('No new staff added this month.')
-    : `<ul style="margin:0;padding-left:18px;">${data.newStaff.map((name) => `<li>${escapeHtml(name)}</li>`).join('')}</ul>`
-  sections.push({ title: 'New staff', viewInAppHref: '/staff', bodyHtml: newStaffHtml })
-
   return renderReportEmail({
     heading: `Monthly report — ${data.monthLabel}`,
     intro: 'A summary of build progress, invoicing, and safety across all sites for the month.',

@@ -83,7 +83,6 @@ export type MonthlyEmailData = {
   toolboxMeetingsCount: number
   outstandingSafetyFormsCount: number
   outstandingSwmsCount: number | null // null = couldn't be determined (no swms templates / query failed)
-  newStaff: string[]
 }
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
@@ -261,7 +260,6 @@ export async function fetchMonthlyEmailData(): Promise<MonthlyEmailData> {
     { count: toolboxMeetingsCount },
     { count: outstandingSafetyFormsCount },
     outstandingSwmsResult,
-    { data: newStaffRaw },
   ] = await Promise.all([
     db.from('lots')
       .select('id', { count: 'exact', head: true })
@@ -310,11 +308,6 @@ export async function fetchMonthlyEmailData(): Promise<MonthlyEmailData> {
         return null
       }
     })(),
-    db.from('profiles')
-      .select('first_name, last_name, created_at')
-      .neq('role', 'client')
-      .gte('created_at', start)
-      .lt('created_at', end),
   ])
 
   // Distinct lot ids invoiced this month, across all invoice runs in the window.
@@ -335,10 +328,6 @@ export async function fetchMonthlyEmailData(): Promise<MonthlyEmailData> {
     description: i.description,
   }))
 
-  const newStaff = (newStaffRaw ?? []).map((p: { first_name: string; last_name: string }) =>
-    `${p.first_name} ${p.last_name}`.trim()
-  )
-
   return {
     monthLabel: label,
     lotsCompletedCount: lotsCompletedCount ?? 0,
@@ -350,6 +339,5 @@ export async function fetchMonthlyEmailData(): Promise<MonthlyEmailData> {
     toolboxMeetingsCount: toolboxMeetingsCount ?? 0,
     outstandingSafetyFormsCount: outstandingSafetyFormsCount ?? 0,
     outstandingSwmsCount: outstandingSwmsResult,
-    newStaff,
   }
 }

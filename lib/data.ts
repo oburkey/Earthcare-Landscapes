@@ -266,7 +266,7 @@ async function _materialsPlanningData(db: Db, startDate: string, endDate: string
       .select(`
         id, title, due_date,
         stages!inner(id, name, sites!inner(id, name)),
-        extra_job_quote_items(quantity, quote_template_items(name))
+        extra_job_quote_items(quantity, description, quote_template_items(name))
       `)
       .not('due_date', 'is', null)
       .gte('due_date', startDate)

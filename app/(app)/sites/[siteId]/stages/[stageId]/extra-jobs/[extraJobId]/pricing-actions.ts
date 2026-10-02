@@ -4,115 +4,150 @@ import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import type { ActionState } from '@/types/actions'
+import { LABOUR_HOURLY_RATE, BOBCAT_HOURLY_RATE } from '@/lib/pricingPresets'
+
+// ── Quick-add presets ───────────────────────────────────────────────────────────
+// Rates for the "Mulch / Edging / Turf" quick-add chips are pulled live from
+// the quote template items so they stay in sync with Settings → Quote
+// templates. Labour/Bobcat aren't template-driven (same as the Quotes page
+// presets) so they share the constants in lib/pricingPresets.ts.
+
+const TEMPLATE_PRESET_ITEM_NAMES: Record<string, string> = {
+  mulch_limestone:      'Mulch Limestone 32mm',
+  mulch_black:          'Black Mulch',
+  mulch_laterite:       'Laterite compacted gravel',
+  mulch_recycled_brick: 'Recycled Brick',
+  edging:               'Steel Edging',
+  turf:                 'Artificial Turf',
+}
+
+// `itemName` is the exact quote_template_items.name — it's what gets saved
+// as the line's description (not the shorter `label`), so quick-added mulch
+// lines still match the materials planning page's name-based lookups
+// (see app/(app)/materials/lib.ts FRONT_BED_ITEMS / REAR_BED_ITEMS).
+export const MULCH_PRESET_OPTIONS = [
+  { key: 'mulch_limestone',      label: 'Limestone 32mm', itemName: TEMPLATE_PRESET_ITEM_NAMES.mulch_limestone },
+  { key: 'mulch_black',          label: 'Black Mulch',    itemName: TEMPLATE_PRESET_ITEM_NAMES.mulch_black },
+  { key: 'mulch_laterite',       label: 'Laterite',       itemName: TEMPLATE_PRESET_ITEM_NAMES.mulch_laterite },
+  { key: 'mulch_recycled_brick', label: 'Recycled Brick', itemName: TEMPLATE_PRESET_ITEM_NAMES.mulch_recycled_brick },
+] as const
+
+export async function getExtraJobPresetRates(): Promise<Record<string, number | null>> {
+  const rates: Record<string, number | null> = {
+    labour: LABOUR_HOURLY_RATE,
+    bobcat: BOBCAT_HOURLY_RATE,
+  }
+
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('quote_template_items')
+    .select('name, unit_price, quote_template_sections!inner(order_index, is_active, is_client_extra)')
+    .in('name', Object.values(TEMPLATE_PRESET_ITEM_NAMES))
+    .eq('is_active', true)
+    .eq('quote_template_sections.is_active', true)
+    .eq('quote_template_sections.is_client_extra', false)
+    .order('order_index', { referencedTable: 'quote_template_sections', ascending: true })
+
+  // Several sections can have an item with the same name (e.g. "Artificial
+  // Turf" exists for both front and rear) — take the first by section order.
+  const rateByName = new Map<string, number | null>()
+  for (const row of data ?? []) {
+    if (!rateByName.has(row.name)) {
+      rateByName.set(row.name, row.unit_price != null ? Number(row.unit_price) : null)
+    }
+  }
+
+  for (const [key, name] of Object.entries(TEMPLATE_PRESET_ITEM_NAMES)) {
+    rates[key] = rateByName.get(name) ?? null
+  }
+
+  return rates
+}
 
 // ── Save ──────────────────────────────────────────────────────────────────────
 
-export async function saveExtraJobPricing(
+type LinePayload = {
+  id: string | null
+  description: string
+  qty: string
+  unit: string
+  rate: string
+  presetKey: string | null
+}
+
+export async function saveExtraJobLineItems(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
   const profile = await requireAuth()
   if (profile.role === 'worker' || profile.role === 'client') {
-    return { error: 'You do not have permission to save pricing.' }
+    return { error: 'You do not have permission to save line items.' }
   }
 
   const extraJobId = formData.get('extra_job_id') as string
-  const siteId     = formData.get('site_id')     as string
-  const stageId    = formData.get('stage_id')    as string
-
+  const siteId      = formData.get('site_id')     as string
+  const stageId     = formData.get('stage_id')    as string
   if (!extraJobId) return { error: 'Extra job ID is missing.' }
+
+  let lines: LinePayload[] = []
+  try {
+    lines = JSON.parse((formData.get('lines') as string) || '[]')
+  } catch {
+    return { error: 'Invalid line items payload.' }
+  }
 
   const supabase = await createClient()
   const isAdmin = profile.role === 'admin'
 
-  // For non-admins, preserve existing rates from DB so admin-set rates are never clobbered
-  const preservedRates: Record<string, number | null> = {}
+  // Non-admins never receive unit_price values from the server, so when they
+  // save we must look up each existing line's rate by id and carry it
+  // forward — otherwise their save would silently wipe out admin-set prices.
+  const existingRateById = new Map<string, number | null>()
   if (!isAdmin) {
-    const { data: rateRows } = await supabase
+    const { data: rows } = await supabase
       .from('extra_job_quote_items')
-      .select('item_type, unit_price')
+      .select('id, unit_price')
       .eq('extra_job_id', extraJobId)
-      .in('item_type', ['bobcat', 'labour', 'additional_1', 'additional_2'])
-    for (const r of rateRows ?? []) {
-      preservedRates[r.item_type] = r.unit_price
+    for (const r of rows ?? []) existingRateById.set(r.id, r.unit_price)
+  }
+
+  const presetRates = await getExtraJobPresetRates()
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const toInsert: any[] = []
+  let sortOrder = 0
+  for (const line of lines) {
+    const description = (line.description ?? '').trim()
+    const qty = parseFloat(line.qty)
+    if (!description || !(qty > 0)) continue
+    const unit = (line.unit ?? '').trim() || 'No.'
+
+    let rate: number | null
+    if (line.presetKey && presetRates[line.presetKey] != null) {
+      // Always resolve preset-sourced lines from the live rate, so changing
+      // a price in Settings is reflected even if this line was quick-added
+      // by a leading hand who never saw the number.
+      rate = presetRates[line.presetKey]
+    } else if (isAdmin) {
+      const parsed = parseFloat(line.rate)
+      rate = isNaN(parsed) ? null : parsed
+    } else {
+      rate = line.id ? (existingRateById.get(line.id) ?? null) : null
     }
+
+    toInsert.push({
+      extra_job_id: extraJobId,
+      description,
+      unit,
+      quantity:   qty,
+      unit_price: rate,
+      item_type:  'line',
+      sort_order: sortOrder++,
+    })
   }
 
   // Replace all existing items for this job
   await supabase.from('extra_job_quote_items').delete().eq('extra_job_id', extraJobId)
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const toInsert: any[] = []
-
-  // Template items — keys are template_<templateItemId>
-  for (const [key, value] of formData.entries()) {
-    if (!key.startsWith('template_')) continue
-    const qty = parseFloat(value as string)
-    if (!qty || isNaN(qty)) continue
-    toInsert.push({
-      extra_job_id:     extraJobId,
-      template_item_id: key.replace('template_', ''),
-      unit:             (formData.get(`unit_${key.replace('template_', '')}`) as string) || 'No.',
-      quantity:         qty,
-      item_type:        'template',
-      sort_order:       0,
-    })
-  }
-
-  // Bobcat
-  const bobcatHours = parseFloat((formData.get('bobcat_hours') as string) || '')
-  const bobcatRate  = isAdmin
-    ? parseFloat((formData.get('bobcat_rate') as string) || '95')
-    : (preservedRates['bobcat'] ?? 95)
-  if (bobcatHours > 0) {
-    toInsert.push({
-      extra_job_id: extraJobId,
-      description:  'Bobcat',
-      unit:         'hr',
-      quantity:     bobcatHours,
-      unit_price:   isNaN(Number(bobcatRate)) ? 95 : bobcatRate,
-      item_type:    'bobcat',
-      sort_order:   100,
-    })
-  }
-
-  // Labour
-  const labourHours = parseFloat((formData.get('labour_hours') as string) || '')
-  const labourRate  = isAdmin
-    ? parseFloat((formData.get('labour_rate') as string) || '65')
-    : (preservedRates['labour'] ?? 65)
-  if (labourHours > 0) {
-    toInsert.push({
-      extra_job_id: extraJobId,
-      description:  'Labour',
-      unit:         'hr',
-      quantity:     labourHours,
-      unit_price:   isNaN(Number(labourRate)) ? 65 : labourRate,
-      item_type:    'labour',
-      sort_order:   101,
-    })
-  }
-
-  // Additional free-form items
-  for (let i = 1; i <= 2; i++) {
-    const desc = ((formData.get(`add${i}_desc`) as string) ?? '').trim()
-    const qty  = parseFloat((formData.get(`add${i}_qty`)  as string) || '')
-    const unit = (formData.get(`add${i}_unit`) as string) || 'No.'
-    const rate = isAdmin
-      ? parseFloat((formData.get(`add${i}_rate`) as string) || '')
-      : (preservedRates[`additional_${i}`] ?? NaN)
-    if (desc && qty > 0) {
-      toInsert.push({
-        extra_job_id: extraJobId,
-        description:  desc,
-        unit,
-        quantity:     qty,
-        unit_price:   isNaN(rate) ? null : rate,
-        item_type:    `additional_${i}`,
-        sort_order:   200 + i,
-      })
-    }
-  }
 
   if (toInsert.length > 0) {
     const { error } = await supabase.from('extra_job_quote_items').insert(toInsert)
