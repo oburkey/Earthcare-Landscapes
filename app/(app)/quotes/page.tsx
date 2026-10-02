@@ -30,14 +30,14 @@ export default async function QuotesPage() {
     // Try full query with stage_id (requires migration_quote_conversion.sql)
     let { data, error } = await supabase
       .from('quotes')
-      .select(`id, site_id, stage_id, reference, description, status, notes, override_total, created_at, sites(name), stages(name), ${SECTIONS_SELECT}`)
+      .select(`id, site_id, stage_id, reference, description, status, notes, override_total, hide_total, custom_totals, created_at, sites(name), stages(name), ${SECTIONS_SELECT}`)
       .order('created_at', { ascending: false })
 
     // Fall back to simpler query if stage_id column doesn't exist yet
     if (error && error.code !== '42P01' && !error.message?.includes('does not exist')) {
       const fallback = await supabase
         .from('quotes')
-        .select(`id, site_id, reference, description, status, notes, override_total, created_at, sites(name), ${SECTIONS_SELECT}`)
+        .select(`id, site_id, reference, description, status, notes, override_total, hide_total, custom_totals, created_at, sites(name), ${SECTIONS_SELECT}`)
         .order('created_at', { ascending: false })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       data = fallback.data as any
@@ -84,6 +84,12 @@ export default async function QuotesPage() {
         notes:        q.notes ?? '',
         createdAt:    q.created_at,
         overrideTotal: q.override_total != null ? Number(q.override_total) : null,
+        hideTotal:    q.hide_total ?? false,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        customTotals: (Array.isArray(q.custom_totals) ? q.custom_totals : []).map((t: any) => ({
+          label:  String(t?.label ?? ''),
+          amount: Number(t?.amount) || 0,
+        })),
       }))
     }
   } catch {

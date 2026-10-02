@@ -87,6 +87,19 @@ export async function saveQuote(
   const parsedOverrideTotal = rawOverrideTotal === '' ? null : parseFloat(rawOverrideTotal)
   const overrideTotal = parsedOverrideTotal === null || isNaN(parsedOverrideTotal) ? null : parsedOverrideTotal
 
+  const hideTotal = (formData.get('hide_total') as string) === 'true'
+
+  let customTotals: { label: string; amount: number }[] = []
+  try {
+    const rawCustomTotals = JSON.parse((formData.get('custom_totals') as string) || '[]')
+    if (Array.isArray(rawCustomTotals)) {
+      customTotals = rawCustomTotals
+        .map((t) => ({ label: String(t?.label ?? ''), amount: Number(t?.amount) || 0 }))
+    }
+  } catch {
+    return { error: 'Invalid custom total data.' }
+  }
+
   let sections: SavedSection[]
   try {
     sections = JSON.parse(rawSections || '[]')
@@ -107,6 +120,8 @@ export async function saveQuote(
         status,
         notes,
         override_total: overrideTotal,
+        hide_total:     hideTotal,
+        custom_totals:  customTotals,
         updated_at:    new Date().toISOString(),
       })
       .eq('id', id)
@@ -129,6 +144,8 @@ export async function saveQuote(
       status,
       notes,
       override_total: overrideTotal,
+      hide_total:     hideTotal,
+      custom_totals:  customTotals,
       created_by:     profile.id,
     })
     .select('id')

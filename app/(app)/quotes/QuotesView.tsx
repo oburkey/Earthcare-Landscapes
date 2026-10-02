@@ -31,6 +31,11 @@ export type QuoteSection = {
   overrideSubtotal?: number | null
 }
 
+export type CustomTotalLine = {
+  label: string
+  amount: number
+}
+
 export type QuoteRow = {
   id: string
   siteId: string | null
@@ -46,6 +51,12 @@ export type QuoteRow = {
   // Manual override for the quote's grand total — null means use the
   // calculated sum of (possibly overridden) section subtotals.
   overrideTotal: number | null
+  // When true, the standard "Total (ex GST)" row is omitted from the
+  // builder and PDF — independent of custom total lines below.
+  hideTotal: boolean
+  // Free-form extra total rows (e.g. "Total with Option A (ex GST)") shown
+  // at the bottom of the PDF regardless of hideTotal.
+  customTotals: CustomTotalLine[]
 }
 
 export type SiteOption = {
@@ -209,13 +220,26 @@ export function buildQuoteHtml(
   notes: string,
   logoSrc: string,
   includeGst: boolean,
-  overrideTotal: number | null = null
+  overrideTotal: number | null = null,
+  hideTotal: boolean = false,
+  customTotals: CustomTotalLine[] = []
 ): string {
   const date = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
   const grandTotal = calcGrandTotal(sections, overrideTotal)
   const showSectionSubtotals = sections.length >= 2
 
   const rows = sections.map((s) => quoteSectionRows(s, includeGst, showSectionSubtotals)).join('')
+
+  const totalRowHtml = hideTotal ? '' : `
+      <tr class="grand">
+        <td colspan="5">Total (ex GST)</td>
+        <td class="r">${gstAwareAmountCell(grandTotal, includeGst)}</td>
+      </tr>`
+  const customTotalsHtml = customTotals.map((ct) => `
+      <tr class="grand">
+        <td colspan="5">${ct.label || ''}</td>
+        <td class="r">${fmt(ct.amount)}</td>
+      </tr>`).join('')
 
   return `${QUOTE_STYLES}
 <div class="quote-page">
@@ -244,10 +268,8 @@ export function buildQuoteHtml(
     </thead>
     <tbody>
       ${rows || '<tr><td colspan="6" style="color:#aaa;font-style:italic;padding:6px">No sections</td></tr>'}
-      <tr class="grand">
-        <td colspan="5">Total (ex GST)</td>
-        <td class="r">${gstAwareAmountCell(grandTotal, includeGst)}</td>
-      </tr>
+      ${totalRowHtml}
+      ${customTotalsHtml}
     </tbody>
   </table>
   ${notes ? `<div class="quote-notes"><div class="notes-lbl">Notes / Conditions</div>${notes.replace(/\n/g, '<br>')}</div>` : ''}
@@ -341,10 +363,16 @@ function buildCombinedQuotesPdf(selectedQuotes: QuoteRow[], logoSrc: string): st
         </thead>
         <tbody>
           ${sectionRows || '<tr><td colspan="6" style="color:#aaa;font-style:italic;padding:6px">No sections</td></tr>'}
+          ${q.hideTotal ? '' : `
           <tr class="subtotal">
             <td colspan="5">Quote total</td>
             <td class="r">${fmt(quoteTotal)}</td>
-          </tr>
+          </tr>`}
+          ${q.customTotals.map((ct) => `
+          <tr class="subtotal">
+            <td colspan="5">${ct.label || ''}</td>
+            <td class="r">${fmt(ct.amount)}</td>
+          </tr>`).join('')}
         </tbody>
       </table>
       ${q.notes ? `<div class="sec-notes">${q.notes.replace(/\n/g, '<br>')}</div>` : ''}
@@ -440,6 +468,8 @@ export default function QuotesView({
   const [sections, setSections]       = useState<QuoteSection[]>([emptySection(0)])
   const [notes, setNotes]             = useState('')
   const [overrideTotal, setOverrideTotal] = useState<number | null>(null)
+  const [hideTotal, setHideTotal]     = useState(false)
+  const [customTotals, setCustomTotals] = useState<CustomTotalLine[]>([])
   const [formStages, setFormStages]   = useState<{ id: string; name: string }[]>([])
   const [loadingFormStages, setLoadingFormStages] = useState(false)
   const [convertValidation, setConvertValidation] = useState(false)
@@ -483,6 +513,8 @@ export default function QuotesView({
     setSections([{ name: '', orderIndex: 0, items: [{ description: 'Administration & Preliminary', qty: 1, unit: 'item', rate: 500, orderIndex: 0 }], overrideSubtotal: null }])
     setNotes('')
     setOverrideTotal(null)
+    setHideTotal(false)
+    setCustomTotals([])
     setFormStages([]); setConvertValidation(false); setIncludeGst(false)
     setActionError(null); setView('new'); setPickerOpen(false)
   }
@@ -506,6 +538,8 @@ export default function QuotesView({
     )
     setNotes('')
     setOverrideTotal(null)
+    setHideTotal(false)
+    setCustomTotals([])
     setFormStages([]); setConvertValidation(false); setIncludeGst(false)
     setActionError(null); setView('new'); setPickerOpen(false)
   }
@@ -519,6 +553,8 @@ export default function QuotesView({
     setSections(q.sections.length > 0 ? q.sections : [emptySection(0)])
     setNotes(q.notes)
     setOverrideTotal(q.overrideTotal ?? null)
+    setHideTotal(q.hideTotal ?? false)
+    setCustomTotals(q.customTotals ?? [])
     setConvertValidation(false)
     setIncludeGst(false)
     setActionError(null)
@@ -557,6 +593,24 @@ export default function QuotesView({
     const parsed = value === '' ? null : parseFloat(value)
     const overrideSubtotal = parsed === null || isNaN(parsed) ? null : parsed
     setSections((prev) => prev.map((s, idx) => idx === sectionIdx ? { ...s, overrideSubtotal } : s))
+  }
+
+  // ── Custom total lines ───────────────────────────────────────────────────────
+
+  function addCustomTotal() {
+    setCustomTotals((prev) => [...prev, { label: '', amount: 0 }])
+  }
+
+  function updateCustomTotal(idx: number, key: keyof CustomTotalLine, value: string) {
+    setCustomTotals((prev) => prev.map((line, i) => {
+      if (i !== idx) return line
+      if (key === 'amount') return { ...line, amount: parseFloat(value) || 0 }
+      return { ...line, label: value }
+    }))
+  }
+
+  function removeCustomTotal(idx: number) {
+    setCustomTotals((prev) => prev.filter((_, i) => i !== idx))
   }
 
   function addLine(sectionIdx: number) {
@@ -643,6 +697,8 @@ export default function QuotesView({
     fd.set('sections', JSON.stringify(sections))
     fd.set('notes', notes)
     fd.set('override_total', overrideTotal != null ? String(overrideTotal) : '')
+    fd.set('hide_total', String(hideTotal))
+    fd.set('custom_totals', JSON.stringify(customTotals))
 
     const result = await saveQuote(fd)
     setSaving(false)
@@ -658,14 +714,14 @@ export default function QuotesView({
     if (view === 'new') {
       const newId = ('id' in (result ?? {})) ? (result as { id: string }).id : crypto.randomUUID()
       setQuotes((prev) => [
-        { id: newId, siteId: siteId || null, siteName: resolvedSiteName, stageId: stageId || null, stageName: resolvedStageName, reference, description, status, sections, notes, createdAt: new Date().toISOString(), overrideTotal },
+        { id: newId, siteId: siteId || null, siteName: resolvedSiteName, stageId: stageId || null, stageName: resolvedStageName, reference, description, status, sections, notes, createdAt: new Date().toISOString(), overrideTotal, hideTotal, customTotals },
         ...prev,
       ])
     } else {
       setQuotes((prev) =>
         prev.map((q) =>
           q.id === view
-            ? { ...q, siteId: siteId || null, siteName: resolvedSiteName, stageId: stageId || null, stageName: resolvedStageName, reference, description, status, sections, notes, overrideTotal }
+            ? { ...q, siteId: siteId || null, siteName: resolvedSiteName, stageId: stageId || null, stageName: resolvedStageName, reference, description, status, sections, notes, overrideTotal, hideTotal, customTotals }
             : q
         )
       )
@@ -808,7 +864,7 @@ export default function QuotesView({
   function handleDownloadPDF() {
     const resolvedSiteName = sites.find((s) => s.id === siteId)?.name ?? null
     const filename = slug(resolvedSiteName, reference || 'Quote') + '.pdf'
-    const html = buildQuoteHtml(resolvedSiteName, reference, description, sections, notes, LOGO_DATA_URL, includeGst, overrideTotal)
+    const html = buildQuoteHtml(resolvedSiteName, reference, description, sections, notes, LOGO_DATA_URL, includeGst, overrideTotal, hideTotal, customTotals)
     setPdfGenerating(true)
     downloadPDF(html, filename, setActionError, () => setPdfGenerating(false))
   }
@@ -1126,32 +1182,88 @@ export default function QuotesView({
             />
           </div>
 
+          {/* Custom total lines */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-fg-secondary uppercase tracking-wide">Custom total lines</label>
+            </div>
+            {customTotals.map((line, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={line.label}
+                  onChange={(e) => updateCustomTotal(idx, 'label', e.target.value)}
+                  placeholder="e.g. Total with Option A (ex GST)"
+                  className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-border focus:outline-none"
+                />
+                <input
+                  type="number" step="any"
+                  value={line.amount}
+                  onChange={(e) => updateCustomTotal(idx, 'amount', e.target.value)}
+                  className="w-32 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg text-right tabular-nums focus:border-border focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeCustomTotal(idx)}
+                  className="shrink-0 text-fg-muted hover:text-red-500 transition-colors"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={addCustomTotal}
+              className="flex items-center gap-1 text-sm font-medium text-accent-fg hover:text-green-900 transition-colors"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              Add total line
+            </button>
+          </div>
+
           {/* Totals */}
           <div className="flex justify-end border-t border-border-subtle pt-4">
             <div className="w-72 space-y-2 text-sm">
-              <div className="flex items-center justify-between gap-2">
-                <label className="text-xs text-fg-muted">Override total</label>
+              <label className="flex items-center justify-end gap-2 text-xs text-fg-muted cursor-pointer select-none">
                 <input
-                  type="number" step="any"
-                  value={overrideTotal ?? ''}
-                  onChange={(e) => {
-                    const v = e.target.value
-                    const parsed = v === '' ? null : parseFloat(v)
-                    setOverrideTotal(parsed === null || isNaN(parsed) ? null : parsed)
-                  }}
-                  placeholder="auto"
-                  className="w-28 rounded border border-border bg-surface px-2 py-1 text-sm text-fg text-right tabular-nums placeholder:text-fg-muted focus:border-border focus:outline-none"
+                  type="checkbox"
+                  checked={hideTotal}
+                  onChange={(e) => setHideTotal(e.target.checked)}
+                  className="h-4 w-4 rounded border-border text-accent-fg focus:ring-green-600 cursor-pointer"
                 />
-              </div>
-              <div className="flex items-center justify-between font-semibold text-fg">
-                <span>Total (ex GST)</span>
-                <span className="flex items-baseline gap-2">
-                  <span className="tabular-nums">{fmt(grandTotal)}</span>
-                  {overrideTotal != null && (
-                    <span className="text-xs font-normal text-fg-muted tabular-nums">(calc {fmt(calculatedGrandTotal)})</span>
-                  )}
-                </span>
-              </div>
+                Hide total
+              </label>
+              {!hideTotal && (
+                <>
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-xs text-fg-muted">Override total</label>
+                    <input
+                      type="number" step="any"
+                      value={overrideTotal ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        const parsed = v === '' ? null : parseFloat(v)
+                        setOverrideTotal(parsed === null || isNaN(parsed) ? null : parsed)
+                      }}
+                      placeholder="auto"
+                      className="w-28 rounded border border-border bg-surface px-2 py-1 text-sm text-fg text-right tabular-nums placeholder:text-fg-muted focus:border-border focus:outline-none"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between font-semibold text-fg">
+                    <span>Total (ex GST)</span>
+                    <span className="flex items-baseline gap-2">
+                      <span className="tabular-nums">{fmt(grandTotal)}</span>
+                      {overrideTotal != null && (
+                        <span className="text-xs font-normal text-fg-muted tabular-nums">(calc {fmt(calculatedGrandTotal)})</span>
+                      )}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
