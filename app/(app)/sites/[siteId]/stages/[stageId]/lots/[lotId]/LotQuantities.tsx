@@ -155,7 +155,8 @@ export default function LotQuantities({
   plantRatios,
 }: Props) {
   const [open, setOpen] = useState(false)
-  const hasFinalData = !!finalQuote && finalQuote.items.some((i) => i.quantity !== null)
+  const hasFinalData  = !!finalQuote  && finalQuote.items.some((i) => i.quantity !== null)
+  const hasBudgetData = !!budgetQuote && budgetQuote.items.some((i) => i.quantity !== null)
   // Estimate isn't an option for non-admins at all — default to Final when it
   // has data, otherwise Budget for non-admins (Estimate is admin's own default).
   const [quoteType, setQuoteType] = useState<QuoteType>(
@@ -415,6 +416,48 @@ export default function LotQuantities({
       })
       if (result?.error) setError(result.error)
       else { setSaved(true); dirtyRef.current = false }
+    })
+  }
+
+  // Copies every quantity from the other (budget/final) quant sheet into
+  // whichever tab is currently active, then saves through the normal
+  // saveLotQuote path — same pending_review / stock-deduction-diffing /
+  // last-edited-by / admin-only-section-preservation side effects as any
+  // other save, since it's just a payload built from different source data.
+  function copyFrom(sourceType: QuoteType) {
+    const sourceQuote = quoteForType(sourceType)
+    const targetLabel = quoteType === 'final' ? 'Final' : 'Budget'
+    const sourceLabel = sourceType === 'final' ? 'Final' : 'Budget'
+    if (!confirm(`This will overwrite all ${targetLabel} quantities with the ${sourceLabel} values. Continue?`)) return
+
+    clearAutoSaveTimer()
+    if (autoSaveHideRef.current) {
+      clearTimeout(autoSaveHideRef.current)
+      autoSaveHideRef.current = null
+    }
+    setAutoSaveStatus('idle')
+    setError(null)
+    setSaved(false)
+
+    const copiedValues     = initValues(sourceQuote)
+    const copiedVariantSel = initVariantSel(sourceQuote, variantGroups)
+    const items = buildItemsPayload(copiedValues, copiedVariantSel)
+
+    startTransition(async () => {
+      const result = await saveLotQuote({
+        lotId, siteId, stageId, quoteType,
+        status: 'submitted',
+        notes,
+        items,
+      })
+      if (result?.error) {
+        setError(result.error)
+      } else {
+        setValues(copiedValues)
+        setVariantSel(copiedVariantSel)
+        setSaved(true)
+        dirtyRef.current = false
+      }
     })
   }
 
@@ -806,6 +849,29 @@ export default function LotQuantities({
           className="w-full rounded-lg border border-green-200 bg-accent-dim px-3 py-2 text-xs font-medium text-accent-fg hover:bg-accent-dim transition-colors"
         >
           Recalculate plants from garden bed
+        </button>
+      )}
+
+      {/* Copy from the other (budget/final) quant sheet — leading_hand+,
+          only when the source sheet has data, hidden once approved */}
+      {canEditActiveTab && !isApproved && quoteType === 'final' && hasBudgetData && (
+        <button
+          type="button"
+          onClick={() => copyFrom('budget')}
+          disabled={isPending}
+          className="w-full rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-medium text-fg-secondary hover:bg-surface-raised disabled:opacity-50 transition-colors"
+        >
+          Copy from Budget
+        </button>
+      )}
+      {canEditActiveTab && !isApproved && quoteType === 'budget' && hasFinalData && (
+        <button
+          type="button"
+          onClick={() => copyFrom('final')}
+          disabled={isPending}
+          className="w-full rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-medium text-fg-secondary hover:bg-surface-raised disabled:opacity-50 transition-colors"
+        >
+          Copy from Final
         </button>
       )}
 
