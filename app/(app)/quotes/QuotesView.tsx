@@ -429,6 +429,7 @@ export default function QuotesView({
   sites,
   presets,
   canEdit,
+  isAdmin,
   tableExists,
   initialConversions,
 }: {
@@ -436,6 +437,7 @@ export default function QuotesView({
   sites: SiteOption[]
   presets: QuotePreset[]
   canEdit: boolean
+  isAdmin: boolean
   tableExists: boolean
   initialConversions: ConversionMap
 }) {
@@ -899,7 +901,7 @@ export default function QuotesView({
           </button>
           <span className="text-fg-muted">/</span>
           <h1 className="text-xl font-semibold text-fg">{isNew ? 'New quote' : 'Edit quote'}</h1>
-          {!isNew && (
+          {!isNew && isAdmin && (
             <>
               <div className="flex-1" />
               <button

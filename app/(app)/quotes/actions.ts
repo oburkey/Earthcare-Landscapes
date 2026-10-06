@@ -211,8 +211,8 @@ export async function deleteQuote(
   formData: FormData
 ): Promise<{ error: string } | null> {
   const profile = await requireAuth()
-  if (profile.role !== 'admin' && profile.role !== 'supervisor') {
-    return { error: 'Only admins and supervisors can delete quotes.' }
+  if (profile.role !== 'admin') {
+    return { error: 'Only admins can delete quotes.' }
   }
 
   const id = formData.get('id') as string
