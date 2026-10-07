@@ -7,6 +7,7 @@ import type { ApprovedLot, ApprovedExtraJob, ApprovedProgressClaim } from './App
 import type { InvoiceRun } from './InvoiceHistory'
 import type { ProgressClaimRow } from './ProgressClaimsSection'
 import { getExtraJobsPricing } from '@/app/(app)/sites/[siteId]/stages/[stageId]/extra-jobs/[extraJobId]/pricing-actions'
+import { getQuantIssues } from '@/lib/quantIssues'
 
 export const metadata = { title: 'Invoices — Earthcare Landscapes' }
 
@@ -488,6 +489,17 @@ export default async function InvoicesPage() {
     }
   })
 
+  // Quant sheet / invoicing issue checks — admin only (this whole page already is).
+  const quantIssues = await getQuantIssues()
+  const lotIssuesById: Record<string, string[]> = {}
+  const extraJobIssuesById: Record<string, string[]> = {}
+  for (const row of quantIssues) {
+    const message = row.quote_type ? `[${row.quote_type}] ${row.issue}` : row.issue
+    const byId = row.entity_type === 'lot' ? lotIssuesById : extraJobIssuesById
+    if (!byId[row.lot_id]) byId[row.lot_id] = []
+    byId[row.lot_id].push(message)
+  }
+
   return (
     <div className="min-h-screen bg-bg">
       <div className="mx-auto max-w-6xl px-4 py-6 space-y-5">
@@ -497,6 +509,8 @@ export default async function InvoicesPage() {
           approvedLots={approvedLots}
           approvedExtraJobs={approvedExtraJobs}
           approvedProgressClaims={approvedProgressClaims}
+          lotIssuesById={lotIssuesById}
+          extraJobIssuesById={extraJobIssuesById}
         />
         <InvoiceHistory runs={invoiceHistory} />
       </div>

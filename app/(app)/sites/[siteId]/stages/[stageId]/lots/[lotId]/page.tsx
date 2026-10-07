@@ -14,6 +14,8 @@ import LotDocumentPreview from './LotDocumentPreview'
 import LotQuantities from './LotQuantities'
 import LotStatusToggles from './LotStatusToggles'
 import DelayControl from '@/app/_components/DelayControl'
+import QuantIssuesWarning from '@/app/_components/QuantIssuesWarning'
+import { getQuantIssues } from '@/lib/quantIssues'
 import SubcontractorCosts from './SubcontractorCosts'
 import type { SubcontractorCostRow } from './SubcontractorCosts'
 import TradeStatusSection from './TradeStatusSection'
@@ -187,6 +189,13 @@ export default async function LotPage({ params }: Props) {
   // is RLS-locked to admin; supervisor still gets a simplified indicator from
   // the same comparison, just without dollar amounts (see render below).
   const budgetComparison = canSupervise ? await getCachedLotBudgetVsEstimate(lotId) : null
+
+  // Quant sheet / invoicing issue checks — admin only.
+  const lotIssueMessages = isAdmin
+    ? (await getQuantIssues())
+        .filter((row) => row.lot_id === lotId)
+        .map((row) => row.quote_type ? `[${row.quote_type}] ${row.issue}` : row.issue)
+    : []
 
   // Plant ratios for auto-calc
   const ratioSettings = await getCachedPlantRatioSettings()
@@ -365,6 +374,9 @@ export default async function LotPage({ params }: Props) {
           clearAction={clearLotDelayed}
           hiddenFields={{ lot_id: lotId, site_id: siteId, stage_id: stageId }}
         />
+
+        {/* Quant sheet / invoicing issues — admin only */}
+        <QuantIssuesWarning issues={lotIssueMessages} />
 
         {/* Status toggles — supervisor+ sees Build Complete; admin also sees Invoiced */}
         {canSupervise && (

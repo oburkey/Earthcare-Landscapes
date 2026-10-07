@@ -155,6 +155,59 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
     if (insertError) return { error: insertError.message }
   }
 
+  // Carry through from Estimate: the first time a Budget or Final sheet is
+  // created for a lot that already has an Estimate, pre-fill the Earthworks
+  // section and the Corner lot toggle (plus whatever items it controls) from
+  // that Estimate. Only on creation (not every save) — editing afterwards is
+  // free-form — and only items genuinely missing from what was just written,
+  // so a value the user already entered on this first save is never touched.
+  if (!existing && (quoteType === 'budget' || quoteType === 'final')) {
+    const { data: estimateQuote } = await supabase
+      .from('lot_quotes')
+      .select('id')
+      .eq('lot_id', lotId)
+      .eq('quote_type', 'estimate')
+      .maybeSingle()
+
+    if (estimateQuote) {
+      const { data: estimateItems } = await supabase
+        .from('lot_quote_items')
+        .select(`
+          template_item_id, item_name, unit, quantity, unit_price_snapshot,
+          quote_template_items(auto_calc_formula, quote_template_sections(name))
+        `)
+        .eq('quote_id', estimateQuote.id)
+
+      const presentTemplateItemIds = new Set(toInsert.map((i) => i.template_item_id))
+      const carryOverItems = (estimateItems ?? [])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .filter((row: any) => {
+          if (row.quantity === null || !row.template_item_id) return false
+          if (presentTemplateItemIds.has(row.template_item_id)) return false
+          const tpl = row.quote_template_items
+          const section = tpl?.quote_template_sections
+          const formula = tpl?.auto_calc_formula
+          return section?.name === 'Earthworks' || formula === 'corner_lot_flag' || formula === 'show_if_corner_lot'
+        })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .map((row: any) => ({
+          quote_id:            quoteId,
+          template_item_id:    row.template_item_id,
+          item_name:           row.item_name,
+          unit:                row.unit,
+          quantity:            row.quantity,
+          unit_price_snapshot: row.unit_price_snapshot,
+        }))
+
+      if (carryOverItems.length > 0) {
+        const { error: carryOverError } = await supabase
+          .from('lot_quote_items')
+          .insert(carryOverItems)
+        if (carryOverError) return { error: carryOverError.message }
+      }
+    }
+  }
+
   // Preliminaries (admin_only sections) must always be present on every
   // quant sheet, regardless of who saved it — a non-admin's payload never
   // includes them (the section is hidden from their form), and even an

@@ -14,3 +14,9 @@ jobs:
           curl -sfL -X POST "${{ secrets.APP_URL }}/api/send-weekly-email" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "Content-Type: application/json"
+
+      - name: Send issues email
+        run: |
+          curl -sfL -X POST "${{ secrets.APP_URL }}/api/send-issues-email" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json"

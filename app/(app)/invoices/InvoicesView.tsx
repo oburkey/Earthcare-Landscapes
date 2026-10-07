@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   toggleInvoiced, togglePendingReview, toggleApprovedForInvoicing,
@@ -491,7 +491,15 @@ async function downloadPDF(
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function InvoicesView({ sites, isAdmin, hidePricing }: { sites: SiteData[]; isAdmin: boolean; hidePricing: boolean }) {
+export default function InvoicesView({
+  sites, isAdmin, hidePricing, lotIssuesById, extraJobIssuesById,
+}: {
+  sites: SiteData[]
+  isAdmin: boolean
+  hidePricing: boolean
+  lotIssuesById: Record<string, string[]>
+  extraJobIssuesById: Record<string, string[]>
+}) {
   const router = useRouter()
   const [expandedSites, setExpandedSites] = useState<Set<string>>(new Set())
   // Stages start collapsed by default
@@ -980,8 +988,8 @@ export default function InvoicesView({ sites, isAdmin, hidePricing }: { sites: S
                               const lotUrl   = `/sites/${site.id}/stages/${stage.id}/lots/${lot.id}`
 
                               return (
+                                <Fragment key={lot.id}>
                                 <tr
-                                  key={lot.id}
                                   onClick={() => router.push(lotUrl)}
                                   className={`border-b border-border-subtle transition-colors cursor-pointer ${selected ? 'bg-accent-dim' : 'hover:bg-surface-raised'}`}
                                 >
@@ -1068,6 +1076,14 @@ export default function InvoicesView({ sites, isAdmin, hidePricing }: { sites: S
                                     </button>
                                   </td>
                                 </tr>
+                                {isAdmin && ((pendingReviewMap[lot.id] ?? lot.pendingReview) || (approvedMap[lot.id] ?? lot.approvedForInvoicing)) && (lotIssuesById[lot.id]?.length ?? 0) > 0 && (
+                                  <tr className="border-b border-border-subtle bg-amber-50 dark:bg-amber-900/20">
+                                    <td colSpan={12} className="px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+                                      {lotIssuesById[lot.id]!.join(' · ')}
+                                    </td>
+                                  </tr>
+                                )}
+                                </Fragment>
                               )
                             })}
 
@@ -1115,8 +1131,8 @@ export default function InvoicesView({ sites, isAdmin, hidePricing }: { sites: S
                                     const jobApproved = extraJobApprovedMap[job.id] ?? job.approvedForInvoicing
                                     const jobInvoiced = extraJobInvoicedMap[job.id] ?? job.invoiced
                                     return (
+                                      <Fragment key={job.id}>
                                       <tr
-                                        key={job.id}
                                         onClick={() => router.push(`/sites/${site.id}/stages/${stage.id}/extra-jobs/${job.id}`)}
                                         className={`border-b border-border-subtle last:border-0 transition-colors cursor-pointer ${selectedExtraJobs.has(job.id) ? 'bg-amber-50 dark:bg-amber-900/20' : 'hover:bg-surface-raised'}`}
                                       >
@@ -1210,6 +1226,14 @@ export default function InvoicesView({ sites, isAdmin, hidePricing }: { sites: S
                                           </button>
                                         </td>
                                       </tr>
+                                      {isAdmin && (jobPending || jobApproved) && (extraJobIssuesById[job.id]?.length ?? 0) > 0 && (
+                                        <tr className="border-b border-border-subtle last:border-0 bg-amber-50 dark:bg-amber-900/20">
+                                          <td colSpan={9} className="px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+                                            {extraJobIssuesById[job.id]!.join(' · ')}
+                                          </td>
+                                        </tr>
+                                      )}
+                                      </Fragment>
                                     )
                                   })}
                                 </tbody>

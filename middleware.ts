@@ -15,6 +15,6 @@ export const config = {
     // CRON_SECRET bearer token, not a user session — letting this
     // middleware run on them would redirect the unauthenticated request to
     // /login before it ever reaches the route handler).
-    '/((?!_next/static|_next/image|favicon.ico|api/send-weekly-email|api/send-monthly-email|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api/send-weekly-email|api/send-monthly-email|api/send-issues-email|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

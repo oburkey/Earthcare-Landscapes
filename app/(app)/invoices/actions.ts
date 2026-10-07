@@ -115,8 +115,13 @@ export async function toggleApprovedForInvoicing(
   const value = formData.get('value') === 'true'
 
   const supabase = await createClient()
-  // Approving also clears pending_review
-  const update: Record<string, boolean | string> = { approved_for_invoicing: value, updated_by: profile.id }
+  // Approving also clears pending_review. approved_for_invoicing_at tracks
+  // when the flag turned on, for the "approved too long" issue check.
+  const update: Record<string, boolean | string | null> = {
+    approved_for_invoicing: value,
+    approved_for_invoicing_at: value ? new Date().toISOString() : null,
+    updated_by: profile.id,
+  }
   if (value) update.pending_review = false
 
   const { error } = await supabase
@@ -187,7 +192,10 @@ export async function toggleExtraJobApprovedForInvoicing(
   const value = formData.get('value') === 'true'
 
   const supabase = await createClient()
-  const update: Record<string, boolean> = { approved_for_invoicing: value }
+  const update: Record<string, boolean | string | null> = {
+    approved_for_invoicing: value,
+    approved_for_invoicing_at: value ? new Date().toISOString() : null,
+  }
   if (value) update.pending_review = false
 
   const { error } = await supabase
