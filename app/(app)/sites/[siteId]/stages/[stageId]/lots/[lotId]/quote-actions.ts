@@ -155,6 +155,40 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
     if (insertError) return { error: insertError.message }
   }
 
+  // Preliminaries (admin_only sections) must always be present on every
+  // quant sheet, regardless of who saved it — a non-admin's payload never
+  // includes them (the section is hidden from their form), and even an
+  // admin's very first save of a brand-new quote has nothing to "preserve"
+  // yet. Add any active admin_only template item missing from what was just
+  // written, defaulted to qty 1 at the current template rate. Never touches
+  // rows that already exist — this only fills genuine gaps.
+  {
+    const presentTemplateItemIds = new Set(toInsert.map((i) => i.template_item_id))
+    const { data: adminOnlyTemplateItems } = await supabase
+      .from('quote_template_items')
+      .select('id, name, unit, unit_price, quote_template_sections!inner(admin_only, is_active)')
+      .eq('is_active', true)
+      .eq('quote_template_sections.admin_only', true)
+      .eq('quote_template_sections.is_active', true)
+
+    const missingPrelimItems = (adminOnlyTemplateItems ?? [])
+      .filter((item) => !presentTemplateItemIds.has(item.id))
+
+    if (missingPrelimItems.length > 0) {
+      const { error: prelimError } = await supabase
+        .from('lot_quote_items')
+        .insert(missingPrelimItems.map((item) => ({
+          quote_id:            quoteId,
+          template_item_id:    item.id,
+          item_name:           item.name,
+          unit:                item.unit,
+          quantity:            1,
+          unit_price_snapshot: item.unit_price,
+        })))
+      if (prelimError) return { error: prelimError.message }
+    }
+  }
+
   // Sync the persistent lots.is_corner flag from the quant sheet's "Corner
   // lot" toggle (quote_template_items.auto_calc_formula = 'corner_lot_flag')
   // — whichever quote type was just saved. Replaces the old manual "Is
