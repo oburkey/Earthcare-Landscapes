@@ -343,6 +343,7 @@ export default async function InvoicesPage() {
                   contractPrice:       effectiveContractPrice,
                   showClientExtras,
                   sections:            amounts.sections,
+                  homeDesign:          lot.home_design ?? null,
                   hasFinal,
                 })
               }

@@ -198,9 +198,15 @@ function claimSheetBody(
       ${sectionSubtotal}`
   }
 
+  // A contract price replaces the Final's standard sections on the priced
+  // sheet. The priceless sheet has no price to show, so it lists the Final's
+  // sections instead — otherwise it would be just a bare "Contract Price" row.
+  // With no Final behind it, the Contract Price row is all there is to show.
+  const standardSections = lot.sections.filter((s) => !s.isClientExtra)
+  const useContractRow = lot.contractPrice != null && !(hidePricing && standardSections.length > 0)
   let standardRows: string
   let providenceSubtotal: string
-  if (lot.contractPrice != null) {
+  if (useContractRow && lot.contractPrice != null) {
     standardRows = hidePricing ? `
       <tr>
         <td class="code">1</td>
@@ -218,9 +224,8 @@ function claimSheetBody(
       </tr>`
     providenceSubtotal = ''
   } else {
-    const standard = lot.sections.filter((s) => !s.isClientExtra)
-    standardRows = standard.map(sectionItemRows).join('')
-    providenceSubtotal = (!hidePricing && standard.length > 0) ? `
+    standardRows = standardSections.map(sectionItemRows).join('')
+    providenceSubtotal = (!hidePricing && standardSections.length > 0) ? `
       <tr class="sub">
         <td colspan="5">Providence Works Subtotal</td>
         <td class="r">${fmt(lot.standardAmount)}</td>
@@ -247,9 +252,10 @@ function claimSheetBody(
   <div class="hdr">
     <div class="hdr-left">
       <h1>${site.name} — Lot ${lot.lotNumber}</h1>
-      <div class="lbl">${lot.contractPrice != null ? 'Contract Price' : 'Final Price — ACTUAL'}</div>
+      <div class="lbl">${hidePricing ? 'Final Quant Sheet' : lot.contractPrice != null ? 'Contract Price' : 'Final Price — ACTUAL'}</div>
       ${site.clientContact ? `<div class="sub">Developer: ${site.clientContact}</div>` : ''}
       <div class="sub">Stage: ${stageName}</div>
+      ${lot.homeDesign ? `<div class="sub">Home design: ${lot.homeDesign}</div>` : ''}
       <div class="sub">${date}</div>
     </div>
     <div class="hdr-right">
@@ -514,11 +520,12 @@ async function downloadPDF(
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function InvoicesView({
-  sites, isAdmin, hidePricing,
+  sites, isAdmin, hidePricing, onHidePricingChange,
 }: {
   sites: SiteData[]
   isAdmin: boolean
   hidePricing: boolean
+  onHidePricingChange: (value: boolean) => void
 }) {
   const router = useRouter()
   const [expandedSites, setExpandedSites] = useState<Set<string>>(new Set())
@@ -867,6 +874,17 @@ export default function InvoicesView({
             ].filter(Boolean).join(' · ')} selected
           </span>
           <div className="flex items-center gap-2 flex-wrap">
+            {selectedLots.size > 0 && (
+              <label className="flex items-center gap-1.5 text-xs text-fg-secondary cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={hidePricing}
+                  onChange={(e) => onHidePricingChange(e.target.checked)}
+                  className="h-4 w-4 rounded border-border text-accent-fg focus:ring-green-600 cursor-pointer"
+                />
+                Hide pricing
+              </label>
+            )}
             {selectedLots.size > 0 && (
               <button
                 type="button"

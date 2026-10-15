@@ -24,17 +24,6 @@ export default function InvoicesPageClient({
 
   return (
     <>
-      <div className="flex justify-end">
-        <label className="flex items-center gap-2 text-sm text-fg-secondary cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={hidePricing}
-            onChange={(e) => setHidePricing(e.target.checked)}
-            className="h-4 w-4 rounded border-border text-accent-fg focus:ring-green-600 cursor-pointer"
-          />
-          Hide pricing on lot PDFs
-        </label>
-      </div>
       <ApprovedPanel
         lots={approvedLots}
         extraJobs={approvedExtraJobs}
@@ -45,6 +34,7 @@ export default function InvoicesPageClient({
         sites={sites}
         isAdmin={true}
         hidePricing={hidePricing}
+        onHidePricingChange={setHidePricing}
       />
     </>
   )

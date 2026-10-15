@@ -501,7 +501,7 @@ export async function getClaimLotDataForSnapshot(
   const { data: lot, error: lotError } = await supabase
     .from('lots')
     .select(`
-      id, lot_number, contract_price, has_client_extras,
+      id, lot_number, home_design, contract_price, has_client_extras,
       stages!inner(id, name, default_contract_price,
         sites!inner(id, name, client_contact, has_client_extras))
     `)
@@ -562,6 +562,7 @@ export async function getClaimLotDataForSnapshot(
     contractPrice:      effectiveContractPrice,
     showClientExtras,
     sections:           amounts.sections,
+    homeDesign:         lot.home_design ?? null,
     hasFinal,
   }
 

@@ -21,6 +21,7 @@ export type ClaimLotData = {
   contractPrice: number | null
   showClientExtras: boolean
   sections: LotSection[]
+  homeDesign: string | null
   // True when the lot has a Final quant sheet (quote_type='final'). Without
   // one, standardAmount/clientExtrasAmount/sections are empty — the Estimate
   // is never substituted in, so a claim sheet can't pass it off as final.
@@ -126,17 +127,22 @@ export function lotClaimHtml(lot: ClaimLotData, hidePricing: boolean = false): s
       ${sectionSubtotal}`
   }
 
+  // A contract price replaces the Final's standard sections on the priced
+  // sheet. The priceless sheet has no price to show, so it lists the Final's
+  // sections instead — otherwise it would be just a bare "Contract Price" row.
+  // With no Final behind it, the Contract Price row is all there is to show.
+  const standardSections = lot.sections.filter((s) => !s.isClientExtra)
+  const useContractRow = lot.contractPrice != null && !(hidePricing && standardSections.length > 0)
   let standardRows: string
   let providenceSubtotal: string
-  if (lot.contractPrice != null) {
+  if (useContractRow && lot.contractPrice != null) {
     standardRows = hidePricing
       ? `<tr><td></td><td>Contract Price</td><td class="r">1</td><td class="u">Lot</td></tr>`
       : `<tr><td></td><td>Contract Price</td><td class="r">1</td><td class="u">Lot</td><td class="r">${fmt(lot.contractPrice)}</td><td class="r">${fmt(lot.contractPrice)}</td></tr>`
     providenceSubtotal = ''
   } else {
-    const standard = lot.sections.filter((s) => !s.isClientExtra)
-    standardRows = standard.map(sectionItemRows).join('')
-    providenceSubtotal = (!hidePricing && standard.length > 0)
+    standardRows = standardSections.map(sectionItemRows).join('')
+    providenceSubtotal = (!hidePricing && standardSections.length > 0)
       ? `<tr class="sub"><td colspan="5">Providence Works Subtotal</td><td class="r">${fmt(lot.standardAmount)}</td></tr>`
       : ''
   }
@@ -156,9 +162,10 @@ export function lotClaimHtml(lot: ClaimLotData, hidePricing: boolean = false): s
   <div class="hdr">
     <div class="hdr-left">
       <h1>${lot.siteName} — Lot ${lot.lotNumber}</h1>
-      <div class="lbl">${lot.contractPrice != null ? 'Contract Price' : 'Final Price — ACTUAL'}</div>
+      <div class="lbl">${hidePricing ? 'Final Quant Sheet' : lot.contractPrice != null ? 'Contract Price' : 'Final Price — ACTUAL'}</div>
       ${lot.clientContact ? `<div class="sub">Developer: ${lot.clientContact}</div>` : ''}
       <div class="sub">Stage: ${lot.stageName}</div>
+      ${lot.homeDesign ? `<div class="sub">Home design: ${lot.homeDesign}</div>` : ''}
       <div class="sub">${date}</div>
     </div>
     <div class="hdr-right">${LOGO_DATA_URL ? `<img src="${LOGO_DATA_URL}" alt="Earthcare Landscapes" />` : ''}</div>
