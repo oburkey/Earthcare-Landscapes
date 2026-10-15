@@ -10,6 +10,7 @@
 - Warn me before making a change that could break something else
 - Keep code clean and modular — no spaghetti
 - always verify file/data exists before attempting code fixes
+- Always run `npx next build` before reporting a task as done — not just tsc and eslint, since some Next.js errors (e.g. invalid 'use server' exports) only show up in a full build
 
 ## Project Context
 - Next.js 15 App Router, React 19, TypeScript, Tailwind CSS v4
@@ -17,6 +18,7 @@
 - Role hierarchy: worker → leading_hand → supervisor → admin → client (separate)
 - All data fetching via lib/data.ts with unstable_cache / React cache pattern
 - Mutations must call revalidatePath() or revalidateTag() after changes
+- Never export non-async values (constants, arrays, objects) from any file with a 'use server' directive — Next.js requires every export from such a file to be an async function; put shared constants in a separate plain module instead
 ## UI Defaults
 - All collapsible/expandable sections must default to CLOSED unless there is a strong reason to default open
 - Never default a section to open without explicitly confirming this is the right behaviour
