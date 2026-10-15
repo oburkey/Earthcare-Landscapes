@@ -114,6 +114,34 @@ export async function clearExtraJobDelayed(
   return null
 }
 
+// Status-only update — distinct from updateExtraJob (which requires
+// resubmitting title/description/due_date/notes and always redirects). Used
+// by the dashboard's "Mark complete" button for a quick inline status flip
+// with no navigation and no risk of blanking other fields.
+export async function markExtraJobComplete(
+  extraJobId: string,
+  siteId: string,
+  stageId: string
+): Promise<ActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'leading_hand' && profile.role !== 'supervisor' && profile.role !== 'admin') {
+    return { error: 'Only leading hands and above can mark a job as complete.' }
+  }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('extra_jobs')
+    .update({ status: 'complete' })
+    .eq('id', extraJobId)
+    .select('id')
+
+  if (error) return { error: error.message }
+  if (!data || data.length === 0) return { error: 'Update failed — the job could not be found or you do not have permission to edit it.' }
+
+  revalidateAfterDelayChange(siteId, stageId, extraJobId)
+  return null
+}
+
 export async function deleteExtraJob(
   _prev: ActionState,
   formData: FormData

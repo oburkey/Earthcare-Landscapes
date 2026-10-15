@@ -383,7 +383,7 @@ export default async function DashboardPage() {
         </section>
 
         {/* Section 3 — Extra jobs to complete (all roles, hidden if empty) */}
-        <ExtraJobsList jobs={extraJobItems} />
+        <ExtraJobsList jobs={extraJobItems} canManage={isLeadingHand} />
 
         {/* Section 4 — Pre-starts this week (supervisor+) */}
         {isSupervisor && preStartDays.length > 0 && (
