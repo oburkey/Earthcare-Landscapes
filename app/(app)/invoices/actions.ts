@@ -527,17 +527,15 @@ export async function getClaimLotDataForSnapshot(
     `)
     .eq('lot_id', lotId)
 
+  // Only the Final quant sheet is used — never the Estimate — so a
+  // regenerated claim sheet can't present estimate figures as final.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const finals = ((quotes ?? []) as any[]).filter((q) => q.quote_type === 'final')
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const estimates = ((quotes ?? []) as any[]).filter((q) => q.quote_type === 'estimate')
+  const hasFinal = finals.length > 0
 
   let amounts = { standard: 0, extras: 0, sections: [] as LotSection[] }
-  if (finals.length > 0) {
+  if (hasFinal) {
     const best = [...finals].sort((a, b) => bestQuoteScore(b) - bestQuoteScore(a))[0]
-    amounts = buildClaimSections(best.lot_quote_items ?? [])
-  } else if (estimates.length > 0) {
-    const best = [...estimates].sort((a, b) => bestQuoteScore(b) - bestQuoteScore(a))[0]
     amounts = buildClaimSections(best.lot_quote_items ?? [])
   }
 
@@ -546,6 +544,10 @@ export async function getClaimLotDataForSnapshot(
     lot.contract_price != null ? Number(lot.contract_price)
     : stage.default_contract_price != null ? Number(stage.default_contract_price)
     : null
+
+  if (!hasFinal && effectiveContractPrice == null) {
+    return { error: `Lot ${lot.lot_number} has no Final quant sheet — no claim sheet available.` }
+  }
 
   const data: ClaimLotData = {
     id:                 lot.id,
@@ -560,6 +562,7 @@ export async function getClaimLotDataForSnapshot(
     contractPrice:      effectiveContractPrice,
     showClientExtras,
     sections:           amounts.sections,
+    hasFinal,
   }
 
   return { data }

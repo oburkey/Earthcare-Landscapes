@@ -7,7 +7,6 @@ import type { ApprovedLot, ApprovedExtraJob, ApprovedProgressClaim } from './App
 import type { InvoiceRun } from './InvoiceHistory'
 import type { ProgressClaimRow } from './ProgressClaimsSection'
 import { getExtraJobsPricing } from '@/app/(app)/sites/[siteId]/stages/[stageId]/extra-jobs/[extraJobId]/pricing-actions'
-import { getQuantIssues } from '@/lib/quantIssues'
 
 export const metadata = { title: 'Invoices — Earthcare Landscapes' }
 
@@ -279,12 +278,11 @@ export default async function InvoicesPage() {
         estimateByLot.set(lotId, estimateData.standard + estimateData.extras)
       }
 
+      // Only a Final quant sheet feeds amountByLot — the Estimate has its own
+      // column (estimateByLot) and is never substituted in as the final.
       if (finals.length > 0) {
         const best = [...finals].sort((a, b) => bestQuoteScore(b) - bestQuoteScore(a))[0]
         amountByLot.set(lotId, buildSections(best.lot_quote_items ?? []))
-      } else if (estimateData) {
-        // No final quote yet — use estimate sections as fallback for PDF
-        amountByLot.set(lotId, estimateData)
       }
     }
   }
@@ -323,7 +321,9 @@ export default async function InvoicesPage() {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const lots: LotRow[] = ((stage.lots ?? []) as any[])
             .map((lot): LotRow => {
-              const amounts          = amountByLot.get(lot.id) ?? { standard: 0, extras: 0, sections: [] }
+              const finalAmounts     = amountByLot.get(lot.id)
+              const hasFinal         = finalAmounts != null
+              const amounts          = finalAmounts ?? { standard: 0, extras: 0, sections: [] }
               const showClientExtras = siteShowClientExtras && (lot.has_client_extras ?? true)
               const effectiveContractPrice =
                 lot.contract_price != null ? Number(lot.contract_price) : stageDefaultContractPrice
@@ -343,6 +343,7 @@ export default async function InvoicesPage() {
                   contractPrice:       effectiveContractPrice,
                   showClientExtras,
                   sections:            amounts.sections,
+                  hasFinal,
                 })
               }
 
@@ -360,6 +361,7 @@ export default async function InvoicesPage() {
                 sections:             amounts.sections,
                 showClientExtras,
                 contractPrice:        effectiveContractPrice,
+                hasFinal,
               }
             })
             .sort((a, b) =>
@@ -489,17 +491,6 @@ export default async function InvoicesPage() {
     }
   })
 
-  // Quant sheet / invoicing issue checks — admin only (this whole page already is).
-  const quantIssues = await getQuantIssues()
-  const lotIssuesById: Record<string, string[]> = {}
-  const extraJobIssuesById: Record<string, string[]> = {}
-  for (const row of quantIssues) {
-    const message = row.quote_type ? `[${row.quote_type}] ${row.issue}` : row.issue
-    const byId = row.entity_type === 'lot' ? lotIssuesById : extraJobIssuesById
-    if (!byId[row.lot_id]) byId[row.lot_id] = []
-    byId[row.lot_id].push(message)
-  }
-
   return (
     <div className="min-h-screen bg-bg">
       <div className="mx-auto max-w-6xl px-4 py-6 space-y-5">
@@ -509,8 +500,6 @@ export default async function InvoicesPage() {
           approvedLots={approvedLots}
           approvedExtraJobs={approvedExtraJobs}
           approvedProgressClaims={approvedProgressClaims}
-          lotIssuesById={lotIssuesById}
-          extraJobIssuesById={extraJobIssuesById}
         />
         <InvoiceHistory runs={invoiceHistory} />
       </div>

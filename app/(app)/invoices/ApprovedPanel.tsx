@@ -3,7 +3,7 @@
 import { useState, useTransition, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { markAsInvoiced, uploadInvoiceSnapshot, getClaimExtraJobData } from './actions'
-import { generateClaimPdfBlob, pdfFilename, generateExtraJobPdfBlob, extraJobPdfFilename, type ClaimLotData } from './pdfClient'
+import { generateClaimPdfBlob, pdfFilename, generateExtraJobPdfBlob, extraJobPdfFilename, canProduceClaimSheet, type ClaimLotData } from './pdfClient'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -144,7 +144,10 @@ export default function ApprovedPanel({
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
-  const [selectedLotIds, setSelectedLotIds]         = useState<Set<string>>(() => new Set(lots.map((l) => l.id)))
+  // Lots with no Final quant sheet and no contract price can't be claimed
+  // (their only figures are the Estimate), so they're never selectable — this
+  // keeps them out of the ZIP, the invoice snapshots and the invoice run.
+  const [selectedLotIds, setSelectedLotIds]         = useState<Set<string>>(() => new Set(lots.filter(canProduceClaimSheet).map((l) => l.id)))
   const [selectedJobIds, setSelectedJobIds]         = useState<Set<string>>(() => new Set(extraJobs.map((j) => j.id)))
   const [selectedClaimIds, setSelectedClaimIds]     = useState<Set<string>>(() => new Set(progressClaims.map((c) => c.id)))
   const [invoiceDate, setInvoiceDate]         = useState(() => new Date().toISOString().slice(0, 10))
@@ -162,8 +165,8 @@ export default function ApprovedPanel({
     const newIds = new Set(lots.map((l) => l.id))
     setSelectedLotIds((prev) => {
       const updated = new Set([...prev].filter((id) => newIds.has(id)))
-      for (const id of newIds) {
-        if (!prevLotIds.current.has(id)) updated.add(id)
+      for (const lot of lots) {
+        if (!prevLotIds.current.has(lot.id) && canProduceClaimSheet(lot)) updated.add(lot.id)
       }
       return updated
     })
@@ -289,28 +292,39 @@ export default function ApprovedPanel({
               <p className="text-xs font-semibold text-accent-fg uppercase tracking-wide pt-4 mb-2">Lots</p>
               <div className="rounded-xl border border-green-200 dark:border-green-800 overflow-hidden divide-y divide-green-100 dark:divide-green-900">
                 {lots.map((lot) => {
+                  const claimable = canProduceClaimSheet(lot)
                   const amount  = lot.contractPrice ?? (lot.standardAmount + lot.clientExtrasAmount)
-                  const checked = selectedLotIds.has(lot.id)
+                  const checked = claimable && selectedLotIds.has(lot.id)
                   return (
                     <label
                       key={lot.id}
-                      className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${checked ? 'bg-green-50 dark:bg-green-900/20' : 'bg-surface hover:bg-green-50 dark:hover:bg-green-900/20'}`}
+                      title={claimable ? undefined : 'No Final quant sheet — complete the Final before invoicing this lot.'}
+                      className={`flex items-center gap-3 px-4 py-2.5 transition-colors ${
+                        !claimable ? 'bg-surface cursor-not-allowed opacity-70'
+                        : checked ? 'bg-green-50 dark:bg-green-900/20 cursor-pointer'
+                        : 'bg-surface hover:bg-green-50 dark:hover:bg-green-900/20 cursor-pointer'
+                      }`}
                     >
                       <input
                         type="checkbox"
                         checked={checked}
+                        disabled={!claimable}
                         onChange={() => setSelectedLotIds((prev) => {
                           const next = new Set(prev)
                           if (next.has(lot.id)) next.delete(lot.id); else next.add(lot.id)
                           return next
                         })}
-                        className="h-4 w-4 rounded border-border text-accent-fg focus:ring-green-600 cursor-pointer shrink-0"
+                        className="h-4 w-4 rounded border-border text-accent-fg focus:ring-green-600 cursor-pointer disabled:cursor-not-allowed shrink-0"
                       />
                       <span className="text-sm text-fg-secondary flex-1 min-w-0">
                         <span className="font-medium">Lot {lot.lotNumber}</span>
                         <span className="text-fg-muted"> · {lot.siteName} · {lot.stageName}</span>
                       </span>
-                      <span className="text-sm tabular-nums font-medium text-fg-secondary shrink-0">{fmt(amount)}</span>
+                      {claimable ? (
+                        <span className="text-sm tabular-nums font-medium text-fg-secondary shrink-0">{fmt(amount)}</span>
+                      ) : (
+                        <span className="shrink-0 rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">No final</span>
+                      )}
                     </label>
                   )
                 })}

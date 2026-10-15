@@ -21,6 +21,16 @@ export type ClaimLotData = {
   contractPrice: number | null
   showClientExtras: boolean
   sections: LotSection[]
+  // True when the lot has a Final quant sheet (quote_type='final'). Without
+  // one, standardAmount/clientExtrasAmount/sections are empty — the Estimate
+  // is never substituted in, so a claim sheet can't pass it off as final.
+  hasFinal: boolean
+}
+
+// A claim sheet needs a real price behind it: the Final quant sheet, or a
+// contract price. A lot with only an Estimate can't produce one.
+export function canProduceClaimSheet(lot: { hasFinal: boolean; contractPrice: number | null }): boolean {
+  return lot.hasFinal || lot.contractPrice != null
 }
 
 export type ClaimExtraJobItem = {
@@ -265,6 +275,9 @@ async function renderHtmlToPdfBlob(html: string): Promise<Blob> {
 // hidePricing defaults to false so existing callers (invoice snapshots,
 // InvoiceHistory's regeneration fallback) keep full pricing unchanged.
 export async function generateClaimPdfBlob(lot: ClaimLotData, hidePricing: boolean = false): Promise<Blob> {
+  if (!canProduceClaimSheet(lot)) {
+    throw new Error(`Lot ${lot.lotNumber} has no Final quant sheet or contract price — no claim sheet available.`)
+  }
   return renderHtmlToPdfBlob(CLAIM_STYLES + lotClaimHtml(lot, hidePricing))
 }
 

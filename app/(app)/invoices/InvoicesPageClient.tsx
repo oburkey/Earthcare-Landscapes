@@ -14,15 +14,11 @@ export default function InvoicesPageClient({
   approvedLots,
   approvedExtraJobs,
   approvedProgressClaims,
-  lotIssuesById,
-  extraJobIssuesById,
 }: {
   sites: SiteData[]
   approvedLots: ApprovedLot[]
   approvedExtraJobs: ApprovedExtraJob[]
   approvedProgressClaims: ApprovedProgressClaim[]
-  lotIssuesById: Record<string, string[]>
-  extraJobIssuesById: Record<string, string[]>
 }) {
   const [hidePricing, setHidePricing] = useState(false)
 
@@ -49,8 +45,6 @@ export default function InvoicesPageClient({
         sites={sites}
         isAdmin={true}
         hidePricing={hidePricing}
-        lotIssuesById={lotIssuesById}
-        extraJobIssuesById={extraJobIssuesById}
       />
     </>
   )

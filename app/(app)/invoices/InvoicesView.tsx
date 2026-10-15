@@ -9,7 +9,7 @@ import {
 } from './actions'
 import { getExtraJobsPricing } from '@/app/(app)/sites/[siteId]/stages/[stageId]/extra-jobs/[extraJobId]/pricing-actions'
 import { LOGO_DATA_URL } from '@/lib/pdfAssets'
-import { generateExtraJobPdfBlob, extraJobPdfFilename, downloadBlob } from './pdfClient'
+import { generateExtraJobPdfBlob, extraJobPdfFilename, downloadBlob, canProduceClaimSheet } from './pdfClient'
 import ProgressClaimsSection from './ProgressClaimsSection'
 import type { ProgressClaimRow } from './ProgressClaimsSection'
 import FinanceNotesField from './FinanceNotesField'
@@ -50,6 +50,24 @@ export type LotRow = {
   sections: LotSection[]
   showClientExtras: boolean
   contractPrice: number | null
+  // True when the lot has a Final quant sheet. Without one, standardAmount /
+  // clientExtrasAmount / sections are empty — the Estimate is never used as
+  // a stand-in (it has its own estimateTotal column).
+  hasFinal: boolean
+}
+
+// A lot's real (non-estimate) total. With a Final quant sheet the contract
+// price, if set, still replaces the Providence Works subtotal (client extras
+// always come from the quant sheet); with no Final it's the contract price
+// alone; with neither it's null — callers then show the Estimate as "(est.)".
+function confirmedTotal(lot: LotRow): number | null {
+  if (lot.hasFinal) return (lot.contractPrice ?? lot.standardAmount) + lot.clientExtrasAmount
+  return lot.contractPrice
+}
+
+// Estimate shown in place of a total when the lot has no confirmed total.
+function estimateFallbackTotal(lot: LotRow): number | null {
+  return confirmedTotal(lot) == null ? lot.estimateTotal : null
 }
 
 export type ExtraJobRow = {
@@ -281,20 +299,24 @@ function stageSummaryBody(
   logoSrc: string
 ): string {
   const date     = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
+  const hasAnyFinalStd = stage.lots.some((l) => l.hasFinal && l.contractPrice == null)
   const totStd   = stage.lots.reduce((s, l) => s + (l.contractPrice != null ? 0 : l.standardAmount), 0)
   const totExtra = stage.lots.reduce((s, l) => s + l.clientExtrasAmount, 0)
-  const totContract = stage.lots.reduce((s, l) => s + (l.contractPrice ?? 0), 0)
-  const totAmt   = totStd + totExtra + totContract
+  const totAmt   = stage.lots.reduce((s, l) => s + (confirmedTotal(l) ?? 0), 0)
+  const totEst   = stage.lots.reduce((s, l) => s + (estimateFallbackTotal(l) ?? 0), 0)
+  const estCell  = (amount: number) => `<span style="color:#888;font-weight:normal">${fmt(amount)} (est.)</span>`
 
   const rows = stage.lots.map((lot) => {
-    const inv   = invoicedMap[lot.id] ?? lot.invoiced
-    const total = (lot.contractPrice ?? lot.standardAmount) + lot.clientExtrasAmount
+    const inv       = invoicedMap[lot.id] ?? lot.invoiced
+    const confirmed = confirmedTotal(lot)
+    const est       = estimateFallbackTotal(lot)
+    const totalCell = confirmed != null ? fmt(confirmed) : est != null ? estCell(est) : '—'
     return `<tr>
       <td>Lot ${lot.lotNumber}${lot.contractPrice != null ? ' <span style="color:#7c3aed;font-size:9px;font-weight:600">CONTRACT</span>' : ''}</td>
       <td class="c">${lot.buildComplete ? '✓' : '—'}</td>
-      <td class="r">${lot.contractPrice != null ? '—' : fmt(lot.standardAmount)}</td>
+      <td class="r">${lot.contractPrice != null || !lot.hasFinal ? '—' : fmt(lot.standardAmount)}</td>
       <td class="r">${lot.clientExtrasAmount > 0 ? fmt(lot.clientExtrasAmount) : '—'}</td>
-      <td class="r" style="font-weight:600">${fmt(total)}</td>
+      <td class="r" style="font-weight:600">${totalCell}</td>
       <td class="c">${inv ? '✓' : ''}</td>
     </tr>`
   }).join('')
@@ -326,9 +348,9 @@ function stageSummaryBody(
       ${rows}
       <tr class="tot">
         <td colspan="2">Stage Total</td>
-        <td class="r">${fmt(totStd)}</td>
+        <td class="r">${hasAnyFinalStd ? fmt(totStd) : '—'}</td>
         <td class="r">${totExtra > 0 ? fmt(totExtra) : '—'}</td>
-        <td class="r">${fmt(totAmt)}</td>
+        <td class="r">${fmt(totAmt)}${totEst > 0 ? `<br>+ ${estCell(totEst)}` : ''}</td>
         <td></td>
       </tr>
     </tbody>
@@ -492,13 +514,11 @@ async function downloadPDF(
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function InvoicesView({
-  sites, isAdmin, hidePricing, lotIssuesById, extraJobIssuesById,
+  sites, isAdmin, hidePricing,
 }: {
   sites: SiteData[]
   isAdmin: boolean
   hidePricing: boolean
-  lotIssuesById: Record<string, string[]>
-  extraJobIssuesById: Record<string, string[]>
 }) {
   const router = useRouter()
   const [expandedSites, setExpandedSites] = useState<Set<string>>(new Set())
@@ -731,6 +751,10 @@ export default function InvoicesView({
   // ── Export functions ───────────────────────────────────────────────────────
 
   function exportLotClaimSheet(site: SiteData, stageName: string, lot: LotRow) {
+    if (!canProduceClaimSheet(lot)) {
+      setActionError(`Lot ${lot.lotNumber} has no Final quant sheet — no claim sheet available.`)
+      return
+    }
     const genId    = lot.id
     const filename = slug(site.name, stageName, 'Lot', lot.lotNumber, 'Claim') + '.pdf'
     startGen(genId)
@@ -768,13 +792,22 @@ export default function InvoicesView({
     const genId = 'batch'
     // Collect selected lots in site → stage → lot order
     type LotCtx = { site: SiteData; stageName: string; lot: LotRow }
-    const selected: LotCtx[] = []
+    const candidates: LotCtx[] = []
     for (const site of sites) {
       for (const stage of site.stages) {
         for (const lot of stage.lots) {
-          if (selectedLots.has(lot.id)) selected.push({ site, stageName: stage.name, lot })
+          if (selectedLots.has(lot.id)) candidates.push({ site, stageName: stage.name, lot })
         }
       }
+    }
+    // Lots with no Final quant sheet (and no contract price) are left out —
+    // their only figures are the Estimate, which must not go on a claim sheet.
+    const skipped  = candidates.filter(({ lot }) => !canProduceClaimSheet(lot))
+    const selected = candidates.filter(({ lot }) => canProduceClaimSheet(lot))
+    if (skipped.length > 0) {
+      setActionError(
+        `Skipped ${skipped.map(({ lot }) => `Lot ${lot.lotNumber}`).join(', ')} — no Final quant sheet.`
+      )
     }
     if (selected.length === 0) return
 
@@ -900,13 +933,15 @@ export default function InvoicesView({
             {isExpanded && (
               <div className="border-t border-border-subtle divide-y divide-border-subtle">
                 {site.stages.map((stage) => {
-                  const totStd        = stage.lots.reduce((s, l) => s + (l.contractPrice != null ? 0 : l.standardAmount), 0)
-                  // Final Amount always shows the quant sheet total, even for contract-priced
-                  // lots — unlike totStd (which excludes them to avoid double-counting totAmt).
+                  // Final Amount always shows the Final quant sheet total, even for
+                  // contract-priced lots; lots with no Final contribute nothing.
+                  const hasAnyFinal   = stage.lots.some((l) => l.hasFinal)
                   const totStdDisplay = stage.lots.reduce((s, l) => s + l.standardAmount, 0)
                   const totExtra      = stage.lots.reduce((s, l) => s + l.clientExtrasAmount, 0)
-                  const totContract   = stage.lots.reduce((s, l) => s + (l.contractPrice ?? 0), 0)
-                  const totAmt             = totStd + totExtra + totContract
+                  const totAmt             = stage.lots.reduce((s, l) => s + (confirmedTotal(l) ?? 0), 0)
+                  // Estimates standing in for lots with no Final and no contract price —
+                  // kept out of totAmt and shown separately as "(est.)".
+                  const totEstFallback     = stage.lots.reduce((s, l) => s + (estimateFallbackTotal(l) ?? 0), 0)
                   const totEstimate        = stage.lots.reduce((s, l) => s + (l.estimateTotal ?? 0), 0)
                   const stagePendingCount  = stage.lots.filter((l) => pendingReviewMap[l.id] ?? l.pendingReview).length
                   const stageApprovedCount = stage.lots.filter((l) => approvedMap[l.id] ?? l.approvedForInvoicing).length
@@ -981,7 +1016,8 @@ export default function InvoicesView({
                           </thead>
                           <tbody>
                             {stage.lots.map((lot) => {
-                              const total    = (lot.contractPrice ?? lot.standardAmount) + lot.clientExtrasAmount
+                              const total    = confirmedTotal(lot)
+                              const estTotal = estimateFallbackTotal(lot)
                               const invoiced = invoicedMap[lot.id] ?? lot.invoiced
                               const selected = selectedLots.has(lot.id)
                               const genning  = generating.has(lot.id)
@@ -1017,12 +1053,16 @@ export default function InvoicesView({
                                     {lot.estimateTotal != null ? fmt(lot.estimateTotal) : <span className="text-fg-muted">—</span>}
                                   </td>
                                   <td className="py-2.5 px-3 text-right tabular-nums text-fg-secondary">
-                                    {fmt(lot.standardAmount)}
+                                    {lot.hasFinal ? fmt(lot.standardAmount) : <span className="text-fg-muted">—</span>}
                                   </td>
                                   <td className="py-2.5 px-3 text-right tabular-nums text-fg-secondary">
                                     {lot.clientExtrasAmount > 0 ? fmt(lot.clientExtrasAmount) : <span className="text-fg-muted">—</span>}
                                   </td>
-                                  <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg">{fmt(total)}</td>
+                                  <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg whitespace-nowrap">
+                                    {total != null ? fmt(total)
+                                      : estTotal != null ? <span className="font-normal text-fg-muted">{fmt(estTotal)} <span className="text-xs">(est.)</span></span>
+                                      : <span className="font-normal text-fg-muted">—</span>}
+                                  </td>
                                   <td className="py-2.5 px-3 text-center" onClick={e => e.stopPropagation()}>
                                     <button
                                       type="button"
@@ -1076,13 +1116,6 @@ export default function InvoicesView({
                                     </button>
                                   </td>
                                 </tr>
-                                {isAdmin && ((pendingReviewMap[lot.id] ?? lot.pendingReview) || (approvedMap[lot.id] ?? lot.approvedForInvoicing)) && (lotIssuesById[lot.id]?.length ?? 0) > 0 && (
-                                  <tr className="border-b border-border-subtle bg-amber-50 dark:bg-amber-900/20">
-                                    <td colSpan={12} className="px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-                                      {lotIssuesById[lot.id]!.join(' · ')}
-                                    </td>
-                                  </tr>
-                                )}
                                 </Fragment>
                               )
                             })}
@@ -1090,11 +1123,16 @@ export default function InvoicesView({
                             <tr className="border-t-2 border-border bg-surface-raised">
                               <td colSpan={4} className="py-2.5 pr-6 font-semibold text-fg-secondary">Stage Total</td>
                               <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg-muted">{totEstimate > 0 ? fmt(totEstimate) : <span className="text-fg-muted">—</span>}</td>
-                              <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg-secondary">{fmt(totStdDisplay)}</td>
+                              <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg-secondary">{hasAnyFinal ? fmt(totStdDisplay) : <span className="text-fg-muted">—</span>}</td>
                               <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg-secondary">
                                 {totExtra > 0 ? fmt(totExtra) : <span className="text-fg-muted">—</span>}
                               </td>
-                              <td className="py-2.5 px-3 text-right tabular-nums font-bold text-fg">{fmt(totAmt)}</td>
+                              <td className="py-2.5 px-3 text-right tabular-nums font-bold text-fg whitespace-nowrap">
+                                {fmt(totAmt)}
+                                {totEstFallback > 0 && (
+                                  <div className="text-xs font-normal text-fg-muted">+ {fmt(totEstFallback)} (est.)</div>
+                                )}
+                              </td>
                               <td colSpan={4} />
                             </tr>
                           </tbody>
@@ -1226,13 +1264,6 @@ export default function InvoicesView({
                                           </button>
                                         </td>
                                       </tr>
-                                      {isAdmin && (jobPending || jobApproved) && (extraJobIssuesById[job.id]?.length ?? 0) > 0 && (
-                                        <tr className="border-b border-border-subtle last:border-0 bg-amber-50 dark:bg-amber-900/20">
-                                          <td colSpan={9} className="px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-                                            {extraJobIssuesById[job.id]!.join(' · ')}
-                                          </td>
-                                        </tr>
-                                      )}
                                       </Fragment>
                                     )
                                   })}
