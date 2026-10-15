@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { fmtNumber, fmtPct } from '../format'
 import { type AnalyticsData, type PlantSize } from '../lib'
 
@@ -21,7 +22,7 @@ export default function MaterialsAccuracySection({
   materials: AnalyticsData['materials']
   isAdmin: boolean
 }) {
-  const { plantRatios, plantBreakdown, accuracyRows, lotCount } = materials
+  const { plantRatios, plantBreakdown, accuracyGroups, lotCount } = materials
 
   return (
     <div className="space-y-4">
@@ -29,7 +30,7 @@ export default function MaterialsAccuracySection({
         <div className="px-4 py-3 border-b border-border-subtle">
           <h3 className="text-sm font-semibold text-fg-secondary">Materials accuracy — estimate vs final</h3>
         </div>
-        {accuracyRows.length === 0 ? (
+        {accuracyGroups.length === 0 ? (
           <p className="px-4 py-4 text-sm text-fg-muted">No comparable lots.</p>
         ) : (
           <>
@@ -44,24 +45,38 @@ export default function MaterialsAccuracySection({
                   </tr>
                 </thead>
                 <tbody>
-                  {accuracyRows.map((row) => (
-                    <tr key={row.key} className="border-t border-border-subtle">
-                      <td className="px-4 py-2 text-fg-secondary">{row.label}</td>
-                      <td className="px-2 py-2 text-right text-fg-muted">
-                        {fmtNumber(row.estimateQty, 1)} {row.unit}
-                      </td>
-                      <td className="px-2 py-2 text-right text-fg-muted">
-                        {fmtNumber(row.finalQty, 1)} {row.unit}
-                      </td>
-                      <td className="px-2 py-2 pr-4 text-right">
-                        <span className={row.variance <= 0 ? 'text-green-700' : 'text-red-600'}>
-                          {signedQty(row.variance)} {row.unit}
-                          {row.variancePct != null && (
-                            <span className="ml-1 text-fg-muted">({fmtPct(row.variancePct, 0)})</span>
-                          )}
-                        </span>
-                      </td>
-                    </tr>
+                  {accuracyGroups.map((group) => (
+                    <Fragment key={group.key}>
+                      <tr className="border-t border-border-subtle">
+                        <td colSpan={4} className="px-4 pt-2 pb-0.5 font-medium text-fg-secondary">
+                          {group.label} <span className="font-normal text-fg-muted">({group.unit})</span>
+                        </td>
+                      </tr>
+                      {group.rows.map((row) => {
+                        const isTotal = row.side === 'total'
+                        return (
+                          <tr key={row.key} className={isTotal ? 'font-semibold' : ''}>
+                            <td className={`py-1 pr-2 ${isTotal ? 'pl-4 text-fg-secondary' : 'pl-8 text-fg-muted'}`}>
+                              {row.label}
+                            </td>
+                            <td className="px-2 py-1 text-right text-fg-muted">
+                              {fmtNumber(row.estimateQty, 1)} {row.unit}
+                            </td>
+                            <td className="px-2 py-1 text-right text-fg-muted">
+                              {fmtNumber(row.finalQty, 1)} {row.unit}
+                            </td>
+                            <td className="px-2 py-1 pr-4 text-right">
+                              <span className={row.variance <= 0 ? 'text-green-700' : 'text-red-600'}>
+                                {signedQty(row.variance)} {row.unit}
+                                {row.variancePct != null && (
+                                  <span className="ml-1 font-normal text-fg-muted">({fmtPct(row.variancePct, 0)})</span>
+                                )}
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>

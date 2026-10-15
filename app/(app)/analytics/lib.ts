@@ -203,6 +203,18 @@ export type MaterialAccuracyRow = {
   lotCount: number
 }
 
+// One material in the accuracy table, shown as Front / Rear / Total rows.
+// Rows with no comparable lots are omitted; a group with no rows at all is
+// omitted entirely.
+export type MaterialAccuracyGroup = {
+  key: string
+  label: string
+  unit: string
+  rows: (MaterialAccuracyRow & { side: AccuracySide })[]
+}
+
+export type AccuracySide = 'front' | 'rear' | 'total'
+
 export type MaterialsSection = {
   variance: MaterialsVariance
   trend: VarianceTrendPoint[]
@@ -213,7 +225,7 @@ export type MaterialsSection = {
     actualRear: number | null
   }
   plantBreakdown: PlantSizeBreakdownRow[]
-  accuracyRows: MaterialAccuracyRow[]
+  accuracyGroups: MaterialAccuracyGroup[]
   // Total lots in this section's scope — shown at the bottom of the
   // materials-accuracy table so it's clear what's being averaged.
   lotCount: number
@@ -367,32 +379,46 @@ function computePlantSizeQuantities(items: QuoteItemRow[] | null | undefined): R
   return result
 }
 
-// Plant quantities split by BOTH side (front/rear) and pot size (130/140mm,
-// 200mm) — needed for the materials-accuracy table, which shows each
-// side/size combination as its own row. Unlike computePlantSizeQuantities
-// (sizes combined across sides) or computeCategoryQuantities.plantsFront/
-// plantsRear (sizes combined per side), this tracks both dimensions at once.
-export type PlantSideSizeQuantities = {
-  front130: number
-  front200: number
-  rear130: number
-  rear200: number
+// Per-side quantities for the materials-accuracy table. Side is decided by
+// template section: front = "Hardscape Works — Front" / "Softscape Works —
+// Front", rear = "Rear & Side Lot". Client Extras items are excluded — they're
+// extras, not standard works. Independent of computeCategoryQuantities, which
+// still drives the variance summary and trend chart.
+const ACCURACY_FRONT_SECTIONS = [FRONT_EDGING_SECTION, FRONT_BED_SECTION]
+const ACCURACY_REAR_SECTIONS = [REAR_BED_SECTION]
+const ACCURACY_EDGING_ITEMS = [FRONT_EDGING_ITEM, REAR_EDGING_ITEM]
+const ACCURACY_BED_ITEMS = [...new Set([...FRONT_BED_ITEMS, ...REAR_BED_ITEMS])]
+
+export type AccuracyMaterial = 'turf' | 'edging' | 'mulch' | 'plants140' | 'plants200'
+type SideQty = { front: number; rear: number }
+export type AccuracySideQuantities = Record<AccuracyMaterial, SideQty>
+
+function accuracyMaterialFor(name: string): AccuracyMaterial | null {
+  if (name === TURF_ITEM) return 'turf'
+  if (ACCURACY_EDGING_ITEMS.includes(name)) return 'edging'
+  if (ACCURACY_BED_ITEMS.includes(name)) return 'mulch'
+  if (name === '130/140mm plants') return 'plants140'
+  if (name === '200mm plants') return 'plants200'
+  return null
 }
 
-function computePlantSideSizeQuantities(items: QuoteItemRow[] | null | undefined): PlantSideSizeQuantities {
-  const result: PlantSideSizeQuantities = { front130: 0, front200: 0, rear130: 0, rear200: 0 }
+function computeAccuracySideQuantities(items: QuoteItemRow[] | null | undefined): AccuracySideQuantities {
+  const result: AccuracySideQuantities = {
+    turf: { front: 0, rear: 0 },
+    edging: { front: 0, rear: 0 },
+    mulch: { front: 0, rear: 0 },
+    plants140: { front: 0, rear: 0 },
+    plants200: { front: 0, rear: 0 },
+  }
   if (!items) return result
   for (const item of items) {
+    const material = accuracyMaterialFor(item.item_name)
+    if (!material) continue
+    const section = one(one(item.quote_template_items)?.quote_template_sections)
+    if (!section || section.is_client_extra) continue
     const qty = Number(item.quantity ?? 0)
-    const tpl = one(item.quote_template_items)
-    const side = tpl?.plant_category
-    if (item.item_name === '130/140mm plants') {
-      if (side === 'front') result.front130 += qty
-      else if (side === 'rear') result.rear130 += qty
-    } else if (item.item_name === '200mm plants') {
-      if (side === 'front') result.front200 += qty
-      else if (side === 'rear') result.rear200 += qty
-    }
+    if (ACCURACY_FRONT_SECTIONS.includes(section.name)) result[material].front += qty
+    else if (ACCURACY_REAR_SECTIONS.includes(section.name)) result[material].rear += qty
   }
   return result
 }
@@ -438,8 +464,8 @@ type LotCalc = {
   estimatePlantSizes: Record<PlantSize, number> | null
   budgetPlantSizes: Record<PlantSize, number> | null
   finalPlantSizes: Record<PlantSize, number> | null
-  estimatePlantSideSizes: PlantSideSizeQuantities | null
-  finalPlantSideSizes: PlantSideSizeQuantities | null
+  estimateSideQtys: AccuracySideQuantities | null
+  finalSideQtys: AccuracySideQuantities | null
   // When the final quant sheet was last saved — drives the variance trend's
   // chronological ordering (see buildMaterialsSection).
   finalLastEditedAt: string | null
@@ -510,8 +536,8 @@ function buildLotCalcs(
       estimatePlantSizes: estimateQuote ? computePlantSizeQuantities(estimateQuote.lot_quote_items) : null,
       budgetPlantSizes: budgetQuote ? computePlantSizeQuantities(budgetQuote.lot_quote_items) : null,
       finalPlantSizes: finalQuote ? computePlantSizeQuantities(finalQuote.lot_quote_items) : null,
-      estimatePlantSideSizes: estimateQuote ? computePlantSideSizeQuantities(estimateQuote.lot_quote_items) : null,
-      finalPlantSideSizes: finalQuote ? computePlantSideSizeQuantities(finalQuote.lot_quote_items) : null,
+      estimateSideQtys: estimateQuote ? computeAccuracySideQuantities(estimateQuote.lot_quote_items) : null,
+      finalSideQtys: finalQuote ? computeAccuracySideQuantities(finalQuote.lot_quote_items) : null,
       finalLastEditedAt: finalQuote?.last_edited_at ?? null,
       contractPrice: cp,
       subcontractorCost,
@@ -571,67 +597,63 @@ function computePlantBreakdown(lots: LotCalc[]): PlantSizeBreakdownRow[] {
   return rows
 }
 
-// One definition per row of the materials-accuracy table. Edging stays a
-// single combined front+rear row (matching computeCategoryQuantities); plants
-// split by side because front/rear planting density differs materially.
-const MATERIAL_ROW_DEFS: {
-  key: string
-  label: string
-  unit: string
-  getEstimate: (l: LotCalc) => number | null
-  getFinal: (l: LotCalc) => number | null
-}[] = [
-  { key: 'turf', label: 'Turf', unit: 'm²',
-    getEstimate: (l) => l.estimateCats?.turf ?? null, getFinal: (l) => l.finalCats?.turf ?? null },
-  { key: 'gardenBedFront', label: 'Garden bed (front)', unit: 'm²',
-    getEstimate: (l) => l.estimateCats?.gardenBedFront ?? null, getFinal: (l) => l.finalCats?.gardenBedFront ?? null },
-  { key: 'gardenBedRear', label: 'Garden bed (rear)', unit: 'm²',
-    getEstimate: (l) => l.estimateCats?.gardenBedRear ?? null, getFinal: (l) => l.finalCats?.gardenBedRear ?? null },
-  { key: 'edging', label: 'Edging', unit: 'lm',
-    getEstimate: (l) => l.estimateCats?.edging ?? null, getFinal: (l) => l.finalCats?.edging ?? null },
-  { key: 'plantsFront130', label: 'Plants (front 140mm)', unit: 'No.',
-    getEstimate: (l) => l.estimatePlantSideSizes?.front130 ?? null, getFinal: (l) => l.finalPlantSideSizes?.front130 ?? null },
-  { key: 'plantsFront200', label: 'Plants (front 200mm)', unit: 'No.',
-    getEstimate: (l) => l.estimatePlantSideSizes?.front200 ?? null, getFinal: (l) => l.finalPlantSideSizes?.front200 ?? null },
-  { key: 'plantsRear130', label: 'Plants (rear 140mm)', unit: 'No.',
-    getEstimate: (l) => l.estimatePlantSideSizes?.rear130 ?? null, getFinal: (l) => l.finalPlantSideSizes?.rear130 ?? null },
-  { key: 'plantsRear200', label: 'Plants (rear 200mm)', unit: 'No.',
-    getEstimate: (l) => l.estimatePlantSideSizes?.rear200 ?? null, getFinal: (l) => l.finalPlantSideSizes?.rear200 ?? null },
+// One group per material in the materials-accuracy table, each rendered as
+// Front / Rear / Total rows.
+const MATERIAL_GROUP_DEFS: { key: AccuracyMaterial; label: string; unit: string }[] = [
+  { key: 'turf', label: 'Turf', unit: 'm²' },
+  { key: 'edging', label: 'Edging', unit: 'lm' },
+  { key: 'mulch', label: 'Mulch / garden bed', unit: 'm²' },
+  { key: 'plants140', label: 'Plants 140mm', unit: 'No.' },
+  { key: 'plants200', label: 'Plants 200mm', unit: 'No.' },
 ]
 
+const SIDE_LABELS: Record<AccuracySide, string> = { front: 'Front', rear: 'Rear', total: 'Total' }
+
+function sideQty(q: SideQty, side: AccuracySide): number {
+  return side === 'total' ? q.front + q.rear : q[side]
+}
+
 // Averages (or, for a single lot, returns exact) estimate/final quantities
-// per material — one row per material that has data, skipping the rest.
-// A lot only contributes to a row if its estimate for that material is > 0
-// (same "meaningful comparison" gate as computeVariance), avoiding both
-// divide-by-zero and rows padded out by lots that never estimated the item.
-function computeMaterialAccuracyRows(lots: LotCalc[]): MaterialAccuracyRow[] {
-  const rows: MaterialAccuracyRow[] = []
-  for (const def of MATERIAL_ROW_DEFS) {
-    let estSum = 0, finSum = 0, n = 0
-    for (const lot of lots) {
-      const est = def.getEstimate(lot)
-      const fin = def.getFinal(lot)
-      if (est == null || fin == null || est <= 0) continue
-      estSum += est
-      finSum += fin
-      n++
+// per material and side — skipping rows without data, and groups with no
+// rows at all. A lot only contributes to a row if its estimate for that
+// material/side is > 0 (same "meaningful comparison" gate as computeVariance),
+// avoiding both divide-by-zero and rows padded out by lots that never
+// estimated the item. Each row is averaged over its own contributing lots, so
+// Total isn't necessarily Front + Rear when lot coverage differs by side.
+function computeMaterialAccuracyGroups(lots: LotCalc[]): MaterialAccuracyGroup[] {
+  const groups: MaterialAccuracyGroup[] = []
+  for (const def of MATERIAL_GROUP_DEFS) {
+    const rows: MaterialAccuracyGroup['rows'] = []
+    for (const side of ['front', 'rear', 'total'] as const) {
+      let estSum = 0, finSum = 0, n = 0
+      for (const lot of lots) {
+        if (!lot.estimateSideQtys || !lot.finalSideQtys) continue
+        const est = sideQty(lot.estimateSideQtys[def.key], side)
+        const fin = sideQty(lot.finalSideQtys[def.key], side)
+        if (est <= 0) continue
+        estSum += est
+        finSum += fin
+        n++
+      }
+      if (n === 0) continue
+      const estimateQty = estSum / n
+      const finalQty = finSum / n
+      const variance = finalQty - estimateQty
+      rows.push({
+        key: `${def.key}-${side}`,
+        label: SIDE_LABELS[side],
+        unit: def.unit,
+        side,
+        estimateQty,
+        finalQty,
+        variance,
+        variancePct: estimateQty > 0 ? (variance / estimateQty) * 100 : null,
+        lotCount: n,
+      })
     }
-    if (n === 0) continue
-    const estimateQty = estSum / n
-    const finalQty = finSum / n
-    const variance = finalQty - estimateQty
-    rows.push({
-      key: def.key,
-      label: def.label,
-      unit: def.unit,
-      estimateQty,
-      finalQty,
-      variance,
-      variancePct: estimateQty > 0 ? (variance / estimateQty) * 100 : null,
-      lotCount: n,
-    })
+    if (rows.length > 0) groups.push({ key: def.key, label: def.label, unit: def.unit, rows })
   }
-  return rows
+  return groups
 }
 
 // Builds the variance / trend / plant-ratio bundle for a set of lots — used
@@ -685,7 +707,7 @@ function buildMaterialsSection(
     trend,
     plantRatios: { configuredFront, configuredRear, actualFront, actualRear },
     plantBreakdown: computePlantBreakdown(lotCalcs),
-    accuracyRows: computeMaterialAccuracyRows(lotCalcs),
+    accuracyGroups: computeMaterialAccuracyGroups(lotCalcs),
     lotCount: lotCalcs.length,
   }
 }
