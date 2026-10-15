@@ -168,7 +168,7 @@ const QUOTE_STYLES = `
 .html2pdf__container tr.subtotal .gst-breakdown { font-weight: 500; font-size: 9px; color: #555; white-space: nowrap; }
 .html2pdf__container tr.grand td { background: #f0f0f0; font-weight: bold; font-size: 12px; border-top: 3px solid #999; padding: 11px 8px; }
 .html2pdf__container tr.grand .gst-breakdown { font-size: 10px; color: #555; font-weight: 500; white-space: nowrap; }
-.html2pdf__container .quote-notes { margin-top: 18px; padding: 10px 12px; background: #f9f9f9; border: 1px solid #e8e8e8; font-size: 10px; color: #444; white-space: pre-wrap; line-height: 1.5; }
+.html2pdf__container .quote-notes { margin-top: 18px; padding: 10px 12px; background: #f9f9f9; border: 1px solid #e8e8e8; font-size: 10px; color: #444; white-space: pre-wrap; line-height: 1.5; page-break-inside: avoid; break-inside: avoid; }
 .html2pdf__container .quote-notes .notes-lbl { font-size: 9px; font-weight: bold; text-transform: uppercase; color: #888; letter-spacing: 0.05em; margin-bottom: 4px; }
 .html2pdf__container .note { margin-top: 20px; font-size: 9px; color: #999; }
 </style>`
@@ -291,7 +291,7 @@ const COMBINED_STYLES = `
 .html2pdf__container .sec-hdr { margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #ddd; }
 .html2pdf__container .sec-title { font-size: 13px; font-weight: bold; color: #111; margin-bottom: 2px; }
 .html2pdf__container .sec-desc { font-size: 10px; color: #555; }
-.html2pdf__container .sec-notes { margin-top: 10px; padding: 8px 10px; background: #f9f9f9; border: 1px solid #e8e8e8; font-size: 10px; color: #444; white-space: pre-wrap; line-height: 1.5; }
+.html2pdf__container .sec-notes { margin-top: 10px; padding: 8px 10px; background: #f9f9f9; border: 1px solid #e8e8e8; font-size: 10px; color: #444; white-space: pre-wrap; line-height: 1.5; page-break-inside: avoid; break-inside: avoid; }
 .html2pdf__container table { width: 100%; border-collapse: collapse; }
 .html2pdf__container thead th { font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: #555; padding: 8px; border-bottom: 2px solid #bbb; text-align: left; white-space: nowrap; }
 .html2pdf__container thead th.r { text-align: right; }
@@ -414,6 +414,24 @@ export async function downloadPDF(
         pagebreak:   { mode: ['css', 'legacy'] },
       })
       .from(el)
+      .toPdf()
+      // html2pdf slices its single rendered canvas into page-height chunks
+      // using Math.ceil(totalHeight / pageHeight) — a page-break-inside:avoid
+      // push (or any sub-pixel rounding between the pre-render page height
+      // and the post-render canvas page height) can leave a final slice
+      // that's only a few px tall, producing an all-but-blank trailing page.
+      // Drop it when the leftover is under ~3% of a full page.
+      .then(function trimBlankTrailingPage(this: {
+        prop: { canvas: HTMLCanvasElement; pageSize: { inner: { ratio: number } }; pdf: { internal: { getNumberOfPages(): number }; deletePage(n: number): void } }
+      }) {
+        const { canvas, pageSize, pdf } = this.prop
+        const pxPageHeight = Math.floor(canvas.width * pageSize.inner.ratio)
+        const remainder = canvas.height % pxPageHeight
+        const nPages = pdf.internal.getNumberOfPages()
+        if (nPages > 1 && remainder > 0 && remainder < pxPageHeight * 0.03) {
+          pdf.deletePage(nPages)
+        }
+      })
       .save()
   } catch {
     onError('Failed to generate PDF. Please try again.')
