@@ -119,7 +119,7 @@ export default function MaterialsAccuracySection({
         <div className="rounded-xl border border-border bg-surface p-4">
           <h3 className="text-sm font-semibold text-fg-secondary">Plant breakdown</h3>
           <p className="mt-1 text-xs text-fg-muted">
-            Plant counts by pot size, front and rear combined — estimate vs budget vs final, this range.
+            Plant counts by pot size, front and rear combined — estimate vs final, this range.
           </p>
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-xs">
@@ -127,9 +127,7 @@ export default function MaterialsAccuracySection({
                 <tr className="text-fg-muted">
                   <th className="text-left font-medium py-2 pr-2">Plant size</th>
                   {isAdmin && <th className="text-right font-medium py-2 px-2">Estimate</th>}
-                  <th className="text-right font-medium py-2 px-2">Budget</th>
-                  <th className="text-right font-medium py-2 px-2">Final</th>
-                  <th className="text-right font-medium py-2 pl-2">Budget vs Final</th>
+                  <th className="text-right font-medium py-2 pl-2">Final</th>
                 </tr>
               </thead>
               <tbody>
@@ -141,20 +139,8 @@ export default function MaterialsAccuracySection({
                         {row.estimateQty !== null ? fmtNumber(row.estimateQty, 0) : '—'}
                       </td>
                     )}
-                    <td className="py-2 px-2 text-right text-fg-muted">
-                      {row.budgetQty !== null ? fmtNumber(row.budgetQty, 0) : '—'}
-                    </td>
-                    <td className="py-2 px-2 text-right text-fg-muted">
+                    <td className="py-2 pl-2 text-right text-fg-muted">
                       {row.finalQty !== null ? fmtNumber(row.finalQty, 0) : '—'}
-                    </td>
-                    <td className="py-2 pl-2 text-right">
-                      {row.budgetVsFinalPct !== null ? (
-                        <span className={row.budgetVsFinalPct <= 0 ? 'text-green-700' : 'text-red-600'}>
-                          {fmtPct(row.budgetVsFinalPct, 0)}
-                        </span>
-                      ) : (
-                        <span className="text-fg-muted">—</span>
-                      )}
                     </td>
                   </tr>
                 ))}

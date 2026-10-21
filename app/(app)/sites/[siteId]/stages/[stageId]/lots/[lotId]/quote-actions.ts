@@ -14,7 +14,9 @@ export type QuoteItemPayload = {
   unit_price_snapshot: number | null
 }
 
-export type QuoteType = 'estimate' | 'budget' | 'final'
+// Budget quant sheets are retired — existing 'budget' rows stay in the
+// database untouched, but the app no longer reads or writes them.
+export type QuoteType = 'estimate' | 'final'
 
 export type SaveQuotePayload = {
   lotId: string
@@ -33,6 +35,10 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
   }
 
   const { lotId, siteId, stageId, quoteType, status, notes, items } = payload
+
+  if (quoteType !== 'estimate' && quoteType !== 'final') {
+    return { error: 'Unknown quant sheet type.' }
+  }
 
   // Estimate is admin-only — RLS already enforces this at the DB layer, this
   // is just a clearer error than the raw RLS failure would give.
@@ -93,8 +99,7 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
 
   // For a final quant sheet, snapshot the current (about-to-be-replaced)
   // items first — this is the "old" side of the stock-deduction diff below,
-  // and must be captured before the delete wipes it. Budget is excluded —
-  // it doesn't drive stock deduction (see below).
+  // and must be captured before the delete wipes it.
   let oldItemsSnapshot: { item_name: string; quantity: number | null }[] = []
   if (quoteType === 'final') {
     const { data } = await supabase
@@ -155,13 +160,13 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
     if (insertError) return { error: insertError.message }
   }
 
-  // Carry through from Estimate: the first time a Budget or Final sheet is
+  // Carry through from Estimate: the first time a Final sheet is
   // created for a lot that already has an Estimate, pre-fill the Earthworks
   // section and the Corner lot toggle (plus whatever items it controls) from
   // that Estimate. Only on creation (not every save) — editing afterwards is
   // free-form — and only items genuinely missing from what was just written,
   // so a value the user already entered on this first save is never touched.
-  if (!existing && (quoteType === 'budget' || quoteType === 'final')) {
+  if (!existing && quoteType === 'final') {
     const { data: estimateQuote } = await supabase
       .from('lot_quotes')
       .select('id')
@@ -310,8 +315,7 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
     }
   }
 
-  // Saving a final quant sheet flags the lot for admin review. Budget is
-  // excluded — it's a tracking sheet, not a claim of completed work.
+  // Saving a final quant sheet flags the lot for admin review.
   if (quoteType === 'final') {
     const { error: pendingReviewError } = await supabase
       .from('lots')
@@ -324,7 +328,6 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
   // from the previous save (oldItemsSnapshot captured above), so re-saving
   // the same quant sheet repeatedly doesn't double-deduct. Never blocks the
   // quant sheet save itself — any failure here is logged and swallowed.
-  // Budget is excluded — it's a tracking sheet, not actual material usage.
   if (quoteType === 'final') {
     try {
       const materialTypes = await getActiveMaterialTypes(supabase)

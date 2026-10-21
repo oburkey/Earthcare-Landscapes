@@ -59,11 +59,12 @@ interface Props {
   // supervisor+ (admin included, since supervisor is already the higher of
   // the two roles this needs to cover).
   canSeeLastEdited: boolean
+  isAdmin: boolean
 }
 
 export default function StageViewSwitcher({
   lots, extraJobs, tradeStatusMap, checklistMap, siteId, stageId,
-  canAddLot, canManageExtraJobs, canTickChecklist, canToggleBuildComplete, canUseTableViews, canSeeLastEdited,
+  canAddLot, canManageExtraJobs, canTickChecklist, canToggleBuildComplete, canUseTableViews, canSeeLastEdited, isAdmin,
 }: Props) {
   // Lazy initializer (same pattern as ScheduleView's view-preference state) —
   // localStorage isn't available during SSR, so fall back to the default there.
@@ -122,6 +123,7 @@ export default function StageViewSwitcher({
           canAddLot={canAddLot}
           canManageExtraJobs={canManageExtraJobs}
           canSeeLastEdited={canSeeLastEdited}
+          isAdmin={isAdmin}
         />
       ) : (
         <StageLotsTable

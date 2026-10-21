@@ -51,7 +51,6 @@ type Props = {
   canSupervise?: boolean
   sections: TemplateSection[]
   estimatedQuote: QuoteData
-  budgetQuote: QuoteData
   finalQuote: QuoteData
   showClientExtras?: boolean
   contractPrice?: number | null
@@ -150,26 +149,26 @@ const DEFAULT_YES_TOGGLES = new Set<string>([])
 export default function LotQuantities({
   lotId, siteId, stageId,
   isAdmin, canManage, canSupervise,
-  sections, estimatedQuote, budgetQuote, finalQuote,
+  sections, estimatedQuote, finalQuote,
   showClientExtras = true,
   plantRatios,
 }: Props) {
   const [open, setOpen] = useState(false)
-  const hasFinalData  = !!finalQuote  && finalQuote.items.some((i) => i.quantity !== null)
-  const hasBudgetData = !!budgetQuote && budgetQuote.items.some((i) => i.quantity !== null)
+  const hasFinalData    = !!finalQuote     && finalQuote.items.some((i) => i.quantity !== null)
+  const hasEstimateData = !!estimatedQuote && estimatedQuote.items.some((i) => i.quantity !== null)
   // Estimate isn't an option for non-admins at all — default to Final when it
-  // has data, otherwise Budget for non-admins (Estimate is admin's own default).
+  // has data, otherwise Estimate for admins and Final for everyone else.
   const [quoteType, setQuoteType] = useState<QuoteType>(
-    hasFinalData ? 'final' : (isAdmin ? 'estimate' : 'budget')
+    hasFinalData ? 'final' : (isAdmin ? 'estimate' : 'final')
   )
   function quoteForType(type: QuoteType): QuoteData {
-    return type === 'estimate' ? estimatedQuote : type === 'budget' ? budgetQuote : finalQuote
+    return type === 'estimate' ? estimatedQuote : finalQuote
   }
   const activeQuote = quoteForType(quoteType)
   // The quote matching the initial active mode above — used to seed initial
   // state below (must match the useState initializer, or the default mode
   // would open showing the wrong quote's data).
-  const initialQuote = quoteForType(hasFinalData ? 'final' : (isAdmin ? 'estimate' : 'budget'))
+  const initialQuote = quoteForType(hasFinalData ? 'final' : (isAdmin ? 'estimate' : 'final'))
 
   const allItems = useMemo(
     () => sections.flatMap((s) => s.items.map((item) => ({ ...item, isClientExtra: s.isClientExtra ?? false }))),
@@ -419,16 +418,15 @@ export default function LotQuantities({
     })
   }
 
-  // Copies every quantity from the other (budget/final) quant sheet into
-  // whichever tab is currently active, then saves through the normal
-  // saveLotQuote path — same pending_review / stock-deduction-diffing /
-  // last-edited-by / admin-only-section-preservation side effects as any
-  // other save, since it's just a payload built from different source data.
-  function copyFrom(sourceType: QuoteType) {
-    const sourceQuote = quoteForType(sourceType)
-    const targetLabel = quoteType === 'final' ? 'Final' : 'Budget'
-    const sourceLabel = sourceType === 'final' ? 'Final' : 'Budget'
-    if (!confirm(`This will overwrite all ${targetLabel} quantities with the ${sourceLabel} values. Continue?`)) return
+  // Copies every quantity from the Estimate into the Final tab, then saves
+  // through the normal saveLotQuote path — same pending_review /
+  // stock-deduction-diffing / last-edited-by / admin-only-section-preservation
+  // side effects as any other save, since it's just a payload built from
+  // different source data.
+  function copyFromEstimate() {
+    if (quoteType !== 'final') return
+    const sourceQuote = estimatedQuote
+    if (!confirm('This will overwrite all Final quantities with the Estimate values. Continue?')) return
 
     clearAutoSaveTimer()
     if (autoSaveHideRef.current) {
@@ -499,10 +497,10 @@ export default function LotQuantities({
 
       {open && (<>
 
-      {/* Estimate / Budget / Final toggle — Estimate hidden entirely for non-admins */}
+      {/* Estimate / Final toggle — Estimate hidden entirely for non-admins */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-1 bg-surface-raised rounded-lg p-1 self-start w-fit">
-          {(['estimate', 'budget', 'final'] as const)
+          {(['estimate', 'final'] as const)
             .filter((type) => type !== 'estimate' || isAdmin)
             .map((type) => (
               <button
@@ -515,7 +513,7 @@ export default function LotQuantities({
                     : 'text-fg-muted hover:text-fg-secondary'
                 }`}
               >
-                {type === 'estimate' ? 'Estimate' : type === 'budget' ? 'Budget' : 'Final'}
+                {type === 'estimate' ? 'Estimate' : 'Final'}
               </button>
             ))}
         </div>
@@ -852,26 +850,17 @@ export default function LotQuantities({
         </button>
       )}
 
-      {/* Copy from the other (budget/final) quant sheet — leading_hand+,
-          only when the source sheet has data, hidden once approved */}
-      {canEditActiveTab && !isApproved && quoteType === 'final' && hasBudgetData && (
+      {/* Copy from Estimate into the Final tab — only when the Estimate has
+          data (the Estimate is RLS-hidden from non-admins, so in practice
+          admin-only), hidden once approved */}
+      {canEditActiveTab && !isApproved && quoteType === 'final' && hasEstimateData && (
         <button
           type="button"
-          onClick={() => copyFrom('budget')}
+          onClick={copyFromEstimate}
           disabled={isPending}
           className="w-full rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-medium text-fg-secondary hover:bg-surface-raised disabled:opacity-50 transition-colors"
         >
-          Copy from Budget
-        </button>
-      )}
-      {canEditActiveTab && !isApproved && quoteType === 'budget' && hasFinalData && (
-        <button
-          type="button"
-          onClick={() => copyFrom('final')}
-          disabled={isPending}
-          className="w-full rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-medium text-fg-secondary hover:bg-surface-raised disabled:opacity-50 transition-colors"
-        >
-          Copy from Final
+          Copy from Estimate
         </button>
       )}
 

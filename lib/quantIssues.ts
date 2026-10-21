@@ -26,7 +26,7 @@ export type QuantIssueRow = {
   stage: string
   lot_id: string       // the extra job's id, for entity_type 'extra_job'
   lot_number: string   // the extra job's title, for entity_type 'extra_job'
-  quote_type: 'estimate' | 'budget' | 'final' | null
+  quote_type: 'estimate' | 'final' | null
   issue: string
   entity_type: 'lot' | 'extra_job'
   invoiced: boolean
@@ -34,7 +34,7 @@ export type QuantIssueRow = {
 
 // ── Shared fetched data shapes ────────────────────────────────────────────────
 
-type QuoteType = 'estimate' | 'budget' | 'final'
+type QuoteType = 'estimate' | 'final'
 
 type LotQuoteItemRow = {
   template_item_id: string | null
@@ -137,6 +137,8 @@ async function getActiveLotsWithQuotes(db: Db): Promise<ActiveLotRow[]> {
   const { data: quoteData } = await db
     .from('lot_quotes')
     .select('lot_id, quote_type, lot_quote_items(template_item_id, quantity, unit_price_snapshot)')
+    // Retired Budget sheets stay in the database but are never checked.
+    .in('quote_type', ['estimate', 'final'])
 
   const quotesByLotId = new Map<string, LotQuoteRow[]>()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -254,7 +256,7 @@ function quoteTotal(items: LotQuoteItemRow[]): number {
 
 // ── Checks ────────────────────────────────────────────────────────────────────
 
-// 1. Preliminaries (admin_only section) items missing on any estimate/budget/final sheet.
+// 1. Preliminaries (admin_only section) items missing on any estimate/final sheet.
 function checkPreliminariesMissing(lots: ActiveLotRow[], template: TemplateStructure): QuantIssueRow[] {
   if (template.adminOnlyItems.length === 0) return []
   const rows: QuantIssueRow[] = []

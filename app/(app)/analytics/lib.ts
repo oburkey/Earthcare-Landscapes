@@ -78,7 +78,7 @@ export type QuoteItemRow = {
 }
 export type QuoteRow = {
   lot_id: string
-  quote_type: 'estimate' | 'budget' | 'final'
+  quote_type: 'estimate' | 'final'
   status: string
   last_edited_at: string | null
   lot_quote_items: QuoteItemRow[] | null
@@ -138,11 +138,7 @@ export type LotDrillDownRow = {
   buildComplete: boolean
   invoiced: boolean
   estimateTotal: number | null
-  budgetTotal: number | null
   finalTotal: number | null
-  // (final - budget) / budget * 100 — how closely actual work tracked to
-  // budget. null unless both a budget and a final total exist.
-  budgetVsFinalPct: number | null
   // (final - estimate) / estimate * 100 — how far the actual final quant
   // total came in from what was estimated. Shown for contract-priced lots
   // alongside contractVariance, since estimate vs final is a different
@@ -181,10 +177,7 @@ export type PlantSize = '130/140mm plants' | '200mm plants' | '300mm plants'
 export type PlantSizeBreakdownRow = {
   size: PlantSize
   estimateQty: number | null
-  budgetQty: number | null
   finalQty: number | null
-  // (final - budget) / budget * 100 — how closely actual usage tracked to budget.
-  budgetVsFinalPct: number | null
 }
 
 // One row of the materials-accuracy table — estimate vs final, averaged
@@ -354,9 +347,8 @@ function quoteTotal(items: QuoteItemRow[] | null | undefined): number {
   }, 0)
 }
 
-// Only ever called on estimate/final rows (budget is filtered out before
-// this runs — see buildLotCalcs) — budget is a tracking sheet, not a price
-// quote, so it never participates in revenue/"best available price" calcs.
+// Only ever called on estimate/final rows — retired Budget sheets are
+// filtered out at the query (see analytics/page.tsx).
 function bestQuoteScore(q: QuoteRow): number {
   const statusScore = q.status === 'approved' ? 3 : q.status === 'submitted' ? 2 : 1
   const typeScore = q.quote_type === 'final' ? 1 : 0 // final preferred over estimate
@@ -456,13 +448,11 @@ type LotCalc = {
   invoiced: boolean
   finalTotal: number | null
   estimateTotal: number | null
-  budgetTotal: number | null
   bestTotal: number | null
   hasQuoteData: boolean
   estimateCats: CategoryQuantities | null
   finalCats: CategoryQuantities | null
   estimatePlantSizes: Record<PlantSize, number> | null
-  budgetPlantSizes: Record<PlantSize, number> | null
   finalPlantSizes: Record<PlantSize, number> | null
   estimateSideQtys: AccuracySideQuantities | null
   finalSideQtys: AccuracySideQuantities | null
@@ -494,12 +484,8 @@ function buildLotCalcs(
     const quotesForLot = byLot.get(lot.id) ?? []
     const finalQuote = quotesForLot.find((q) => q.quote_type === 'final') ?? null
     const estimateQuote = quotesForLot.find((q) => q.quote_type === 'estimate') ?? null
-    const budgetQuote = quotesForLot.find((q) => q.quote_type === 'budget') ?? null
-    // Budget is excluded from revenue/"best available price" — it's a
-    // tracking sheet, not a price quote (see bestQuoteScore).
-    const revenueQuotes = quotesForLot.filter((q) => q.quote_type !== 'budget')
-    const best = revenueQuotes.length > 0
-      ? [...revenueQuotes].sort((a, b) => bestQuoteScore(b) - bestQuoteScore(a))[0]
+    const best = quotesForLot.length > 0
+      ? [...quotesForLot].sort((a, b) => bestQuoteScore(b) - bestQuoteScore(a))[0]
       : null
 
     const ownPrice = lot.contract_price != null ? Number(lot.contract_price) : null
@@ -524,7 +510,6 @@ function buildLotCalcs(
       // estimateTotal, like finalTotal, is always the real quant total — the
       // drill-down shows it alongside the contract price for NLV lots too.
       estimateTotal: estimateQuote ? quoteTotal(estimateQuote.lot_quote_items) : null,
-      budgetTotal: hasContractPrice ? null : (budgetQuote ? quoteTotal(budgetQuote.lot_quote_items) : null),
       bestTotal: hasContractPrice ? cp : (best ? quoteTotal(best.lot_quote_items) : null),
       hasQuoteData: hasContractPrice || quotesForLot.length > 0,
       // Category/plant-size quantities feed the materials & quote accuracy
@@ -534,7 +519,6 @@ function buildLotCalcs(
       estimateCats: estimateQuote ? computeCategoryQuantities(estimateQuote.lot_quote_items) : null,
       finalCats: finalQuote ? computeCategoryQuantities(finalQuote.lot_quote_items) : null,
       estimatePlantSizes: estimateQuote ? computePlantSizeQuantities(estimateQuote.lot_quote_items) : null,
-      budgetPlantSizes: budgetQuote ? computePlantSizeQuantities(budgetQuote.lot_quote_items) : null,
       finalPlantSizes: finalQuote ? computePlantSizeQuantities(finalQuote.lot_quote_items) : null,
       estimateSideQtys: estimateQuote ? computeAccuracySideQuantities(estimateQuote.lot_quote_items) : null,
       finalSideQtys: finalQuote ? computeAccuracySideQuantities(finalQuote.lot_quote_items) : null,
@@ -569,29 +553,22 @@ function computeVariance(lots: LotCalc[]): MaterialsVariance {
 
 // Sums plant-size quantities across a set of lots, per quote type. A size is
 // only included if at least one lot in this scope has quote data for it
-// (estimate/budget/final) — distinct from that quote existing but summing to
+// (estimate/final) — distinct from that quote existing but summing to
 // zero, which is shown as 0 rather than omitted.
 function computePlantBreakdown(lots: LotCalc[]): PlantSizeBreakdownRow[] {
   const rows: PlantSizeBreakdownRow[] = []
   for (const size of PLANT_SIZE_ITEMS) {
     let estimateQty = 0, hasEstimate = false
-    let budgetQty = 0, hasBudget = false
     let finalQty = 0, hasFinal = false
     for (const lot of lots) {
       if (lot.estimatePlantSizes) { hasEstimate = true; estimateQty += lot.estimatePlantSizes[size] }
-      if (lot.budgetPlantSizes) { hasBudget = true; budgetQty += lot.budgetPlantSizes[size] }
       if (lot.finalPlantSizes) { hasFinal = true; finalQty += lot.finalPlantSizes[size] }
     }
-    if (!hasEstimate && !hasBudget && !hasFinal) continue
-    const budgetVsFinalPct = hasBudget && hasFinal && budgetQty > 0
-      ? ((finalQty - budgetQty) / budgetQty) * 100
-      : null
+    if (!hasEstimate && !hasFinal) continue
     rows.push({
       size,
       estimateQty: hasEstimate ? estimateQty : null,
-      budgetQty: hasBudget ? budgetQty : null,
       finalQty: hasFinal ? finalQty : null,
-      budgetVsFinalPct,
     })
   }
   return rows
@@ -737,13 +714,6 @@ function lotVarianceCategories(lot: LotCalc): LotVarianceCategory[] | null {
     parts.push({ key, label: CATEGORY_LABELS[key], pct })
   }
   return parts.length > 0 ? parts : null
-}
-
-// Budget vs final $ variance for a single lot — how closely actual work
-// (final) tracked to what was budgeted. Only meaningful once both exist.
-function budgetVsFinalVariance(lot: LotCalc): number | null {
-  if (lot.budgetTotal == null || lot.finalTotal == null || lot.budgetTotal <= 0) return null
-  return ((lot.finalTotal - lot.budgetTotal) / lot.budgetTotal) * 100
 }
 
 // Estimate vs final $ variance for a single lot — how far the actual final
@@ -969,9 +939,7 @@ export function buildAnalyticsData(input: {
               buildComplete: lot.buildComplete,
               invoiced: lot.invoiced,
               estimateTotal: lot.estimateTotal,
-              budgetTotal: lot.budgetTotal,
               finalTotal: lot.finalTotal,
-              budgetVsFinalPct: budgetVsFinalVariance(lot),
               estimateVsFinalPct: estimateVsFinalVariance(lot),
               varianceCategories: lotVarianceCategories(lot),
               contractPrice: lot.contractPrice,

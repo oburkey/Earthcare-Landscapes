@@ -48,19 +48,18 @@ export default async function MaterialsSummary({ stageId, siteId }: Props) {
 
   type LotQuote = {
     status: string
-    quote_type: 'estimate' | 'budget' | 'final'
+    quote_type: string
     lot_quote_items: { template_item_id: string; quantity: number | null }[]
   }
 
-  // Budget is the primary source, falling back to Final, then Estimate if
-  // neither has been entered yet. Estimate used to be excluded here because
+  // Final is the primary source, falling back to the Estimate if no Final
+  // has been entered yet (retired Budget rows are ignored). Estimate used to be excluded here because
   // it's admin-only under RLS and the session-bound client couldn't read it
   // for supervisors — now that this component reads via the service-role
   // client above, that restriction no longer applies.
   function sourceQuote(quotes: LotQuote[]) {
     if (!quotes || quotes.length === 0) return null
-    return quotes.find((q) => q.quote_type === 'budget')
-      ?? quotes.find((q) => q.quote_type === 'final')
+    return quotes.find((q) => q.quote_type === 'final')
       ?? quotes.find((q) => q.quote_type === 'estimate')
       ?? null
   }

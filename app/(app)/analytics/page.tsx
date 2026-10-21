@@ -84,15 +84,18 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     )
   `
 
+  // Retired Budget sheets stay in the database but never feed analytics.
+  const QUOTE_TYPES = ['estimate', 'final']
+
   let quotes: QuoteRow[] = []
   if (lotIds.length > 0) {
-    const quotesResult = await supabase.from('lot_quotes').select(QUOTE_SELECT).in('lot_id', lotIds)
+    const quotesResult = await supabase.from('lot_quotes').select(QUOTE_SELECT).in('lot_id', lotIds).in('quote_type', QUOTE_TYPES)
     quotes = (quotesResult.data ?? []) as unknown as QuoteRow[]
   }
 
   let allQuotes: QuoteRow[] = []
   if (allLotIds.length > 0) {
-    const allQuotesResult = await supabase.from('lot_quotes').select(QUOTE_SELECT).in('lot_id', allLotIds)
+    const allQuotesResult = await supabase.from('lot_quotes').select(QUOTE_SELECT).in('lot_id', allLotIds).in('quote_type', QUOTE_TYPES)
     allQuotes = (allQuotesResult.data ?? []) as unknown as QuoteRow[]
   }
 

@@ -9,6 +9,17 @@ import type { UploadAction } from '@/types/actions'
 interface Props {
   action: UploadAction
   hiddenFields: Record<string, string>
+  // 'photo' (default): lot/extra job photos — Before/During/After + category.
+  // 'file': Files page — photos and PDFs, no type/category; PDFs skip compression.
+  mode?: 'photo' | 'file'
+  // Called after a batch where at least one file uploaded successfully.
+  onUploaded?: () => void
+  // When set, uploading is blocked and this message is shown instead.
+  blockedReason?: string | null
+}
+
+function isPdfFile(f: File): boolean {
+  return f.type === 'application/pdf' || /\.pdf$/i.test(f.name)
 }
 
 const PHOTO_TYPES = [
@@ -17,7 +28,8 @@ const PHOTO_TYPES = [
   { value: 'after',  label: 'After' },
 ] as const
 
-export default function PhotoUpload({ action, hiddenFields }: Props) {
+export default function PhotoUpload({ action, hiddenFields, mode = 'photo', onUploaded, blockedReason = null }: Props) {
+  const isFileMode = mode === 'file'
   const router = useRouter()
   const formRef = useRef<HTMLFormElement>(null)
   const [error, setError] = useState<string | null>(null)
@@ -30,6 +42,7 @@ export default function PhotoUpload({ action, hiddenFields }: Props) {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
+    if (blockedReason) { setError(blockedReason); return }
 
     const formData = new FormData(e.currentTarget)
     const files = (formData.getAll('photo') as File[]).filter((f) => f && f.size > 0)
@@ -45,7 +58,7 @@ export default function PhotoUpload({ action, hiddenFields }: Props) {
     const compressedFiles: File[] = []
     try {
       for (const file of files) {
-        compressedFiles.push(await compressImage(file, 1920, 800 * 1024))
+        compressedFiles.push(isPdfFile(file) ? file : await compressImage(file, 1920, 800 * 1024))
       }
     } catch {
       setError('Failed to compress image.')
@@ -62,8 +75,10 @@ export default function PhotoUpload({ action, hiddenFields }: Props) {
 
         const single = new FormData()
         for (const [name, value] of Object.entries(hiddenFields)) single.set(name, value)
-        single.set('photo_type', photoType)
-        single.set('photo_category', photoCategory)
+        if (!isFileMode) {
+          single.set('photo_type', photoType)
+          single.set('photo_category', photoCategory)
+        }
         single.set('notes', notes)
         single.set('photo', compressedFiles[i], compressedFiles[i].name)
 
@@ -79,6 +94,7 @@ export default function PhotoUpload({ action, hiddenFields }: Props) {
       if (errors.length < compressedFiles.length) {
         formRef.current?.reset()
         router.refresh()
+        onUploaded?.()
       }
     })
   }
@@ -89,6 +105,7 @@ export default function PhotoUpload({ action, hiddenFields }: Props) {
         <input key={name} type="hidden" name={name} value={value} />
       ))}
 
+      {!isFileMode && <>
       <div>
         <p className="text-sm font-medium text-fg-secondary mb-2">Type</p>
         <div className="flex gap-2">
@@ -123,13 +140,14 @@ export default function PhotoUpload({ action, hiddenFields }: Props) {
           ))}
         </select>
       </div>
+      </>}
 
       <div>
-        <p className="text-sm font-medium text-fg-secondary mb-2">Photo(s)</p>
+        <p className="text-sm font-medium text-fg-secondary mb-2">{isFileMode ? 'Photo(s) or PDF(s)' : 'Photo(s)'}</p>
         <input
           type="file"
           name="photo"
-          accept="image/*"
+          accept={isFileMode ? 'image/*,application/pdf,.pdf' : 'image/*'}
           multiple
           required
           disabled={busy}
@@ -144,7 +162,7 @@ export default function PhotoUpload({ action, hiddenFields }: Props) {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-fg-secondary mb-2">Note (optional) <span className="font-normal text-fg-muted">(applied to all selected photos)</span></label>
+        <label className="block text-sm font-medium text-fg-secondary mb-2">Note (optional) <span className="font-normal text-fg-muted">(applied to all selected {isFileMode ? 'files' : 'photos'})</span></label>
         <input
           type="text"
           name="notes"
@@ -154,20 +172,24 @@ export default function PhotoUpload({ action, hiddenFields }: Props) {
         />
       </div>
 
+      {blockedReason && !error && (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">{blockedReason}</p>
+      )}
+
       {error && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-400">{error}</p>
       )}
 
       <button
         type="submit"
-        disabled={busy}
+        disabled={busy || !!blockedReason}
         className="w-full rounded-lg bg-green-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-green-800 active:bg-green-900 disabled:opacity-50 transition-colors"
       >
         {compressing
           ? 'Compressing…'
           : uploading
             ? (progress ? `Uploading ${progress.current}/${progress.total}…` : 'Uploading…')
-            : 'Upload photo(s)'}
+            : isFileMode ? 'Upload file(s)' : 'Upload photo(s)'}
       </button>
     </form>
   )

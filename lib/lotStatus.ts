@@ -131,6 +131,21 @@ export function tradeStatusBadge(status: TradeStatusSummary | null | undefined):
   return { label: `Blocked — ${reason}`, badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' }
 }
 
+// Stage view badge once a lot is finished — replaces the Ready/Blocked trade
+// badge. Invoiced always wins; otherwise a complete lot either still needs
+// its Final quant sheet or is waiting on admin review. Returns null for a lot
+// that isn't complete yet (the trade badge still applies).
+export function completionBadge(lot: { complete: boolean; hasFinal: boolean; invoiced: boolean }): { label: string; badge: string } | null {
+  if (lot.invoiced) {
+    return { label: 'Completed · Invoiced', badge: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' }
+  }
+  if (!lot.complete) return null
+  if (!lot.hasFinal) {
+    return { label: 'Needs final', badge: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' }
+  }
+  return { label: 'Pending review', badge: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300' }
+}
+
 // ── Site colours & abbreviations ──────────────────────────────────────────────
 
 export const SITE_COLOURS: Record<string, { abbr: string; badge: string }> = {

@@ -103,6 +103,17 @@ function daysBetween(fromStr: string, toStr: string): number {
   return Math.round((to.getTime() - from.getTime()) / 86400000)
 }
 
+// Overdue = due before today (Perth) and not complete. The schedule data
+// already excludes complete lots/jobs; the status check is belt-and-braces.
+function isOverdue(item: { dueDate: string; status: string }, today: string): boolean {
+  return item.dueDate < today && item.status !== 'complete'
+}
+
+function overdueLabel(dueDate: string, today: string): string {
+  const days = daysBetween(dueDate, today)
+  return `${days} day${days === 1 ? '' : 's'} overdue`
+}
+
 function getWeekStart(dateStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number)
   const date = new Date(y, m - 1, d)
@@ -224,10 +235,11 @@ function EmptyState({ text }: { text: string }) {
 
 // ── 2-week view ───────────────────────────────────────────────────────────────
 
-function TwoWeekLotChip({ item, today }: { item: LotItem; today: string }) {
+function TwoWeekLotChip({ item, today, highlightOverdue }: { item: LotItem; today: string; highlightOverdue: boolean }) {
   const sc  = siteColour(item.siteName)
   const cfg = STATUS_CONFIG[item.status] ?? STATUS_CONFIG.not_started
   const overdueBlocked = item.dueDate < today && !item.readyForLandscaping
+  const highlight = highlightOverdue && isOverdue(item, today)
   return (
     <Link
       href={`/sites/${item.siteId}/stages/${item.stageId}/lots/${item.lotId}`}
@@ -235,7 +247,7 @@ function TwoWeekLotChip({ item, today }: { item: LotItem; today: string }) {
         overdueBlocked
           ? 'border-red-200 bg-red-50 dark:bg-red-900/10 dark:border-red-800'
           : 'border-border bg-surface'
-      }`}
+      } ${highlight ? 'ring-2 ring-red-500' : ''}`}
     >
       <div className="flex items-center gap-1 flex-wrap mb-0.5">
         <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold shrink-0 ${sc.badge}`}>{sc.abbr}</span>
@@ -249,6 +261,9 @@ function TwoWeekLotChip({ item, today }: { item: LotItem; today: string }) {
           </span>
         )}
       </div>
+      {highlight && (
+        <p className="mt-0.5 text-[10px] font-semibold text-red-600 dark:text-red-400">{overdueLabel(item.dueDate, today)}</p>
+      )}
     </Link>
   )
 }
@@ -270,12 +285,15 @@ function TwoWeekStartIndicator({ item }: { item: LotItem }) {
   )
 }
 
-function TwoWeekJobChip({ item }: { item: JobItem }) {
+function TwoWeekJobChip({ item, today, highlightOverdue }: { item: JobItem; today: string; highlightOverdue: boolean }) {
   const cfg = EXTRA_JOB_STATUS_CONFIG[item.status] ?? EXTRA_JOB_STATUS_CONFIG.not_started
+  const highlight = highlightOverdue && isOverdue(item, today)
   return (
     <Link
       href={`/sites/${item.siteId}/stages/${item.stageId}/extra-jobs/${item.id}`}
-      className="block rounded-lg border border-border bg-surface p-1.5 hover:bg-surface-raised transition-colors"
+      className={`block rounded-lg border border-border bg-surface p-1.5 hover:bg-surface-raised transition-colors ${
+        highlight ? 'ring-2 ring-red-500' : ''
+      }`}
     >
       <div className="flex items-center gap-1 mb-0.5">
         <span className="rounded px-1.5 py-0.5 text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 shrink-0">XJ</span>
@@ -289,6 +307,9 @@ function TwoWeekJobChip({ item }: { item: JobItem }) {
           </span>
         )}
       </div>
+      {highlight && (
+        <p className="mt-0.5 text-[10px] font-semibold text-red-600 dark:text-red-400">{overdueLabel(item.dueDate, today)}</p>
+      )}
     </Link>
   )
 }
@@ -310,12 +331,13 @@ function TwoWeekEventChip({ event, onOpen }: { event: CalendarEvent; onOpen: () 
   )
 }
 
-function WeekGrid({ days, lots, jobs, events, today, onDayClick }: {
+function WeekGrid({ days, lots, jobs, events, today, highlightOverdue, onDayClick }: {
   days: string[]
   lots: LotItem[]
   jobs: JobItem[]
   events: CalendarEvent[]
   today: string
+  highlightOverdue: boolean
   onDayClick: (day: string) => void
 }) {
   return (
@@ -375,10 +397,10 @@ function WeekGrid({ days, lots, jobs, events, today, onDayClick }: {
                 <TwoWeekStartIndicator key={`start-${item.id}`} item={item} />
               ))}
               {dayLots.map((item) => (
-                <TwoWeekLotChip key={item.id} item={item} today={today} />
+                <TwoWeekLotChip key={item.id} item={item} today={today} highlightOverdue={highlightOverdue} />
               ))}
               {dayJobs.map((item) => (
-                <TwoWeekJobChip key={item.id} item={item} />
+                <TwoWeekJobChip key={item.id} item={item} today={today} highlightOverdue={highlightOverdue} />
               ))}
               {dayEvents.map((ev) => (
                 <TwoWeekEventChip key={ev.id} event={ev} onOpen={() => onDayClick(day)} />
@@ -392,12 +414,13 @@ function WeekGrid({ days, lots, jobs, events, today, onDayClick }: {
 }
 
 function TwoWeekView({
-  lots, jobs, events, today, offset, onOffsetChange, onDayClick,
+  lots, jobs, events, today, highlightOverdue, offset, onOffsetChange, onDayClick,
 }: {
   lots: LotItem[]
   jobs: JobItem[]
   events: CalendarEvent[]
   today: string
+  highlightOverdue: boolean
   offset: number
   onOffsetChange: (next: number) => void
   onDayClick: (day: string) => void
@@ -438,8 +461,8 @@ function TwoWeekView({
         </button>
       </div>
 
-      <WeekGrid days={week1Days} lots={lots} jobs={jobs} events={events} today={today} onDayClick={onDayClick} />
-      <WeekGrid days={week2Days} lots={lots} jobs={jobs} events={events} today={today} onDayClick={onDayClick} />
+      <WeekGrid days={week1Days} lots={lots} jobs={jobs} events={events} today={today} highlightOverdue={highlightOverdue} onDayClick={onDayClick} />
+      <WeekGrid days={week2Days} lots={lots} jobs={jobs} events={events} today={today} highlightOverdue={highlightOverdue} onDayClick={onDayClick} />
     </div>
   )
 }
@@ -447,11 +470,12 @@ function TwoWeekView({
 // ── Month view ────────────────────────────────────────────────────────────────
 
 function MonthView({
-  lots, events, today, monthCursor, onMonthCursorChange, selectedDay, onDayClick,
+  lots, events, today, highlightOverdue, monthCursor, onMonthCursorChange, selectedDay, onDayClick,
 }: {
   lots: LotItem[]
   events: CalendarEvent[]
   today: string
+  highlightOverdue: boolean
   monthCursor: { year: number; month: number }
   onMonthCursorChange: (next: { year: number; month: number }) => void
   selectedDay: string | null
@@ -534,7 +558,13 @@ function MonthView({
                   {visibleLots.map((item) => {
                     const sc = siteColour(item.siteName)
                     return (
-                      <span key={item.id} className={`truncate rounded px-1.5 py-0.5 text-[11px] font-medium ${sc.badge}`}>
+                      <span
+                        key={item.id}
+                        title={highlightOverdue && isOverdue(item, today) ? overdueLabel(item.dueDate, today) : undefined}
+                        className={`truncate rounded px-1.5 py-0.5 text-[11px] font-medium ${sc.badge} ${
+                          highlightOverdue && isOverdue(item, today) ? 'ring-2 ring-red-500' : ''
+                        }`}
+                      >
                         {sc.abbr} {item.lotNumber}
                       </span>
                     )
@@ -695,6 +725,71 @@ function ListView({ lots, jobs, events, today, onDayClick }: {
   )
 }
 
+// ── Overdue list (List view with the Overdue toggle on) ───────────────────────
+
+function OverdueListView({ lots, jobs, today }: { lots: LotItem[]; jobs: JobItem[]; today: string }) {
+  type Row =
+    | { kind: 'lot'; item: LotItem }
+    | { kind: 'job'; item: JobItem }
+  const rows: Row[] = [
+    ...lots.filter((l) => isOverdue(l, today)).map((item): Row => ({ kind: 'lot', item })),
+    ...jobs.filter((j) => isOverdue(j, today)).map((item): Row => ({ kind: 'job', item })),
+  ]
+  // Most overdue first — earliest due date at the top.
+  rows.sort((a, b) => a.item.dueDate.localeCompare(b.item.dueDate))
+
+  if (rows.length === 0) {
+    return <EmptyState text="Nothing overdue." />
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-surface overflow-hidden divide-y divide-border-subtle">
+      {rows.map((row) => {
+        const { item } = row
+        const href = row.kind === 'lot'
+          ? `/sites/${item.siteId}/stages/${item.stageId}/lots/${row.item.lotId}`
+          : `/sites/${item.siteId}/stages/${item.stageId}/extra-jobs/${item.id}`
+        const cfg = row.kind === 'lot'
+          ? (STATUS_CONFIG[row.item.status] ?? STATUS_CONFIG.not_started)
+          : (EXTRA_JOB_STATUS_CONFIG[row.item.status] ?? EXTRA_JOB_STATUS_CONFIG.not_started)
+        return (
+          <Link key={`${row.kind}-${item.id}`} href={href}
+            className="flex items-start gap-3 px-4 py-3.5 hover:bg-surface-raised transition-colors">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-semibold text-fg">
+                  {row.kind === 'lot' ? `Lot ${row.item.lotNumber}` : row.item.title}
+                </span>
+                {row.kind === 'job' && (
+                  <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">Extra job</span>
+                )}
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cfg.badge}`}>{cfg.label}</span>
+                {row.kind === 'lot' && (
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                    row.item.readyForLandscaping ? 'bg-accent-dim text-accent-fg' : 'bg-amber-100 text-amber-700'
+                  }`}>
+                    {row.item.readyForLandscaping ? 'Ready' : 'Blocked'}
+                  </span>
+                )}
+                {item.delayed && (
+                  <span title={item.delayReason ?? undefined} className={`rounded-full px-2 py-0.5 text-xs font-medium ${DELAYED_BADGE_CLASS}`}>
+                    {delayedBadgeLabel(item.expectedCompletionDate)}
+                  </span>
+                )}
+              </div>
+              <p className="mt-0.5 text-xs text-fg-muted">{item.siteName} · {item.stageName}</p>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="text-xs font-semibold text-red-600 dark:text-red-400">{overdueLabel(item.dueDate, today)}</p>
+              <p className="text-xs text-fg-muted">Due {formatDate(item.dueDate)}</p>
+            </div>
+          </Link>
+        )
+      })}
+    </div>
+  )
+}
+
 // ── Blocked lots view ─────────────────────────────────────────────────────────
 
 function BlockedView({ lots, today }: { lots: LotItem[]; today: string }) {
@@ -751,6 +846,8 @@ export default function ScheduleView({ lotItems, jobItems, events, sites, today,
   })
   const [siteFilter, setSiteFilter]   = useState('')
   const [showBlocked, setShowBlocked] = useState(false)
+  // Overdue toggle — filters the List view, highlights in the calendar views.
+  const [overdueOnly, setOverdueOnly] = useState(false)
   const [twoWeekOffset, setTwoWeekOffset] = useState(() => {
     if (!validDateParam) return 0
     const diff = daysBetween(getWeekStart(today), getWeekStart(validDateParam))
@@ -822,6 +919,16 @@ export default function ScheduleView({ lotItems, jobItems, events, sites, today,
             >
               Blocked lots
             </button>
+            <button
+              type="button"
+              onClick={() => setOverdueOnly((o) => !o)}
+              aria-pressed={overdueOnly}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                overdueOnly ? 'bg-red-600 text-white' : 'text-fg-muted hover:bg-surface-raised'
+              }`}
+            >
+              Overdue
+            </button>
           </div>
 
           <select
@@ -835,19 +942,23 @@ export default function ScheduleView({ lotItems, jobItems, events, sites, today,
         </div>
 
         {showBlocked ? (
-          <BlockedView lots={lots} today={today} />
+          <BlockedView lots={overdueOnly ? lots.filter((l) => isOverdue(l, today)) : lots} today={today} />
         ) : view === '2weeks' ? (
           <TwoWeekView
             lots={lots} jobs={jobs} events={events} today={today}
+            highlightOverdue={overdueOnly}
             offset={twoWeekOffset} onOffsetChange={setTwoWeekOffset}
             onDayClick={setSelectedDay}
           />
         ) : view === 'month' ? (
           <MonthView
             lots={lots} events={events} today={today}
+            highlightOverdue={overdueOnly}
             monthCursor={monthCursor} onMonthCursorChange={setMonthCursor}
             selectedDay={selectedDay} onDayClick={setSelectedDay}
           />
+        ) : overdueOnly ? (
+          <OverdueListView lots={lots} jobs={jobs} today={today} />
         ) : (
           <ListView lots={lots} jobs={jobs} events={events} today={today} onDayClick={setSelectedDay} />
         )}

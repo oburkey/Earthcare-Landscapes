@@ -227,6 +227,123 @@ export async function bulkUpdateLots(
   return { updated, created, errors }
 }
 
+// ── Bulk contract price (admin only) ────────────────────────────────────────
+
+export type BulkContractPriceRow = {
+  line: string
+  lotNumber: string | null
+  lotId: string | null
+  currentPrice: number | null // the lot's own contract_price (null = using stage default)
+  newPrice: number | null     // null = clear, falls back to the stage default
+  error: string | null
+}
+
+// "088    7880", "088\t$7,880.50", "088,7880" or just "088" (blank price =
+// clear). The lot number is everything up to the first tab, run of spaces,
+// or comma; the rest is the price, with $, commas and spaces stripped.
+function parseContractPriceLine(line: string): Omit<BulkContractPriceRow, 'lotId' | 'currentPrice'> {
+  const m = line.match(/^([^\s,]+)[\s,]*(.*)$/)
+  const lotNumber = m?.[1] ?? ''
+  if (!lotNumber) return { line, lotNumber: null, newPrice: null, error: 'missing lot number' }
+  const rawPrice = (m?.[2] ?? '').replace(/[$,\s]/g, '')
+  if (!rawPrice) return { line, lotNumber, newPrice: null, error: null }
+  if (!/^\d+(\.\d{1,2})?$/.test(rawPrice)) {
+    return { line, lotNumber, newPrice: null, error: `Lot ${lotNumber}: invalid price "${m?.[2]}"` }
+  }
+  return { line, lotNumber, newPrice: Number(rawPrice), error: null }
+}
+
+async function requireAdminForContractPrice(): Promise<{ error: string | null; profileId: string | null }> {
+  const profile = await requireAuth()
+  if (profile.role !== 'admin') return { error: 'Only admins can bulk update contract prices.', profileId: null }
+  return { error: null, profileId: profile.id }
+}
+
+// Parses every line and matches it to an existing lot in the stage (leading
+// zeros ignored). Update-only — a lot number with no match is an error row,
+// never a new lot. Shared by preview and commit so they can't drift.
+async function resolveContractPriceRows(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  stageId: string,
+  rawData: string,
+): Promise<BulkContractPriceRow[]> {
+  const lines = rawData.split('\n').map(l => l.trim()).filter(Boolean)
+  if (lines.length === 0) return []
+  const { data: existingLots } = await supabase
+    .from('lots')
+    .select('id, lot_number, contract_price')
+    .eq('stage_id', stageId)
+  const lotsMap = new Map(
+    (existingLots ?? []).map(l => [stripZeros(l.lot_number as string), l as { id: string; lot_number: string; contract_price: number | null }])
+  )
+  return lines.map((line) => {
+    const parsed = parseContractPriceLine(line)
+    if (parsed.error || !parsed.lotNumber) return { ...parsed, lotId: null, currentPrice: null }
+    const lot = lotsMap.get(stripZeros(parsed.lotNumber))
+    if (!lot) {
+      return { ...parsed, lotId: null, currentPrice: null, error: `Lot ${parsed.lotNumber}: no matching lot in this stage` }
+    }
+    return {
+      ...parsed,
+      lotNumber: lot.lot_number,
+      lotId: lot.id,
+      currentPrice: lot.contract_price != null ? Number(lot.contract_price) : null,
+    }
+  })
+}
+
+export async function previewBulkContractPrices(
+  stageId: string,
+  rawData: string,
+): Promise<{ rows: BulkContractPriceRow[]; stageDefault: number | null; error?: string }> {
+  const { error: permError } = await requireAdminForContractPrice()
+  if (permError) return { rows: [], stageDefault: null, error: permError }
+  const supabase = await createClient()
+  const [rows, { data: stage }] = await Promise.all([
+    resolveContractPriceRows(supabase, stageId, rawData),
+    supabase.from('stages').select('default_contract_price').eq('id', stageId).maybeSingle(),
+  ])
+  const stageDefault = stage?.default_contract_price != null ? Number(stage.default_contract_price) : null
+  return { rows, stageDefault }
+}
+
+export async function bulkUpdateContractPrices(
+  stageId: string,
+  siteId: string,
+  rawData: string,
+): Promise<BulkUpdateResult> {
+  const { error: permError, profileId } = await requireAdminForContractPrice()
+  if (permError) return { updated: 0, created: 0, errors: [permError] }
+
+  const supabase = await createClient()
+  const rows = await resolveContractPriceRows(supabase, stageId, rawData)
+
+  const errors: string[] = []
+  let updated = 0
+  for (const row of rows) {
+    if (row.error || !row.lotId) {
+      errors.push(row.error ?? `"${row.line}": could not be parsed`)
+      continue
+    }
+    const { error } = await supabase
+      .from('lots')
+      .update({ contract_price: row.newPrice, updated_by: profileId })
+      .eq('id', row.lotId)
+      .eq('stage_id', stageId)
+    if (error) errors.push(`Lot ${row.lotNumber}: ${error.message}`)
+    else updated++
+  }
+
+  if (updated > 0) {
+    revalidatePath(`/sites/${siteId}/stages/${stageId}`, 'layout')
+    revalidatePath('/invoices')
+    revalidatePath('/analytics')
+    revalidateTag('stages')
+  }
+
+  return { updated, created: 0, errors }
+}
+
 export async function deleteStage(
   _prev: ActionState,
   formData: FormData

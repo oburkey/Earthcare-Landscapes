@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { PrefetchLink } from '@/app/_components/PrefetchLink'
-import { STATUS_CONFIG, EXTRA_JOB_STATUS_CONFIG, DELAYED_BADGE_CLASS, formatDate, delayedBadgeLabel, tradeStatusBadge, type TradeStatusSummary } from '@/lib/lotStatus'
+import { STATUS_CONFIG, EXTRA_JOB_STATUS_CONFIG, DELAYED_BADGE_CLASS, formatDate, delayedBadgeLabel, tradeStatusBadge, completionBadge, type TradeStatusSummary } from '@/lib/lotStatus'
 import { formatRelativeTime, type TableLotRow, type TableExtraJobRow } from './StageLotsTable'
 import BulkUpdateLotsButton from './BulkUpdateLotsButton'
 
@@ -15,18 +15,20 @@ interface Props {
   // Gates the "last edited" quant-sheet indicator on each card — same rule
   // as StageLotsTable's canSeeLastEdited (supervisor+, admin included).
   canSeeLastEdited: boolean
+  // Admin-only bulk update modes (contract price).
+  isAdmin: boolean
 }
 
 // Original card view, extracted unchanged from the stage page so it can sit
 // alongside the new Overview/Checklist table views as the third toggle option.
 export default function StageCardView({
-  lots, extraJobs, tradeStatusMap, siteId, stageId, canAddLot, canManageExtraJobs, canSeeLastEdited,
+  lots, extraJobs, tradeStatusMap, siteId, stageId, canAddLot, canManageExtraJobs, canSeeLastEdited, isAdmin,
 }: Props) {
   return (
     <div className="space-y-5">
       {/* ── Lots list ─────────────────────────────────────────────────────── */}
       <div className="space-y-3">
-        {canAddLot && <BulkUpdateLotsButton stageId={stageId} siteId={siteId} />}
+        {canAddLot && <BulkUpdateLotsButton stageId={stageId} siteId={siteId} isAdmin={isAdmin} />}
 
         {lots.length === 0 ? (
           <div className="rounded-xl border border-border bg-surface px-4 py-12 text-center">
@@ -45,6 +47,14 @@ export default function StageCardView({
             {lots.map((lot) => {
               const cfg = STATUS_CONFIG[lot.status] ?? STATUS_CONFIG.not_started
               const tradeBadge = tradeStatusBadge(tradeStatusMap[lot.id])
+              // Once complete, the trade badge gives way to where the lot is
+              // in the invoicing pipeline (Needs final / Pending review /
+              // Completed · Invoiced).
+              const doneBadge = completionBadge({
+                complete: lot.status === 'complete' || lot.buildComplete,
+                hasFinal: lot.hasFinal,
+                invoiced: lot.invoiced,
+              })
               return (
                 <PrefetchLink
                   key={lot.id}
@@ -67,16 +77,16 @@ export default function StageCardView({
                           {delayedBadgeLabel(lot.expectedCompletionDate)}
                         </span>
                       )}
-                      {tradeBadge && !lot.buildComplete && (
+                      {doneBadge ? (
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${doneBadge.badge}`}>
+                          {doneBadge.label}
+                        </span>
+                      ) : tradeBadge && !lot.buildComplete && (
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${tradeBadge.badge}`}>
                           {tradeBadge.label}
                         </span>
                       )}
-                      {lot.invoiced ? (
-                        <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
-                          Invoiced
-                        </span>
-                      ) : lot.quantDone ? (
+                      {!lot.invoiced && lot.quantDone ? (
                         <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-surface-raised text-fg-muted">
                           Quant Done
                         </span>

@@ -21,8 +21,7 @@ import type { SubcontractorCostRow } from './SubcontractorCosts'
 import TradeStatusSection from './TradeStatusSection'
 import ChecklistSection from './ChecklistSection'
 import { getR2SignedUrlSafe } from '@/lib/r2'
-import { getCachedPlantRatioSettings, getCachedLotBudgetVsEstimate } from '@/lib/data'
-import { fmtCurrency } from '@/app/(app)/analytics/format'
+import { getCachedPlantRatioSettings } from '@/lib/data'
 
 interface Props {
   params: Promise<{ siteId: string; stageId: string; lotId: string }>
@@ -106,7 +105,7 @@ export default async function LotPage({ params }: Props) {
           .eq('is_active', true)
           .order('order_index', { ascending: true })
       : Promise.resolve({ data: null }),
-    // Existing quotes for this lot (estimate/budget/final — RLS hides the
+    // Existing quotes for this lot (estimate/final — RLS hides the
     // estimate row entirely for non-admin sessions, so quotesData naturally
     // excludes it for them)
     showQty
@@ -183,12 +182,6 @@ export default async function LotPage({ params }: Props) {
 
   const status = lot.status as LotStatus
   const cfg    = STATUS_CONFIG[status] ?? STATUS_CONFIG.not_started
-
-  // Budget vs estimate comparison — supervisor+ only (leading_hand and below
-  // never see it). Computed via a service-role query since the estimate side
-  // is RLS-locked to admin; supervisor still gets a simplified indicator from
-  // the same comparison, just without dollar amounts (see render below).
-  const budgetComparison = canSupervise ? await getCachedLotBudgetVsEstimate(lotId) : null
 
   // Quant sheet / invoicing issue checks — admin only.
   const lotIssueMessages = isAdmin
@@ -320,7 +313,6 @@ export default async function LotPage({ params }: Props) {
 
   // Quotes
   const estimatedQuote = quotesData?.find((q) => q.quote_type === 'estimate') ?? null
-  const budgetQuote    = quotesData?.find((q) => q.quote_type === 'budget') ?? null
   const finalQuote     = quotesData?.find((q) => q.quote_type === 'final') ?? null
 
   function shapeQuote(q: typeof estimatedQuote) {
@@ -439,11 +431,6 @@ export default async function LotPage({ params }: Props) {
           />
         </div>
 
-        {/* ── Budget vs Estimate indicator — supervisor+ only ─────────────────── */}
-        {budgetComparison && (
-          <BudgetVsEstimateIndicator {...budgetComparison} isAdmin={isAdmin} />
-        )}
-
         {/* ── Quantities ─────────────────────────────────────────────────────── */}
         {showQty && sections.length > 0 && (
           <div>
@@ -457,7 +444,6 @@ export default async function LotPage({ params }: Props) {
               canSupervise={canSupervise}
               sections={sections}
               estimatedQuote={shapeQuote(estimatedQuote)}
-              budgetQuote={shapeQuote(budgetQuote)}
               finalQuote={shapeQuote(finalQuote)}
               contractPrice={contractPrice}
               showClientExtras={showClientExtras}
@@ -605,34 +591,6 @@ export default async function LotPage({ params }: Props) {
         </div>
 
       </div>
-    </div>
-  )
-}
-
-function BudgetVsEstimateIndicator({
-  budgetTotal, estimateTotal, isAdmin,
-}: {
-  budgetTotal: number
-  estimateTotal: number
-  isAdmin: boolean
-}) {
-  const diff = budgetTotal - estimateTotal
-  const pct = estimateTotal > 0 ? (diff / estimateTotal) * 100 : 0
-  const overBudget = diff > 0
-  const colorClass = overBudget ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-accent-dim text-accent-fg'
-
-  return (
-    <div className={`rounded-xl border px-4 py-3 text-sm font-medium ${colorClass}`}>
-      {isAdmin ? (
-        <>
-          Budget: {fmtCurrency(budgetTotal)} · Estimate: {fmtCurrency(estimateTotal)} ·{' '}
-          {overBudget
-            ? `+${fmtCurrency(diff)} over (${pct.toFixed(0)}%)`
-            : `${fmtCurrency(Math.abs(diff))} under (${Math.abs(pct).toFixed(0)}%)`}
-        </>
-      ) : (
-        overBudget ? 'Over budget ⚠️' : 'Under budget ✓'
-      )}
     </div>
   )
 }

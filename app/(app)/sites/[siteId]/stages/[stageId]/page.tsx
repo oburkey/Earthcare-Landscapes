@@ -143,6 +143,8 @@ export default async function StagePage({ params }: Props) {
       tradesCompleted: tradeStatusMap[lot.id]?.trades_completed ?? [],
       invoiced: lotAny.invoiced ?? false,
       quantDone: lotAny.quant_done ?? false,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      hasFinal: ((lotAny.lot_quotes ?? []) as any[]).some((q) => q.quote_type === 'final'),
       lastEditedAt: lastActivity?.at ?? null,
       lastEditedByInitials: lastActivity?.profile ? initialsOf(lastActivity.profile.first_name, lastActivity.profile.last_name) : null,
     }
@@ -287,6 +289,7 @@ export default async function StagePage({ params }: Props) {
           canToggleBuildComplete={canManageStage}
           canUseTableViews={canUseStageTableViews}
           canSeeLastEdited={canManageStage}
+          isAdmin={isAdmin}
         />
 
         {/* ── Materials Summary ────────────────────────────────────────────── */}

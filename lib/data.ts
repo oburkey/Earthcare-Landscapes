@@ -53,6 +53,15 @@ async function _site(db: Db, siteId: string) {
   return data
 }
 
+// Site → stage → lot tree for the Files page filters and upload linking.
+async function _filesFilterTree(db: Db) {
+  const { data } = await db
+    .from('sites')
+    .select('id, name, completed_at, stages(id, name, order, lots(id, lot_number))')
+    .order('name', { ascending: true })
+  return data ?? []
+}
+
 // Last-edited indicator sources, fetched alongside the lot itself so the
 // whole stage resolves in one query rather than one per lot: quant sheet
 // saves (any quote_type), photo uploads, checklist ticks, and the lot row's
@@ -60,7 +69,7 @@ async function _site(db: Db, siteId: string) {
 // four happens in the consumer (stage page.tsx) — see mostRecentActivity.
 const LAST_EDITED_SOURCES_SELECT = `
   updated_at, profiles!updated_by(first_name, last_name),
-  lot_quotes(last_edited_at, profiles!last_edited_by(first_name, last_name)),
+  lot_quotes(quote_type, last_edited_at, profiles!last_edited_by(first_name, last_name)),
   lot_photos(created_at, profiles!uploaded_by(first_name, last_name)),
   lot_checklist_items(updated_at, profiles!completed_by(first_name, last_name))
 `
@@ -178,41 +187,6 @@ async function _tradeStatusByLotIds(db: Db, lotIds: string[]) {
   return map
 }
 
-// Budget vs estimate totals for a lot's over/under-budget indicator. Must run
-// via the service-role client (bypasses RLS) — the estimate quant sheet is
-// admin-only at the RLS layer, but supervisors still need to see a simplified
-// over/under indicator (no dollar amounts) derived from the same comparison.
-// Returns null if either side is missing (nothing to compare) or the table
-// doesn't exist yet. unit_price_snapshot falls back to the template's current
-// price, matching the admin total shown live in LotQuantities.
-async function _lotBudgetVsEstimate(db: Db, lotId: string): Promise<{ budgetTotal: number; estimateTotal: number } | null> {
-  const { data, error } = await db
-    .from('lot_quotes')
-    .select('quote_type, lot_quote_items(quantity, unit_price_snapshot, quote_template_items(unit_price))')
-    .eq('lot_id', lotId)
-    .in('quote_type', ['estimate', 'budget'])
-  if (error || !data) return null
-
-  function totalFor(quoteType: 'estimate' | 'budget'): number | null {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const row = (data as any[]).find((q) => q.quote_type === quoteType)
-    if (!row) return null
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const items = (row.lot_quote_items ?? []) as any[]
-    return items.reduce((sum, i) => {
-      const qty = Number(i.quantity ?? 0)
-      const tpl = Array.isArray(i.quote_template_items) ? i.quote_template_items[0] : i.quote_template_items
-      const price = Number(i.unit_price_snapshot ?? tpl?.unit_price ?? 0)
-      return sum + qty * price
-    }, 0)
-  }
-
-  const budgetTotal = totalFor('budget')
-  const estimateTotal = totalFor('estimate')
-  if (budgetTotal == null || estimateTotal == null) return null
-  return { budgetTotal, estimateTotal }
-}
-
 // Plant ratio settings (global default + per-site overrides). Gracefully
 // returns [] if the table doesn't exist yet.
 async function _plantRatioSettings(db: Db) {
@@ -286,6 +260,13 @@ export const getCachedSitesList = withCache(
   { tags: ['sites'] }
 )
 
+export const getCachedFilesFilterTree = withCache(
+  () => _filesFilterTree(createServiceClient()),
+  async () => _filesFilterTree(await createClient() as Db),
+  ['files-filter-tree'],
+  { tags: ['sites', 'stages'] }
+)
+
 export const getCachedSite = withCache(
   (siteId: string) => _site(createServiceClient(), siteId),
   async (siteId: string) => _site(await createClient() as Db, siteId),
@@ -340,13 +321,6 @@ export const getCachedTradeStatusByLotIds = withCache(
   async (lotIds: string[]) => _tradeStatusByLotIds(await createClient() as Db, lotIds),
   ['trade-status-by-lot-ids'],
   { tags: ['trade-status'], revalidate: 60 }
-)
-
-export const getCachedLotBudgetVsEstimate = withCache(
-  (lotId: string) => _lotBudgetVsEstimate(createServiceClient(), lotId),
-  async (lotId: string) => _lotBudgetVsEstimate(await createClient() as Db, lotId),
-  ['lot-budget-vs-estimate'],
-  { tags: ['stages'], revalidate: 60 }
 )
 
 export const getCachedMaterialsTemplate = withCache(

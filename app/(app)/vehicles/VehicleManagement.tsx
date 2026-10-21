@@ -72,6 +72,60 @@ function getVehicleStatus(v: Vehicle, today: string): StatusLevel {
   return worst
 }
 
+// The vehicle's earliest date among rego expiry, insurance expiry and next
+// service — overdue dates count too, so they sort first. null when none set.
+type NextDue = { label: string; date: string; diff: number }
+
+function getNextDue(v: Vehicle, today: string): NextDue | null {
+  const candidates: Array<{ label: string; date: string | null }> = [
+    { label: 'Rego expiry',      date: v.rego_expiry_date },
+    { label: 'Insurance expiry', date: v.insurance_expiry_date },
+    { label: 'Next service',     date: v.next_service_due_date },
+  ]
+  let next: NextDue | null = null
+  for (const c of candidates) {
+    if (!c.date) continue
+    if (!next || c.date < next.date) next = { label: c.label, date: c.date, diff: daysDiff(c.date, today) }
+  }
+  return next
+}
+
+// Soonest next-due date first; vehicles with no dates go last, then by name.
+function byNextDue(today: string, nameOf: (v: Vehicle) => string) {
+  return (a: Vehicle, b: Vehicle) => {
+    const da = getNextDue(a, today)?.date
+    const db = getNextDue(b, today)?.date
+    if (da && db && da !== db) return da < db ? -1 : 1
+    if (da && !db) return -1
+    if (!da && db) return 1
+    return nameOf(a).localeCompare(nameOf(b))
+  }
+}
+
+// Card highlight: overdue = red, due within 30 days = amber.
+const CARD_BORDER: Record<StatusLevel, string> = {
+  red:   'border-red-300 dark:border-red-800 border-l-4 border-l-red-500',
+  amber: 'border-amber-300 dark:border-amber-800 border-l-4 border-l-amber-400',
+  green: 'border-border',
+}
+
+function NextDueLine({ next }: { next: NextDue | null }) {
+  if (!next) return <p className="mt-1 text-xs text-fg-muted">No due dates set</p>
+  const tone =
+    next.diff < 0  ? 'text-red-600 dark:text-red-400 font-semibold'
+    : next.diff <= 30 ? 'text-amber-600 dark:text-amber-400 font-semibold'
+    : 'text-fg-muted'
+  const when =
+    next.diff < 0   ? `${-next.diff} day${next.diff === -1 ? '' : 's'} overdue`
+    : next.diff === 0 ? 'due today'
+    : `in ${next.diff} day${next.diff === 1 ? '' : 's'}`
+  return (
+    <p className={`mt-1 text-xs ${tone}`}>
+      Next due: {next.label} · {fmt(next.date)} ({when})
+    </p>
+  )
+}
+
 const STATUS_DOT: Record<StatusLevel, { dot: string; label: string }> = {
   green: { dot: 'bg-accent-dim0',  label: 'All good' },
   amber: { dot: 'bg-amber-400',  label: 'Due soon' },
@@ -164,9 +218,9 @@ export default function VehicleManagement({ vehicles, today, faultHistory }: Pro
     : vehicles
 
   const vehicleList = [...filtered.filter((v) => v.vehicle_type !== 'Trailer')]
-    .sort((a, b) => (a.make ?? '').localeCompare(b.make ?? ''))
+    .sort(byNextDue(today, (v) => `${v.make ?? ''} ${v.model ?? ''}`))
   const trailerList = [...filtered.filter((v) => v.vehicle_type === 'Trailer')]
-    .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
+    .sort(byNextDue(today, (v) => v.name ?? ''))
 
   const showVehiclesSection = filterType !== 'Trailer'
   const showTrailersSection = filterType === '' || filterType === 'Trailer'
@@ -289,9 +343,10 @@ function VehicleCard({
 }) {
   const status = getVehicleStatus(vehicle, today)
   const { dot, label } = STATUS_DOT[status]
+  const nextDue = getNextDue(vehicle, today)
 
   return (
-    <div className="rounded-xl border border-border bg-surface overflow-hidden">
+    <div className={`rounded-xl border bg-surface overflow-hidden ${CARD_BORDER[status]}`}>
 
       {/* Card header */}
       <div className="flex items-start justify-between gap-3 px-4 py-4">
@@ -313,6 +368,7 @@ function VehicleCard({
               </span>
             )}
           </div>
+          <NextDueLine next={nextDue} />
           {vehicle.assigned_to && (
             <p className="mt-1 text-xs text-fg-muted">
               Assigned to <span className="font-medium text-fg-secondary">{vehicle.assigned_to}</span>
@@ -432,9 +488,10 @@ function TrailerCard({
 }) {
   const status = getVehicleStatus(vehicle, today)
   const { dot, label } = STATUS_DOT[status]
+  const nextDue = getNextDue(vehicle, today)
 
   return (
-    <div className="rounded-xl border border-border bg-surface overflow-hidden">
+    <div className={`rounded-xl border bg-surface overflow-hidden ${CARD_BORDER[status]}`}>
 
       {/* Card header */}
       <div className="flex items-start justify-between gap-3 px-4 py-4">
@@ -449,6 +506,7 @@ function TrailerCard({
             )}
             <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TYPE_BADGE.Trailer}`}>Trailer</span>
           </div>
+          <NextDueLine next={nextDue} />
           {vehicle.assigned_to && (
             <p className="mt-1 text-xs text-fg-muted">
               Assigned to <span className="font-medium text-fg-secondary">{vehicle.assigned_to}</span>

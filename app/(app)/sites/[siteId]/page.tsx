@@ -8,9 +8,11 @@ import SitePlanManager from './SitePlanManager'
 import StageListActions from './StageListActions'
 import SiteReferenceDocs, { type ReferenceDocRow } from './SiteReferenceDocs'
 import { getR2SignedUrlSafe } from '@/lib/r2'
+import FilesView from '@/app/(app)/files/FilesView'
 
 interface Props {
   params: Promise<{ siteId: string }>
+  searchParams: Promise<{ tab?: string }>
 }
 
 export async function generateMetadata({ params }: Props) {
@@ -19,8 +21,10 @@ export async function generateMetadata({ params }: Props) {
   return { title: data ? `${data.name} — Earthcare Landscapes` : 'Site' }
 }
 
-export default async function SitePage({ params }: Props) {
+export default async function SitePage({ params, searchParams }: Props) {
   const { siteId } = await params
+  const { tab } = await searchParams
+  const showFiles = tab === 'files'
   const profile = await requireAuth()
   const canManage = profile.role === 'supervisor' || profile.role === 'admin'
   const isAdmin = profile.role === 'admin'
@@ -160,6 +164,25 @@ export default async function SitePage({ params }: Props) {
           )}
         </div>
 
+        {/* ── Tabs ───────────────────────────────────────────────────────────── */}
+        <div className="flex gap-1 border-b border-border">
+          {([['Overview', `/sites/${siteId}`, !showFiles], ['Files', `/sites/${siteId}?tab=files`, showFiles]] as const).map(([label, href, active]) => (
+            <Link
+              key={label}
+              href={href}
+              className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
+                active ? 'border-green-700 text-fg' : 'border-transparent text-fg-muted hover:text-fg-secondary'
+              }`}
+            >
+              {label}
+            </Link>
+          ))}
+        </div>
+
+        {showFiles ? (
+          <FilesView profile={profile} siteId={siteId} />
+        ) : (<>
+
         {/* ── Site plan ──────────────────────────────────────────────────────── */}
         <div>
           <h2 className="text-base font-semibold text-fg-secondary mb-3">Site plan</h2>
@@ -199,6 +222,7 @@ export default async function SitePage({ params }: Props) {
           docs={refDocs}
           isAdmin={isAdmin}
         />
+        </>)}
 
       </div>
     </div>

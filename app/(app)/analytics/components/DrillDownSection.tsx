@@ -42,21 +42,9 @@ function LotRow({ lot }: { lot: LotDrillDownRow }) {
         <td className="px-2 py-2 text-right text-fg-muted">
           {lot.estimateTotal !== null ? fmtCurrency(lot.estimateTotal) : '—'}
         </td>
-        <td className="px-2 py-2 text-right text-fg-muted">
-          {lot.budgetTotal !== null ? fmtCurrency(lot.budgetTotal) : '—'}
-        </td>
         <td className="px-2 py-2 text-right">
           {lot.finalTotal !== null ? (
             <span className="font-medium text-fg-secondary">{fmtCurrency(lot.finalTotal)}</span>
-          ) : (
-            <span className="text-fg-muted">—</span>
-          )}
-        </td>
-        <td className="px-2 py-2 pr-4 text-right">
-          {lot.budgetVsFinalPct !== null ? (
-            <span className={lot.budgetVsFinalPct <= 0 ? 'text-green-700' : 'text-red-600'}>
-              {fmtPct(lot.budgetVsFinalPct, 0)}
-            </span>
           ) : (
             <span className="text-fg-muted">—</span>
           )}
@@ -81,7 +69,7 @@ function LotRow({ lot }: { lot: LotDrillDownRow }) {
       </tr>
       {expanded && hasDetail && (
         <tr className="border-t border-border-subtle bg-surface-raised/50">
-          <td colSpan={10} className="px-4 py-2.5">
+          <td colSpan={8} className="px-4 py-2.5">
             <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-fg-muted">
               Estimate vs final material variance
             </p>
@@ -248,9 +236,7 @@ function StageRow({ stage, expanded, onToggle }: { stage: StageAnalytics; expand
                   <th className="text-left font-medium px-2 py-2">Build</th>
                   <th className="text-left font-medium px-2 py-2">Invoiced</th>
                   <th className="text-right font-medium px-2 py-2">Estimate</th>
-                  <th className="text-right font-medium px-2 py-2">Budget</th>
-                  <th className="text-right font-medium px-2 py-2">Final</th>
-                  <th className="text-right font-medium px-2 py-2 pr-4">Budget vs Final</th>
+                  <th className="text-right font-medium px-2 py-2 pr-4">Final</th>
                   <th className="w-8 px-2 py-2" />
                 </tr>
               </thead>

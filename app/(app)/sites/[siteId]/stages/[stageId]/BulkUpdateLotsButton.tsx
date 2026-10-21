@@ -5,17 +5,21 @@ import { useRouter } from 'next/navigation'
 import { previewBulkUpdateLots, bulkUpdateLots } from './actions'
 import type { BulkUpdateResult, BulkDateMode, BulkPreviewRow } from './actions'
 import BulkSitePlanUpload from '../../BulkSitePlanUpload'
+import BulkContractPriceImport from './BulkContractPriceImport'
 
 interface Props {
   stageId: string
   siteId:  string
+  isAdmin: boolean
 }
 
 // Local UI mode — adds a fifth "Site Plans" toggle alongside the four
 // BulkDateMode text-import modes. Kept out of BulkDateMode itself since
 // site plan upload doesn't go through previewBulkUpdateLots/bulkUpdateLots
 // at all (it's a completely different flow — drag-and-drop file matching).
-type PanelMode = BulkDateMode | 'site_plans'
+// 'contract_price' (admin only) is likewise its own flow — update-only, see
+// BulkContractPriceImport.
+type PanelMode = BulkDateMode | 'site_plans' | 'contract_price'
 
 const PLACEHOLDER: Record<BulkDateMode, string> = {
   due_only:         '059\t03/04/2026\tBillie Jean\n076\t03/04/2026\n077\t25/03/2026\tCecilia',
@@ -37,7 +41,7 @@ function formatDateDisplay(iso: string | null): string {
   return `${d}/${m}/${y}`
 }
 
-export default function BulkUpdateLotsButton({ stageId, siteId }: Props) {
+export default function BulkUpdateLotsButton({ stageId, siteId, isAdmin }: Props) {
   const router = useRouter()
   const [open, setOpen]     = useState(false)
   const [text, setText]     = useState('')
@@ -76,7 +80,7 @@ export default function BulkUpdateLotsButton({ stageId, siteId }: Props) {
   }
 
   function handlePreview() {
-    if (mode === 'site_plans') return
+    if (mode === 'site_plans' || mode === 'contract_price') return
     startTransition(async () => {
       const rows = await previewBulkUpdateLots(stageId, text, mode)
       setPreview(rows)
@@ -85,7 +89,7 @@ export default function BulkUpdateLotsButton({ stageId, siteId }: Props) {
   }
 
   function handleConfirm() {
-    if (mode === 'site_plans') return
+    if (mode === 'site_plans' || mode === 'contract_price') return
     startTransition(async () => {
       const r = await bulkUpdateLots(stageId, siteId, text, mode)
       setResult(r)
@@ -127,7 +131,9 @@ export default function BulkUpdateLotsButton({ stageId, siteId }: Props) {
 
       {/* Format toggle */}
       <div className="flex gap-1 rounded-lg border border-border p-1 w-fit flex-wrap">
-        {(['due_only', 'start_and_due', 'start_only', 'home_design_only', 'site_plans'] as const).map((m) => (
+        {(['due_only', 'start_and_due', 'start_only', 'home_design_only', 'site_plans', 'contract_price'] as const)
+          .filter((m) => m !== 'contract_price' || isAdmin)
+          .map((m) => (
           <button
             key={m}
             type="button"
@@ -140,13 +146,16 @@ export default function BulkUpdateLotsButton({ stageId, siteId }: Props) {
               : m === 'start_and_due' ? 'Start + Due date'
               : m === 'start_only' ? 'Start date only'
               : m === 'home_design_only' ? 'Home Design only'
-              : 'Site Plans'}
+              : m === 'site_plans' ? 'Site Plans'
+              : 'Contract price'}
           </button>
         ))}
       </div>
 
       {mode === 'site_plans' ? (
         <BulkSitePlanUpload stageId={stageId} />
+      ) : mode === 'contract_price' ? (
+        <BulkContractPriceImport stageId={stageId} siteId={siteId} onDone={handleClose} />
       ) : (
         <>
           <p className="text-xs text-fg-muted">

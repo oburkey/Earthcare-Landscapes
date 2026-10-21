@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { STATUS_CONFIG, EXTRA_JOB_STATUS_CONFIG, DELAYED_BADGE_CLASS, formatDate, formatDateShort, delayedBadgeLabel } from '@/lib/lotStatus'
+import { STATUS_CONFIG, EXTRA_JOB_STATUS_CONFIG, DELAYED_BADGE_CLASS, formatDate, formatDateShort, delayedBadgeLabel, completionBadge } from '@/lib/lotStatus'
 import type { LotStatus, ExtraJobStatus } from '@/types/database'
 import InlineCheckbox from './InlineCheckbox'
 import { toggleChecklistItemInline, toggleBuildCompleteInline } from './checklist-inline-actions'
@@ -21,6 +21,9 @@ export type TableLotRow = {
   // can share one row shape built once in page.tsx.
   invoiced: boolean
   quantDone: boolean
+  // Whether the lot has a Final quant sheet — drives the post-completion
+  // "Needs final" / "Pending review" badge (see completionBadge).
+  hasFinal: boolean
   // Most recent activity on this lot and who did it — the newest of
   // lot_quotes.last_edited_at, lot_photos.created_at, lot_checklist_items
   // .updated_at, and lots.updated_at. See mostRecentActivity in page.tsx.
@@ -160,6 +163,11 @@ export default function StageLotsTable({
           {lots.map((lot) => {
             const cfg = STATUS_CONFIG[lot.status] ?? STATUS_CONFIG.not_started
             const items = checklistMap[lot.id] ?? {}
+            const doneBadge = completionBadge({
+              complete: lot.status === 'complete' || lot.buildComplete,
+              hasFinal: lot.hasFinal,
+              invoiced: lot.invoiced,
+            })
             return (
               <tr key={lot.id} className="border-b border-border-subtle hover:bg-surface-raised/60">
                 <td className="px-3 py-2 whitespace-nowrap sticky left-0 bg-surface">
@@ -171,6 +179,9 @@ export default function StageLotsTable({
                 <td className="px-2 py-2 whitespace-nowrap text-fg-muted">{formatDate(lot.dueDate)}</td>
                 <td className="px-2 py-2 whitespace-nowrap">
                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${cfg.badge}`}>{cfg.label}</span>
+                  {doneBadge && (
+                    <span className={`ml-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${doneBadge.badge}`}>{doneBadge.label}</span>
+                  )}
                 </td>
                 <td className="px-2 py-2 whitespace-nowrap">
                   {lot.delayed && (
