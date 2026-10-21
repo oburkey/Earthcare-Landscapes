@@ -24,10 +24,11 @@ export async function generateMetadata({ params }: Props) {
 export default async function SitePage({ params, searchParams }: Props) {
   const { siteId } = await params
   const { tab } = await searchParams
-  const showFiles = tab === 'files'
   const profile = await requireAuth()
   const canManage = profile.role === 'supervisor' || profile.role === 'admin'
   const isAdmin = profile.role === 'admin'
+  // Files tab is admin-only for now; non-admins asking for it get the Overview.
+  const showFiles = tab === 'files' && isAdmin
 
   const supabase = await createClient()
   const [site, { data: planDocsRaw }] = await Promise.all([
@@ -164,7 +165,8 @@ export default async function SitePage({ params, searchParams }: Props) {
           )}
         </div>
 
-        {/* ── Tabs ───────────────────────────────────────────────────────────── */}
+        {/* ── Tabs (Files is the only other tab, so admin-only for now) ────── */}
+        {isAdmin && (
         <div className="flex gap-1 border-b border-border">
           {([['Overview', `/sites/${siteId}`, !showFiles], ['Files', `/sites/${siteId}?tab=files`, showFiles]] as const).map(([label, href, active]) => (
             <Link
@@ -178,6 +180,7 @@ export default async function SitePage({ params, searchParams }: Props) {
             </Link>
           ))}
         </div>
+        )}
 
         {showFiles ? (
           <FilesView profile={profile} siteId={siteId} />

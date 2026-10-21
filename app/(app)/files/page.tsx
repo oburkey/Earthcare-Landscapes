@@ -5,7 +5,9 @@ export const metadata = { title: 'Files — Earthcare Landscapes' }
 
 export default async function FilesPage() {
   const profile = await requireAuth()
-  requireRole(profile, 'worker')
+  // Admin-only for now. The DB/RLS already allows all staff, so lowering
+  // this (plus the nav link and the site page tab) is all it takes to open up.
+  requireRole(profile, 'admin')
 
   return (
     <div className="min-h-screen bg-bg">
