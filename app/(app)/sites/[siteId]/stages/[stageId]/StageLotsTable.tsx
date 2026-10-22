@@ -168,6 +168,8 @@ export default function StageLotsTable({
               hasFinal: lot.hasFinal,
               invoiced: lot.invoiced,
             })
+            // Invoiced implies complete, so drop the redundant status badge.
+            const showStatus = !(lot.invoiced && lot.status === 'complete')
             return (
               <tr key={lot.id} className="border-b border-border-subtle hover:bg-surface-raised/60">
                 <td className="px-3 py-2 whitespace-nowrap sticky left-0 bg-surface">
@@ -178,9 +180,11 @@ export default function StageLotsTable({
                 <td className="px-2 py-2 whitespace-nowrap text-fg-secondary">{lot.homeDesign || <span className="text-fg-muted">—</span>}</td>
                 <td className="px-2 py-2 whitespace-nowrap text-fg-muted">{formatDate(lot.dueDate)}</td>
                 <td className="px-2 py-2 whitespace-nowrap">
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${cfg.badge}`}>{cfg.label}</span>
+                  {showStatus && (
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${cfg.badge}`}>{cfg.label}</span>
+                  )}
                   {doneBadge && (
-                    <span className={`ml-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${doneBadge.badge}`}>{doneBadge.label}</span>
+                    <span className={`${showStatus ? 'ml-1 ' : ''}rounded-full px-2 py-0.5 text-[10px] font-medium ${doneBadge.badge}`}>{doneBadge.label}</span>
                   )}
                 </td>
                 <td className="px-2 py-2 whitespace-nowrap">

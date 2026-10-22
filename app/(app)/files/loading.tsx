@@ -8,7 +8,7 @@ export default function FilesLoading() {
         </div>
         <div className="h-12 rounded-xl border border-border bg-surface animate-pulse" />
         <div className="h-28 rounded-xl border border-border bg-surface animate-pulse" />
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-5 gap-3">
           {[0, 1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="aspect-square rounded-lg bg-skeleton animate-pulse" />
           ))}

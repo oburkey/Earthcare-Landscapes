@@ -322,7 +322,7 @@ export default function FilesBrowser({ tree, initial, lockedSiteId, currentUserI
           <h2 className="text-base font-semibold text-fg-secondary mb-3">
             Photos <span className="font-normal text-fg-muted text-sm">({photos.length}{hasMore ? '+' : ''})</span>
           </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-5 gap-3">
             {photos.map((item) => (
               <div key={item.id} className="space-y-1 min-w-0">
                 <a href={item.url} target="_blank" rel="noopener noreferrer"

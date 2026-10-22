@@ -49,12 +49,14 @@ export default function StageCardView({
               const tradeBadge = tradeStatusBadge(tradeStatusMap[lot.id])
               // Once complete, the trade badge gives way to where the lot is
               // in the invoicing pipeline (Needs final / Pending review /
-              // Completed · Invoiced).
+              // Invoiced).
               const doneBadge = completionBadge({
                 complete: lot.status === 'complete' || lot.buildComplete,
                 hasFinal: lot.hasFinal,
                 invoiced: lot.invoiced,
               })
+              // Invoiced implies complete, so drop the redundant status badge.
+              const showStatus = !(lot.invoiced && lot.status === 'complete')
               return (
                 <PrefetchLink
                   key={lot.id}
@@ -66,9 +68,11 @@ export default function StageCardView({
                       <span className="text-sm font-semibold text-fg">
                         Lot {lot.lotNumber}
                       </span>
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cfg.badge}`}>
-                        {cfg.label}
-                      </span>
+                      {showStatus && (
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cfg.badge}`}>
+                          {cfg.label}
+                        </span>
+                      )}
                       {lot.delayed && (
                         <span
                           title={lot.delayReason ?? undefined}

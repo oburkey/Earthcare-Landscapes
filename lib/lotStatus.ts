@@ -137,7 +137,7 @@ export function tradeStatusBadge(status: TradeStatusSummary | null | undefined):
 // that isn't complete yet (the trade badge still applies).
 export function completionBadge(lot: { complete: boolean; hasFinal: boolean; invoiced: boolean }): { label: string; badge: string } | null {
   if (lot.invoiced) {
-    return { label: 'Completed · Invoiced', badge: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' }
+    return { label: 'Invoiced', badge: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' }
   }
   if (!lot.complete) return null
   if (!lot.hasFinal) {
