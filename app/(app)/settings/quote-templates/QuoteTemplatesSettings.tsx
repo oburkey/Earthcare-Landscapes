@@ -2,6 +2,10 @@
 
 import { useState, useTransition } from 'react'
 import { createTemplate, deleteTemplate, saveTemplate } from './actions'
+import {
+  SortableSections, SortableSectionCard, SortableItems, SortableRow, DragHandle, MoveToSectionSelect, EmptySectionNotice,
+  newUid, withUids, moveItemToSection, sectionLabel,
+} from '@/app/_components/SortableSections'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -11,12 +15,15 @@ type TemplateItem = {
   unit: string
   rate: number
   orderIndex: number
+  // Client-only drag-and-drop key (never saved) — see SortableSections.
+  uid?: string
 }
 
 type TemplateSection = {
   name: string
   orderIndex: number
   items: TemplateItem[]
+  uid?: string
 }
 
 export type TemplateRow = {
@@ -33,18 +40,12 @@ function reindex<T extends { orderIndex: number }>(arr: T[]): T[] {
   return arr.map((item, i) => ({ ...item, orderIndex: i }))
 }
 
-function swapAndReindex<T extends { orderIndex: number }>(arr: T[], i: number, j: number): T[] {
-  const next = [...arr]
-  ;[next[i], next[j]] = [next[j], next[i]]
-  return reindex(next)
-}
-
 function emptyItem(orderIndex: number): TemplateItem {
-  return { description: '', qty: 1, unit: '', rate: 0, orderIndex }
+  return { description: '', qty: 1, unit: '', rate: 0, orderIndex, uid: newUid() }
 }
 
 function emptySection(orderIndex: number): TemplateSection {
-  return { name: '', orderIndex, items: [emptyItem(0)] }
+  return { name: '', orderIndex, items: [emptyItem(0)], uid: newUid() }
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -77,7 +78,7 @@ export default function QuoteTemplatesSettings({ templates: initialTemplates }: 
     setExpandedId(t.id)
     setEditName(t.name)
     setEditDescription(t.description ?? '')
-    setEditSections(t.sections.length > 0 ? t.sections : [emptySection(0)])
+    setEditSections(t.sections.length > 0 ? withUids(t.sections) : [emptySection(0)])
     setSaveError(null)
   }
 
@@ -90,19 +91,14 @@ export default function QuoteTemplatesSettings({ templates: initialTemplates }: 
   function removeSection(idx: number) {
     setEditSections((prev) => {
       if (prev.length <= 1) return prev
-      if (!confirm('Remove this section and its line items?')) return prev
+      // An empty section (all items dragged out) has nothing to lose — no prompt.
+      if (prev[idx].items.length > 0 && !confirm('Remove this section and its line items?')) return prev
       return reindex(prev.filter((_, i) => i !== idx))
     })
   }
 
   function renameSection(idx: number, name: string) {
     setEditSections((prev) => prev.map((s, i) => (i === idx ? { ...s, name } : s)))
-  }
-
-  function moveSection(idx: number, direction: -1 | 1) {
-    const target = idx + direction
-    if (target < 0 || target >= editSections.length) return
-    setEditSections((prev) => swapAndReindex(prev, idx, target))
   }
 
   function addItem(sIdx: number) {
@@ -118,14 +114,10 @@ export default function QuoteTemplatesSettings({ templates: initialTemplates }: 
     }))
   }
 
-  function moveItem(sIdx: number, iIdx: number, direction: -1 | 1) {
-    setEditSections((prev) => {
-      const section = prev[sIdx]
-      const target = iIdx + direction
-      if (target < 0 || target >= section.items.length) return prev
-      const reordered = swapAndReindex(section.items, iIdx, target)
-      return prev.map((s, i) => (i === sIdx ? { ...s, items: reordered } : s))
-    })
+  // Drag-and-drop and "Move to section" only change local state — the new
+  // order and sections are written by "Save changes", like every other edit.
+  function handleMoveToSection(sIdx: number, iIdx: number, targetIdx: number) {
+    setEditSections((prev) => moveItemToSection(prev, sIdx, iIdx, targetIdx))
   }
 
   function updateItem<K extends keyof TemplateItem>(sIdx: number, iIdx: number, key: K, value: TemplateItem[K]) {
@@ -275,21 +267,23 @@ export default function QuoteTemplatesSettings({ templates: initialTemplates }: 
                     </div>
 
                     <div className="space-y-3">
+                      <SortableSections
+                        sections={editSections}
+                        onChange={setEditSections}
+                        sectionLabel={sectionLabel}
+                        itemLabel={(item) => item.description || 'Line item'}
+                      >
                       {editSections.map((section, sIdx) => (
-                        <div key={sIdx} className="rounded-lg border border-border-subtle overflow-hidden bg-surface">
+                        <SortableSectionCard key={section.uid} uid={section.uid} className="rounded-lg border border-border-subtle overflow-hidden bg-surface">
+                          {(sectionHandle) => (<>
                           <div className="flex items-center gap-2 bg-surface-raised px-3 py-2">
+                            <DragHandle handle={sectionHandle} label="Drag to reorder section" />
                             <input
                               type="text"
                               value={section.name}
                               onChange={(e) => renameSection(sIdx, e.target.value)}
                               placeholder="Section name"
                               className="flex-1 rounded border border-border bg-surface px-2 py-1 text-sm font-medium text-fg placeholder:text-fg-muted focus:border-border focus:outline-none"
-                            />
-                            <MoveButtons
-                              onUp={() => moveSection(sIdx, -1)}
-                              onDown={() => moveSection(sIdx, 1)}
-                              disabledUp={sIdx === 0}
-                              disabledDown={sIdx === editSections.length - 1}
                             />
                             <button
                               type="button"
@@ -304,20 +298,29 @@ export default function QuoteTemplatesSettings({ templates: initialTemplates }: 
                           </div>
 
                           <div className="p-3 space-y-2">
+                            {section.items.length === 0 && (
+                              <EmptySectionNotice onDelete={() => removeSection(sIdx)} />
+                            )}
                             <div className="overflow-x-auto">
                               <table className="w-full text-sm border-collapse">
                                 <thead>
                                   <tr className="border-b border-border">
+                                    <th className="pb-2 w-8"></th>
                                     <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 pr-3 min-w-[160px]">Description</th>
                                     <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-2 w-16">Qty</th>
                                     <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-2 w-20">Unit</th>
                                     <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-2 w-24">Rate</th>
-                                    <th className="pb-2 w-16"></th>
+                                    <th className="pb-2"></th>
                                   </tr>
                                 </thead>
                                 <tbody>
+                                  <SortableItems items={section.items}>
                                   {section.items.map((item, iIdx) => (
-                                    <tr key={iIdx} className="border-b border-border-subtle">
+                                    <SortableRow key={item.uid} uid={item.uid} className="border-b border-border-subtle">
+                                      {(itemHandle) => (<>
+                                      <td className="py-1.5 pr-1">
+                                        <DragHandle handle={itemHandle} label="Drag to move line item" />
+                                      </td>
                                       <td className="py-1.5 pr-3">
                                         <input
                                           type="text"
@@ -357,13 +360,14 @@ export default function QuoteTemplatesSettings({ templates: initialTemplates }: 
                                         />
                                       </td>
                                       <td className="py-1.5 pl-2">
-                                        <div className="flex items-center gap-1">
-                                          <MoveButtons
-                                            onUp={() => moveItem(sIdx, iIdx, -1)}
-                                            onDown={() => moveItem(sIdx, iIdx, 1)}
-                                            disabledUp={iIdx === 0}
-                                            disabledDown={iIdx === section.items.length - 1}
-                                          />
+                                        <div className="flex items-center gap-1.5">
+                                          {editSections.length >= 2 && (
+                                            <MoveToSectionSelect
+                                              sections={editSections}
+                                              currentIdx={sIdx}
+                                              onMove={(targetIdx) => handleMoveToSection(sIdx, iIdx, targetIdx)}
+                                            />
+                                          )}
                                           <button
                                             type="button"
                                             onClick={() => removeItem(sIdx, iIdx)}
@@ -376,8 +380,10 @@ export default function QuoteTemplatesSettings({ templates: initialTemplates }: 
                                           </button>
                                         </div>
                                       </td>
-                                    </tr>
+                                      </>)}
+                                    </SortableRow>
                                   ))}
+                                  </SortableItems>
                                 </tbody>
                               </table>
                             </div>
@@ -392,8 +398,10 @@ export default function QuoteTemplatesSettings({ templates: initialTemplates }: 
                               Add line
                             </button>
                           </div>
-                        </div>
+                          </>)}
+                        </SortableSectionCard>
                       ))}
+                      </SortableSections>
 
                       <button
                         type="button"
@@ -490,42 +498,6 @@ export default function QuoteTemplatesSettings({ templates: initialTemplates }: 
           Add template
         </button>
       )}
-    </div>
-  )
-}
-
-function MoveButtons({
-  onUp, onDown, disabledUp, disabledDown,
-}: {
-  onUp: () => void
-  onDown: () => void
-  disabledUp: boolean
-  disabledDown: boolean
-}) {
-  return (
-    <div className="flex items-center gap-0.5 shrink-0">
-      <button
-        type="button"
-        onClick={onUp}
-        disabled={disabledUp}
-        aria-label="Move up"
-        className="text-fg-muted hover:text-fg-secondary disabled:opacity-30 disabled:hover:text-fg-muted transition-colors"
-      >
-        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
-        </svg>
-      </button>
-      <button
-        type="button"
-        onClick={onDown}
-        disabled={disabledDown}
-        aria-label="Move down"
-        className="text-fg-muted hover:text-fg-secondary disabled:opacity-30 disabled:hover:text-fg-muted transition-colors"
-      >
-        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-        </svg>
-      </button>
     </div>
   )
 }

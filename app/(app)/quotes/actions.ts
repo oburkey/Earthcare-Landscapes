@@ -19,6 +19,11 @@ type SavedSection = {
   overrideSubtotal?: number | null
 }
 
+// New DB ids from a save, in the same order as the sections/items sent —
+// replaceSections recreates every row, so the client must swap these in
+// before any further drag-and-drop reorder can target the right rows.
+export type SavedQuoteIds = { id: string; itemIds: string[] }[]
+
 // Replaces all of a quote's sections + items with the given set — same
 // delete-then-reinsert pattern used for lot_quote_items in
 // sites/[siteId]/stages/[stageId]/lots/[lotId]/quote-actions.ts.
@@ -26,13 +31,14 @@ async function replaceSections(
   supabase: Awaited<ReturnType<typeof createClient>>,
   quoteId: string,
   sections: SavedSection[]
-): Promise<{ error: string } | null> {
+): Promise<{ error: string } | { ids: SavedQuoteIds }> {
   const { error: deleteError } = await supabase
     .from('quote_sections')
     .delete()
     .eq('quote_id', quoteId)
   if (deleteError) return { error: deleteError.message }
 
+  const ids: SavedQuoteIds = []
   for (const section of sections) {
     const { data: sectionRow, error: sectionError } = await supabase
       .from('quote_sections')
@@ -46,8 +52,9 @@ async function replaceSections(
       .single()
     if (sectionError || !sectionRow) return { error: sectionError?.message ?? 'Failed to save section.' }
 
+    let itemIds: string[] = []
     if (section.items.length > 0) {
-      const { error: itemsError } = await supabase
+      const { data: itemRows, error: itemsError } = await supabase
         .from('quote_line_items')
         .insert(
           section.items.map((item) => ({
@@ -59,16 +66,21 @@ async function replaceSections(
             order_index: item.orderIndex,
           }))
         )
-      if (itemsError) return { error: itemsError.message }
+        .select('id, order_index')
+      if (itemsError || !itemRows) return { error: itemsError?.message ?? 'Failed to save line items.' }
+      // Map back by order_index rather than trusting RETURNING row order.
+      const idByOrder = new Map(itemRows.map((r) => [r.order_index, r.id]))
+      itemIds = section.items.map((item) => idByOrder.get(item.orderIndex) ?? '')
     }
+    ids.push({ id: sectionRow.id, itemIds })
   }
 
-  return null
+  return { ids }
 }
 
 export async function saveQuote(
   formData: FormData
-): Promise<{ error: string } | { id: string } | null> {
+): Promise<{ error: string } | { id: string; sectionIds: SavedQuoteIds }> {
   const profile = await requireAuth()
   if (profile.role !== 'admin' && profile.role !== 'supervisor') {
     return { error: 'Only admins and supervisors can save quotes.' }
@@ -127,11 +139,11 @@ export async function saveQuote(
       .eq('id', id)
     if (error) return { error: error.message }
 
-    const sectionsError = await replaceSections(supabase, id, sections)
-    if (sectionsError) return sectionsError
+    const replaced = await replaceSections(supabase, id, sections)
+    if ('error' in replaced) return replaced
 
     revalidatePath('/quotes')
-    return null
+    return { id, sectionIds: replaced.ids }
   }
 
   const { data, error } = await supabase
@@ -153,17 +165,17 @@ export async function saveQuote(
 
   if (error) return { error: error.message }
 
-  const sectionsError = await replaceSections(supabase, data.id, sections)
-  if (sectionsError) return sectionsError
+  const replaced = await replaceSections(supabase, data.id, sections)
+  if ('error' in replaced) return replaced
 
   revalidatePath('/quotes')
-  return { id: data.id }
+  return { id: data.id, sectionIds: replaced.ids }
 }
 
 // ── Reorder ──────────────────────────────────────────────────────────────────
-// Lightweight, targeted order_index updates for the ↑/↓ reorder buttons —
-// separate from saveQuote's full delete-and-reinsert so a reorder click
-// doesn't require (or wait on) a full quote save. Only ever called for
+// Lightweight, targeted order_index updates for drag-and-drop reordering —
+// separate from saveQuote's full delete-and-reinsert so a reorder doesn't
+// require (or wait on) a full quote save. Only ever called for
 // sections/items that already have a DB id (i.e. the quote has been saved
 // at least once) — see QuotesView.tsx.
 
@@ -187,8 +199,9 @@ export async function reorderQuoteSections(
   return null
 }
 
+// `sectionId` is set when the item was dragged into a different section.
 export async function reorderQuoteLineItems(
-  updates: { id: string; orderIndex: number }[]
+  updates: { id: string; orderIndex: number; sectionId?: string }[]
 ): Promise<{ error: string } | null> {
   const profile = await requireAuth()
   if (profile.role !== 'admin' && profile.role !== 'supervisor') {
@@ -198,7 +211,10 @@ export async function reorderQuoteLineItems(
 
   const supabase = await createClient()
   const results = await Promise.all(
-    updates.map((u) => supabase.from('quote_line_items').update({ order_index: u.orderIndex }).eq('id', u.id))
+    updates.map((u) => supabase
+      .from('quote_line_items')
+      .update({ order_index: u.orderIndex, ...(u.sectionId ? { section_id: u.sectionId } : {}) })
+      .eq('id', u.id))
   )
   const failed = results.find((r) => r.error)
   if (failed?.error) return { error: failed.error.message }

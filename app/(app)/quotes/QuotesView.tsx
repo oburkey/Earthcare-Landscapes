@@ -7,6 +7,10 @@ import {
 } from './actions'
 import { LOGO_DATA_URL } from '@/lib/pdfAssets'
 import { LABOUR_HOURLY_RATE, BOBCAT_HOURLY_RATE } from '@/lib/pricingPresets'
+import {
+  SortableSections, SortableSectionCard, SortableItems, SortableRow, DragHandle, MoveToSectionSelect, EmptySectionNotice,
+  newUid, withUids, moveItemToSection, sectionLabel,
+} from '@/app/_components/SortableSections'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -17,10 +21,13 @@ export type QuoteLineItem = {
   unit: string
   rate: number
   orderIndex: number
+  // Client-only drag-and-drop key (never saved) — see SortableSections.
+  uid?: string
 }
 
 export type QuoteSection = {
   id?: string
+  uid?: string
   name: string
   orderIndex: number
   items: QuoteLineItem[]
@@ -123,25 +130,17 @@ function slug(...parts: (string | null | undefined)[]): string {
 }
 
 function emptyLine(orderIndex: number): QuoteLineItem {
-  return { description: '', qty: 1, unit: 'hr', rate: 0, orderIndex }
+  return { description: '', qty: 1, unit: 'hr', rate: 0, orderIndex, uid: newUid() }
 }
 
 function emptySection(orderIndex: number): QuoteSection {
-  return { name: '', orderIndex, items: [emptyLine(0)], overrideSubtotal: null }
+  return { name: '', orderIndex, items: [emptyLine(0)], overrideSubtotal: null, uid: newUid() }
 }
 
 // Renumbers orderIndex to match array position — called after any
 // add/remove/reorder so persisted order always matches display order.
 function reindex<T extends { orderIndex: number }>(arr: T[]): T[] {
   return arr.map((item, i) => ({ ...item, orderIndex: i }))
-}
-
-// Swaps two adjacent-by-position entries and reindexes — used by the ↑/↓
-// reorder buttons. Only the two swapped entries actually change orderIndex.
-function swapAndReindex<T extends { orderIndex: number }>(arr: T[], i: number, j: number): T[] {
-  const next = [...arr]
-  ;[next[i], next[j]] = [next[j], next[i]]
-  return reindex(next)
 }
 
 // ── PDF ───────────────────────────────────────────────────────────────────────
@@ -188,6 +187,12 @@ function gstAwareAmountCell(exGst: number, includeGst: boolean): string {
 // sits after the last item (not inline with the header) and only appears
 // when the quote has 2+ sections (a single section's subtotal would just
 // duplicate the grand total).
+// Sections with no line items are left out of the PDF entirely — unless
+// they carry a subtotal override, since that still counts toward the total.
+function pdfSections(sections: QuoteSection[]): QuoteSection[] {
+  return sections.filter((s) => s.items.length > 0 || s.overrideSubtotal != null)
+}
+
 function quoteSectionRows(section: QuoteSection, includeGst: boolean, showSubtotal: boolean): string {
   const subtotal = calcSectionSubtotal(section)
   const rows = section.items.map((item, i) => {
@@ -226,9 +231,10 @@ export function buildQuoteHtml(
 ): string {
   const date = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
   const grandTotal = calcGrandTotal(sections, overrideTotal)
-  const showSectionSubtotals = sections.length >= 2
+  const visibleSections = pdfSections(sections)
+  const showSectionSubtotals = visibleSections.length >= 2
 
-  const rows = sections.map((s) => quoteSectionRows(s, includeGst, showSectionSubtotals)).join('')
+  const rows = visibleSections.map((s) => quoteSectionRows(s, includeGst, showSectionSubtotals)).join('')
 
   const totalRowHtml = hideTotal ? '' : `
       <tr class="grand">
@@ -310,9 +316,10 @@ function buildCombinedQuotesPdf(selectedQuotes: QuoteRow[], logoSrc: string): st
   const quoteBlocks = selectedQuotes.map((q, idx) => {
     const quoteTotal = calcGrandTotal(q.sections, q.overrideTotal)
     grandTotal += quoteTotal
-    const showSectionSubtotals = q.sections.length >= 2
+    const visibleSections = pdfSections(q.sections)
+    const showSectionSubtotals = visibleSections.length >= 2
 
-    const sectionRows = q.sections.map((section) => {
+    const sectionRows = visibleSections.map((section) => {
       const subtotal = calcSectionSubtotal(section)
       const rows = section.items.map((item, i) => {
         const lineTotal = (item.qty || 0) * (item.rate || 0)
@@ -530,7 +537,7 @@ export default function QuotesView({
   function openNew() {
     setSiteId(''); setStageId(''); setReference(''); setDescription('')
     setStatus('draft')
-    setSections([{ name: '', orderIndex: 0, items: [{ description: 'Administration & Preliminary', qty: 1, unit: 'item', rate: 500, orderIndex: 0 }], overrideSubtotal: null }])
+    setSections(withUids([{ name: '', orderIndex: 0, items: [{ description: 'Administration & Preliminary', qty: 1, unit: 'item', rate: 500, orderIndex: 0 }], overrideSubtotal: null }]))
     setNotes('')
     setOverrideTotal(null)
     setHideTotal(false)
@@ -548,12 +555,12 @@ export default function QuotesView({
     setStatus('draft')
     setSections(
       preset.sections.length > 0
-        ? reindex(preset.sections.map((s) => ({
+        ? withUids(reindex(preset.sections.map((s) => ({
             name: s.name,
             orderIndex: 0,
-            items: s.items.length > 0 ? reindex(s.items.map((i) => ({ ...i, id: undefined }))) : [emptyLine(0)],
+            items: s.items.length > 0 ? reindex(s.items.map((i) => ({ ...i, id: undefined, uid: undefined }))) : [emptyLine(0)],
             overrideSubtotal: null,
-          })))
+          }))))
         : [emptySection(0)]
     )
     setNotes('')
@@ -570,7 +577,7 @@ export default function QuotesView({
     setReference(q.reference)
     setDescription(q.description)
     setStatus(q.status)
-    setSections(q.sections.length > 0 ? q.sections : [emptySection(0)])
+    setSections(q.sections.length > 0 ? withUids(q.sections) : [emptySection(0)])
     setNotes(q.notes)
     setOverrideTotal(q.overrideTotal ?? null)
     setHideTotal(q.hideTotal ?? false)
@@ -599,7 +606,8 @@ export default function QuotesView({
   function removeSection(sectionIdx: number) {
     setSections((prev) => {
       if (prev.length <= 1) return prev
-      if (!confirm('Remove this section and its line items?')) return prev
+      // An empty section (all items dragged out) has nothing to lose — no prompt.
+      if (prev[sectionIdx].items.length > 0 && !confirm('Remove this section and its line items?')) return prev
       return reindex(prev.filter((_, idx) => idx !== sectionIdx))
     })
   }
@@ -646,42 +654,50 @@ export default function QuotesView({
     }))
   }
 
-  // Reorder — always reorders local state instantly; the DB write only
-  // fires when the moved rows already exist (quote saved at least once and
-  // both swapped rows have an id). New/unsaved quotes and sections/items
-  // added this session stay local-only until the next "Save quote".
-  function moveSection(index: number, direction: -1 | 1) {
-    const target = index + direction
-    if (target < 0 || target >= sections.length) return
-    const reordered = swapAndReindex(sections, index, target)
-    setSections(reordered)
-    if (view !== 'new') {
-      setQuotes((prev) => prev.map((q) => (q.id === view ? { ...q, sections: reordered } : q)))
+  // Reorder (drag-and-drop or "Move to section") — local state updates
+  // instantly; the DB write only covers rows that already exist (quote
+  // saved at least once, row has an id, and for a moved item its new
+  // section has an id). New/unsaved quotes and sections/items added this
+  // session stay local-only until the next "Save quote".
+  function persistOrder(before: QuoteSection[], after: QuoteSection[]) {
+    if (view === 'new') return
+    setQuotes((prev) => prev.map((q) => (q.id === view ? { ...q, sections: after } : q)))
+
+    const prevSectionOrder = new Map(before.filter((s) => s.id).map((s) => [s.id, s.orderIndex]))
+    const sectionUpdates = after
+      .filter((s) => s.id && prevSectionOrder.get(s.id) !== s.orderIndex)
+      .map((s) => ({ id: s.id!, orderIndex: s.orderIndex }))
+
+    const prevItems = new Map<string, { orderIndex: number; sectionId?: string }>()
+    for (const s of before) {
+      for (const i of s.items) if (i.id) prevItems.set(i.id, { orderIndex: i.orderIndex, sectionId: s.id })
     }
-    const a = reordered[index], b = reordered[target]
-    if (view !== 'new' && a.id && b.id) {
-      reorderQuoteSections([{ id: a.id, orderIndex: a.orderIndex }, { id: b.id, orderIndex: b.orderIndex }])
+    const itemUpdates = after.flatMap((s) => {
+      if (!s.id) return []
+      return s.items.flatMap((i) => {
+        if (!i.id) return []
+        const prev = prevItems.get(i.id)
+        if (prev && prev.orderIndex === i.orderIndex && prev.sectionId === s.id) return []
+        return [{ id: i.id, orderIndex: i.orderIndex, sectionId: prev?.sectionId !== s.id ? s.id : undefined }]
+      })
+    })
+
+    if (sectionUpdates.length > 0) {
+      reorderQuoteSections(sectionUpdates)
         .then((result) => { if (result?.error) setActionError(result.error) })
         .catch(() => setActionError('Failed to save the new section order.'))
     }
-  }
-
-  function moveItem(sectionIdx: number, itemIdx: number, direction: -1 | 1) {
-    const section = sections[sectionIdx]
-    const target = itemIdx + direction
-    if (target < 0 || target >= section.items.length) return
-    const reorderedItems = swapAndReindex(section.items, itemIdx, target)
-    const reorderedSections = sections.map((s, idx) => (idx === sectionIdx ? { ...s, items: reorderedItems } : s))
-    setSections(reorderedSections)
-    if (view !== 'new') {
-      setQuotes((prev) => prev.map((q) => (q.id === view ? { ...q, sections: reorderedSections } : q)))
-    }
-    const a = reorderedItems[itemIdx], b = reorderedItems[target]
-    if (view !== 'new' && a.id && b.id) {
-      reorderQuoteLineItems([{ id: a.id, orderIndex: a.orderIndex }, { id: b.id, orderIndex: b.orderIndex }])
+    if (itemUpdates.length > 0) {
+      reorderQuoteLineItems(itemUpdates)
         .then((result) => { if (result?.error) setActionError(result.error) })
         .catch(() => setActionError('Failed to save the new item order.'))
     }
+  }
+
+  function handleMoveToSection(sectionIdx: number, itemIdx: number, targetIdx: number) {
+    const moved = moveItemToSection(sections, sectionIdx, itemIdx, targetIdx)
+    setSections(moved)
+    persistOrder(sections, moved)
   }
 
   function updateLine<K extends keyof QuoteLineItem>(sectionIdx: number, itemIdx: number, key: K, value: QuoteLineItem[K]) {
@@ -696,7 +712,7 @@ export default function QuotesView({
       if (prev.length === 0) return prev
       const lastIdx = prev.length - 1
       return prev.map((s, idx) =>
-        idx === lastIdx ? { ...s, items: reindex([...s.items, { description: desc, qty: 1, unit: 'hr', rate, orderIndex: 0 }]) } : s
+        idx === lastIdx ? { ...s, items: reindex([...s.items, { description: desc, qty: 1, unit: 'hr', rate, orderIndex: 0, uid: newUid() }]) } : s
       )
     })
   }
@@ -723,25 +739,32 @@ export default function QuotesView({
     const result = await saveQuote(fd)
     setSaving(false)
 
-    if (result && 'error' in result) {
+    if ('error' in result) {
       setActionError(result.error)
       return
     }
+
+    // Saving recreates every section/item row, so swap in the new ids —
+    // otherwise drag-and-drop after reopening would target deleted rows.
+    const savedSections = sections.map((s, sIdx) => ({
+      ...s,
+      id: result.sectionIds[sIdx]?.id,
+      items: s.items.map((item, iIdx) => ({ ...item, id: result.sectionIds[sIdx]?.itemIds[iIdx] || undefined })),
+    }))
 
     const resolvedSiteName = sites.find((s) => s.id === siteId)?.name ?? null
     const resolvedStageName = formStages.find((s) => s.id === stageId)?.name ?? null
 
     if (view === 'new') {
-      const newId = ('id' in (result ?? {})) ? (result as { id: string }).id : crypto.randomUUID()
       setQuotes((prev) => [
-        { id: newId, siteId: siteId || null, siteName: resolvedSiteName, stageId: stageId || null, stageName: resolvedStageName, reference, description, status, sections, notes, createdAt: new Date().toISOString(), overrideTotal, hideTotal, customTotals },
+        { id: result.id, siteId: siteId || null, siteName: resolvedSiteName, stageId: stageId || null, stageName: resolvedStageName, reference, description, status, sections: savedSections, notes, createdAt: new Date().toISOString(), overrideTotal, hideTotal, customTotals },
         ...prev,
       ])
     } else {
       setQuotes((prev) =>
         prev.map((q) =>
           q.id === view
-            ? { ...q, siteId: siteId || null, siteName: resolvedSiteName, stageId: stageId || null, stageName: resolvedStageName, reference, description, status, sections, notes, overrideTotal, hideTotal, customTotals }
+            ? { ...q, siteId: siteId || null, siteName: resolvedSiteName, stageId: stageId || null, stageName: resolvedStageName, reference, description, status, sections: savedSections, notes, overrideTotal, hideTotal, customTotals }
             : q
         )
       )
@@ -1023,25 +1046,28 @@ export default function QuotesView({
               </div>
             </div>
 
+            <SortableSections
+              sections={sections}
+              onChange={setSections}
+              onDrop={persistOrder}
+              sectionLabel={sectionLabel}
+              itemLabel={(item) => item.description || 'Line item'}
+            >
             {sections.map((section, sIdx) => {
               const sectionSubtotal = calcSectionSubtotal(section)
               const showSubtotal = sections.length >= 2
               return (
-                <div key={sIdx} className="rounded-lg border border-border-subtle overflow-hidden">
+                <SortableSectionCard key={section.uid} uid={section.uid} className="rounded-lg border border-border-subtle overflow-hidden">
+                  {(sectionHandle) => (<>
                   {/* Section header — name only */}
                   <div className="flex items-center gap-2 bg-surface-raised px-3 py-2">
+                    <DragHandle handle={sectionHandle} label="Drag to reorder section" />
                     <input
                       type="text"
                       value={section.name}
                       onChange={(e) => renameSection(sIdx, e.target.value)}
                       placeholder="Section name (optional)"
                       className="flex-1 rounded border border-border bg-surface px-2 py-1 text-sm font-medium text-fg placeholder:text-fg-muted focus:border-border focus:outline-none"
-                    />
-                    <MoveButtons
-                      onUp={() => moveSection(sIdx, -1)}
-                      onDown={() => moveSection(sIdx, 1)}
-                      disabledUp={sIdx === 0}
-                      disabledDown={sIdx === sections.length - 1}
                     />
                     <button
                       type="button"
@@ -1056,23 +1082,32 @@ export default function QuotesView({
                   </div>
 
                   <div className="p-3 space-y-2">
+                    {section.items.length === 0 && (
+                      <EmptySectionNotice onDelete={() => removeSection(sIdx)} />
+                    )}
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm border-collapse">
                         <thead>
                           <tr className="border-b border-border">
+                            <th className="pb-2 w-8"></th>
                             <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 pr-3 min-w-[180px]">Description</th>
                             <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-2 w-20">Qty</th>
                             <th className="text-left text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-2 w-20">Unit</th>
                             <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-2 w-24">Rate</th>
                             <th className="text-right text-xs font-semibold text-fg-secondary uppercase tracking-wide pb-2 px-2 w-28">Total</th>
-                            <th className="pb-2 w-20"></th>
+                            <th className="pb-2"></th>
                           </tr>
                         </thead>
                         <tbody>
+                          <SortableItems items={section.items}>
                           {section.items.map((item, i) => {
                             const lineTotal = (item.qty || 0) * (item.rate || 0)
                             return (
-                              <tr key={i} className="border-b border-border-subtle">
+                              <SortableRow key={item.uid} uid={item.uid} className="border-b border-border-subtle">
+                                {(itemHandle) => (<>
+                                <td className="py-1.5 pr-1">
+                                  <DragHandle handle={itemHandle} label="Drag to move line item" />
+                                </td>
                                 <td className="py-1.5 pr-3">
                                   <input
                                     type="text"
@@ -1115,13 +1150,14 @@ export default function QuotesView({
                                   {fmt(lineTotal)}
                                 </td>
                                 <td className="py-1.5 pl-2">
-                                  <div className="flex items-center gap-1">
-                                    <MoveButtons
-                                      onUp={() => moveItem(sIdx, i, -1)}
-                                      onDown={() => moveItem(sIdx, i, 1)}
-                                      disabledUp={i === 0}
-                                      disabledDown={i === section.items.length - 1}
-                                    />
+                                  <div className="flex items-center gap-1.5">
+                                    {sections.length >= 2 && (
+                                      <MoveToSectionSelect
+                                        sections={sections}
+                                        currentIdx={sIdx}
+                                        onMove={(targetIdx) => handleMoveToSection(sIdx, i, targetIdx)}
+                                      />
+                                    )}
                                     <button
                                       type="button"
                                       onClick={() => removeLine(sIdx, i)}
@@ -1134,9 +1170,11 @@ export default function QuotesView({
                                     </button>
                                   </div>
                                 </td>
-                              </tr>
+                                </>)}
+                              </SortableRow>
                             )
                           })}
+                          </SortableItems>
                         </tbody>
                       </table>
                     </div>
@@ -1174,9 +1212,11 @@ export default function QuotesView({
                       Add line
                     </button>
                   </div>
-                </div>
+                  </>)}
+                </SortableSectionCard>
               )
             })}
+            </SortableSections>
 
             <button
               type="button"
@@ -1667,42 +1707,6 @@ export default function QuotesView({
           </div>
         </div>
       )}
-    </div>
-  )
-}
-
-function MoveButtons({
-  onUp, onDown, disabledUp, disabledDown,
-}: {
-  onUp: () => void
-  onDown: () => void
-  disabledUp: boolean
-  disabledDown: boolean
-}) {
-  return (
-    <div className="flex items-center gap-0.5 shrink-0">
-      <button
-        type="button"
-        onClick={onUp}
-        disabled={disabledUp}
-        aria-label="Move up"
-        className="text-fg-muted hover:text-fg-secondary disabled:opacity-30 disabled:hover:text-fg-muted transition-colors"
-      >
-        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
-        </svg>
-      </button>
-      <button
-        type="button"
-        onClick={onDown}
-        disabled={disabledDown}
-        aria-label="Move down"
-        className="text-fg-muted hover:text-fg-secondary disabled:opacity-30 disabled:hover:text-fg-muted transition-colors"
-      >
-        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-        </svg>
-      </button>
     </div>
   )
 }
