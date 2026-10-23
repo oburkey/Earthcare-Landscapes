@@ -46,46 +46,8 @@ function reindex<T extends { orderIndex: number }>(arr: T[]): T[] {
   return arr.map((item, i) => ({ ...item, orderIndex: i }))
 }
 
-// Moves one item to the end of another section — the "Move to section"
-// dropdown fallback for when dragging isn't convenient.
-export function moveItemToSection<I extends Orderable, S extends SectionShape<I>>(
-  sections: S[], fromSectionIdx: number, itemIdx: number, toSectionIdx: number
-): S[] {
-  if (fromSectionIdx === toSectionIdx) return sections
-  const item = sections[fromSectionIdx]?.items[itemIdx]
-  if (!item) return sections
-  return sections.map((s, idx) => {
-    if (idx === fromSectionIdx) return { ...s, items: reindex(s.items.filter((_, i) => i !== itemIdx)) } as S
-    if (idx === toSectionIdx) return { ...s, items: reindex([...s.items, item]) } as S
-    return s
-  })
-}
-
 export function sectionLabel(section: { name: string }, idx: number): string {
   return section.name.trim() || `Section ${idx + 1}`
-}
-
-// Shows the item's current section; picking another moves it there.
-export function MoveToSectionSelect({
-  sections, currentIdx, onMove,
-}: {
-  sections: { name: string }[]
-  currentIdx: number
-  onMove: (targetIdx: number) => void
-}) {
-  return (
-    <select
-      value={currentIdx}
-      onChange={(e) => onMove(Number(e.target.value))}
-      aria-label="Move to section"
-      title="Move to section"
-      className="w-28 rounded border border-border bg-surface px-1 py-1 text-xs text-fg-muted focus:border-border focus:outline-none"
-    >
-      {sections.map((s, idx) => (
-        <option key={idx} value={idx}>{sectionLabel(s, idx)}</option>
-      ))}
-    </select>
-  )
 }
 
 // Shown in a section once every item has been dragged/moved out of it. The

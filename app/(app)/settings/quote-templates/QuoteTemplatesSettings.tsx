@@ -3,8 +3,8 @@
 import { useState, useTransition } from 'react'
 import { createTemplate, deleteTemplate, saveTemplate } from './actions'
 import {
-  SortableSections, SortableSectionCard, SortableItems, SortableRow, DragHandle, MoveToSectionSelect, EmptySectionNotice,
-  newUid, withUids, moveItemToSection, sectionLabel,
+  SortableSections, SortableSectionCard, SortableItems, SortableRow, DragHandle, EmptySectionNotice,
+  newUid, withUids, sectionLabel,
 } from '@/app/_components/SortableSections'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -114,11 +114,6 @@ export default function QuoteTemplatesSettings({ templates: initialTemplates }: 
     }))
   }
 
-  // Drag-and-drop and "Move to section" only change local state — the new
-  // order and sections are written by "Save changes", like every other edit.
-  function handleMoveToSection(sIdx: number, iIdx: number, targetIdx: number) {
-    setEditSections((prev) => moveItemToSection(prev, sIdx, iIdx, targetIdx))
-  }
 
   function updateItem<K extends keyof TemplateItem>(sIdx: number, iIdx: number, key: K, value: TemplateItem[K]) {
     setEditSections((prev) => prev.map((s, i) => {
@@ -360,14 +355,7 @@ export default function QuoteTemplatesSettings({ templates: initialTemplates }: 
                                         />
                                       </td>
                                       <td className="py-1.5 pl-2">
-                                        <div className="flex items-center gap-1.5">
-                                          {editSections.length >= 2 && (
-                                            <MoveToSectionSelect
-                                              sections={editSections}
-                                              currentIdx={sIdx}
-                                              onMove={(targetIdx) => handleMoveToSection(sIdx, iIdx, targetIdx)}
-                                            />
-                                          )}
+                                        <div className="flex items-center gap-1">
                                           <button
                                             type="button"
                                             onClick={() => removeItem(sIdx, iIdx)}

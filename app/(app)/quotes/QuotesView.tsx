@@ -8,8 +8,8 @@ import {
 import { LOGO_DATA_URL } from '@/lib/pdfAssets'
 import { LABOUR_HOURLY_RATE, BOBCAT_HOURLY_RATE } from '@/lib/pricingPresets'
 import {
-  SortableSections, SortableSectionCard, SortableItems, SortableRow, DragHandle, MoveToSectionSelect, EmptySectionNotice,
-  newUid, withUids, moveItemToSection, sectionLabel,
+  SortableSections, SortableSectionCard, SortableItems, SortableRow, DragHandle, EmptySectionNotice,
+  newUid, withUids, sectionLabel,
 } from '@/app/_components/SortableSections'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -654,7 +654,7 @@ export default function QuotesView({
     }))
   }
 
-  // Reorder (drag-and-drop or "Move to section") — local state updates
+  // Reorder (drag-and-drop) — local state updates
   // instantly; the DB write only covers rows that already exist (quote
   // saved at least once, row has an id, and for a moved item its new
   // section has an id). New/unsaved quotes and sections/items added this
@@ -692,12 +692,6 @@ export default function QuotesView({
         .then((result) => { if (result?.error) setActionError(result.error) })
         .catch(() => setActionError('Failed to save the new item order.'))
     }
-  }
-
-  function handleMoveToSection(sectionIdx: number, itemIdx: number, targetIdx: number) {
-    const moved = moveItemToSection(sections, sectionIdx, itemIdx, targetIdx)
-    setSections(moved)
-    persistOrder(sections, moved)
   }
 
   function updateLine<K extends keyof QuoteLineItem>(sectionIdx: number, itemIdx: number, key: K, value: QuoteLineItem[K]) {
@@ -1150,14 +1144,7 @@ export default function QuotesView({
                                   {fmt(lineTotal)}
                                 </td>
                                 <td className="py-1.5 pl-2">
-                                  <div className="flex items-center gap-1.5">
-                                    {sections.length >= 2 && (
-                                      <MoveToSectionSelect
-                                        sections={sections}
-                                        currentIdx={sIdx}
-                                        onMove={(targetIdx) => handleMoveToSection(sIdx, i, targetIdx)}
-                                      />
-                                    )}
+                                  <div className="flex items-center gap-1">
                                     <button
                                       type="button"
                                       onClick={() => removeLine(sIdx, i)}
