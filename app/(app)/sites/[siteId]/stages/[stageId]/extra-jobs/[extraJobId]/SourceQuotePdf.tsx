@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { buildQuoteHtml, downloadPDF } from '@/app/(app)/quotes/QuotesView'
 import { LOGO_DATA_URL } from '@/lib/pdfAssets'
 
-type SourceQuoteLineItem = { description: string; qty: number; unit: string; rate: number }
+// `optional` = from a section below the quote's total (not in its total).
+type SourceQuoteLineItem = { description: string; qty: number; unit: string; rate: number; optional: boolean }
 
 export default function SourceQuotePdf({
   siteName,
@@ -36,7 +37,10 @@ export default function SourceQuotePdf({
           <div className="divide-y divide-stone-100">
             {lineItems.map((li, i) => (
               <div key={i} className="flex items-center justify-between gap-3 px-4 py-2.5">
-                <span className="text-sm text-stone-800">{li.description}</span>
+                <span className="text-sm text-stone-800">
+                  {li.description}
+                  {li.optional && <span className="ml-2 text-xs text-stone-400">Optional</span>}
+                </span>
                 <span className="text-sm text-stone-500 tabular-nums shrink-0">{li.qty} {li.unit}</span>
               </div>
             ))}
@@ -50,7 +54,15 @@ export default function SourceQuotePdf({
 
   function handleDownload() {
     const filename = `Quote-${reference || 'source'}.pdf`
-    const sections = [{ name: '', orderIndex: 0, items: lineItems.map((li, i) => ({ ...li, orderIndex: i })) }]
+    // Optional items go in their own section so the PDF lists them under
+    // "Optional items — not included in total", like the quote's own PDF.
+    const toItems = (items: SourceQuoteLineItem[]) =>
+      items.map(({ description, qty, unit, rate }, i) => ({ description, qty, unit, rate, orderIndex: i }))
+    const optionalItems = lineItems.filter((li) => li.optional)
+    const sections = [
+      { name: '', orderIndex: 0, items: toItems(lineItems.filter((li) => !li.optional)) },
+      ...(optionalItems.length > 0 ? [{ name: '', orderIndex: 1, items: toItems(optionalItems), excludeFromTotal: true }] : []),
+    ]
     const html = buildQuoteHtml(siteName, reference, description, sections, notes, LOGO_DATA_URL, false)
     setGenerating(true)
     setError(null)

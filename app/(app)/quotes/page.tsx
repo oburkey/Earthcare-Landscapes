@@ -24,7 +24,7 @@ export default async function QuotesPage() {
   let quotes: QuoteRow[] = []
   let tableExists = true
 
-  const SECTIONS_SELECT = 'quote_sections(id, name, order_index, override_subtotal, quote_line_items(id, description, qty, unit, rate, order_index))'
+  const SECTIONS_SELECT = 'quote_sections(id, name, order_index, override_subtotal, exclude_from_total, quote_line_items(id, description, qty, unit, rate, order_index))'
 
   try {
     // Try full query with stage_id (requires migration_quote_conversion.sql)
@@ -59,15 +59,18 @@ export default async function QuotesPage() {
         reference:   q.reference ?? '',
         description: q.description ?? '',
         status:      q.status ?? 'draft',
+        // Included sections first, then optional (below-the-total) ones — the
+        // builder's total divider relies on that ordering.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         sections: ((q.quote_sections ?? []) as any[])
           .slice()
-          .sort((a, b) => a.order_index - b.order_index)
+          .sort((a, b) => Number(!!a.exclude_from_total) - Number(!!b.exclude_from_total) || a.order_index - b.order_index)
           .map((s) => ({
             id:               s.id,
             name:             s.name,
             orderIndex:       s.order_index,
             overrideSubtotal: s.override_subtotal != null ? Number(s.override_subtotal) : null,
+            excludeFromTotal: !!s.exclude_from_total,
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             items: ((s.quote_line_items ?? []) as any[])
               .slice()
@@ -102,7 +105,7 @@ export default async function QuotesPage() {
   try {
     const { data: presetsRaw, error: presetsError } = await supabase
       .from('quote_presets')
-      .select('id, name, description, order_index, quote_preset_sections(name, order_index, quote_preset_items(description, qty, unit, rate, order_index))')
+      .select('id, name, description, order_index, quote_preset_sections(name, order_index, exclude_from_total, quote_preset_items(description, qty, unit, rate, order_index))')
       .order('order_index')
 
     if (!presetsError && presetsRaw) {
@@ -114,10 +117,11 @@ export default async function QuotesPage() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         sections: ((p.quote_preset_sections ?? []) as any[])
           .slice()
-          .sort((a, b) => a.order_index - b.order_index)
+          .sort((a, b) => Number(!!a.exclude_from_total) - Number(!!b.exclude_from_total) || a.order_index - b.order_index)
           .map((s, sIdx) => ({
             name: s.name,
             orderIndex: sIdx,
+            excludeFromTotal: !!s.exclude_from_total,
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             items: ((s.quote_preset_items ?? []) as any[])
               .slice()

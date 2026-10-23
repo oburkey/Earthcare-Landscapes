@@ -19,12 +19,24 @@ import { CSS } from '@dnd-kit/utilities'
 //
 // Every section and item needs a stable client-side `uid` (see newUid /
 // withUids) — DB ids aren't enough since unsaved rows don't have one yet.
+//
+// With `withDivider`, a fixed "Total" divider sits in the section list:
+// sections below it are optional (excludeFromTotal). Sections must be kept
+// ordered with all included ones first — the loaders sort that way and
+// dropping a section re-derives every flag from its side of the divider.
 
 type Orderable = { uid?: string; orderIndex: number }
-type SectionShape<I extends Orderable> = Orderable & { items: I[] }
+type SectionShape<I extends Orderable> = Orderable & { items: I[]; excludeFromTotal?: boolean }
 
 const SECTION = 's:'
 const ITEM = 'i:'
+const DIVIDER = 'd:total'
+
+// Position of the total divider = number of included sections.
+export function dividerIndex(sections: { excludeFromTotal?: boolean }[]): number {
+  const idx = sections.findIndex((s) => s.excludeFromTotal)
+  return idx < 0 ? sections.length : idx
+}
 
 let uidCounter = 0
 export function newUid(): string {
@@ -92,9 +104,12 @@ export function DragHandle({
 }
 
 export function SortableSections<I extends Orderable, S extends SectionShape<I>>({
-  sections, onChange, onDrop, sectionLabel, itemLabel, children,
+  sections, onChange, onDrop, sectionLabel, itemLabel, withDivider = false, children,
 }: {
   sections: S[]
+  // Render a <SortableTotalDivider> at dividerIndex(sections) among the
+  // section cards when this is set.
+  withDivider?: boolean
   // Called on every live change during a drag (an item crossing into another
   // section) and once more with the final order on drop.
   onChange: (next: S[]) => void
@@ -114,20 +129,24 @@ export function SortableSections<I extends Orderable, S extends SectionShape<I>>
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
+  const sortableIds = sections.map((s) => SECTION + s.uid)
+  if (withDivider) sortableIds.splice(dividerIndex(sections), 0, DIVIDER)
+
   function sectionIdxOf(id: string): number {
     if (id.startsWith(SECTION)) return sections.findIndex((s) => s.uid === id.slice(SECTION.length))
     const uid = id.slice(ITEM.length)
     return sections.findIndex((s) => s.items.some((i) => i.uid === uid))
   }
 
-  // Sections only collide with sections. Items prefer the item under the
-  // pointer, then (for a section with no items left) the section itself.
+  // Sections only collide with sections (and the divider). Items prefer the
+  // item under the pointer, then (for a section with no items left) the
+  // section itself.
   const collisionDetection: CollisionDetection = (args) => {
     const active = String(args.active.id)
     if (active.startsWith(SECTION)) {
       return closestCenter({
         ...args,
-        droppableContainers: args.droppableContainers.filter((c) => String(c.id).startsWith(SECTION)),
+        droppableContainers: args.droppableContainers.filter((c) => String(c.id).startsWith(SECTION) || c.id === DIVIDER),
       })
     }
     const itemContainers = args.droppableContainers.filter((c) => String(c.id).startsWith(ITEM))
@@ -193,9 +212,19 @@ export function SortableSections<I extends Orderable, S extends SectionShape<I>>
     if (over) {
       const overKey = String(over.id)
       if (activeKey.startsWith(SECTION)) {
-        const oldIdx = sectionIdxOf(activeKey)
-        const newIdx = sectionIdxOf(overKey)
-        if (oldIdx >= 0 && newIdx >= 0 && oldIdx !== newIdx) next = reindex(arrayMove(sections, oldIdx, newIdx))
+        // Moved within the list that includes the divider, so dropping onto
+        // the divider's slot lands on whichever side the drag came from.
+        const oldIdx = sortableIds.indexOf(activeKey)
+        const newIdx = sortableIds.indexOf(overKey)
+        if (oldIdx >= 0 && newIdx >= 0 && oldIdx !== newIdx) {
+          const moved = arrayMove(sortableIds, oldIdx, newIdx)
+          const dIdx = moved.indexOf(DIVIDER)
+          const byKey = new Map(sections.map((s) => [SECTION + s.uid, s]))
+          next = reindex(moved.filter((k) => k !== DIVIDER).map((k, i) => {
+            const s = byKey.get(k)!
+            return withDivider ? { ...s, excludeFromTotal: i >= dIdx } as S : s
+          }))
+        }
       } else if (overKey.startsWith(ITEM)) {
         const sIdx = sectionIdxOf(activeKey)
         if (sIdx >= 0 && sIdx === sectionIdxOf(overKey)) {
@@ -239,7 +268,7 @@ export function SortableSections<I extends Orderable, S extends SectionShape<I>>
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <SortableContext items={sections.map((s) => SECTION + s.uid)} strategy={verticalListSortingStrategy}>
+      <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
         {children}
       </SortableContext>
       {/* Rendered outside the sections so a dragged row isn't clipped by the
@@ -283,6 +312,17 @@ export function SortableSectionCard({
   return (
     <div ref={setNodeRef} style={style} className={`${className ?? ''} ${isDragging ? 'opacity-40' : ''}`}>
       {children(handle)}
+    </div>
+  )
+}
+
+// The fixed "Total" line between included and optional sections. It can't
+// be dragged itself, but shifts out of the way as sections are dragged past.
+export function SortableTotalDivider({ className, children }: { className?: string; children: ReactNode }) {
+  const { setNodeRef, transform, transition } = useSortable({ id: DIVIDER, disabled: { draggable: true } })
+  return (
+    <div ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }} className={className}>
+      {children}
     </div>
   )
 }

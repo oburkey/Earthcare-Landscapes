@@ -10,7 +10,7 @@ export default async function QuoteTemplatesSettingsPage() {
   try {
     const { data, error } = await supabase
       .from('quote_presets')
-      .select('id, name, description, order_index, quote_preset_sections(name, order_index, quote_preset_items(description, qty, unit, rate, order_index))')
+      .select('id, name, description, order_index, quote_preset_sections(name, order_index, exclude_from_total, quote_preset_items(description, qty, unit, rate, order_index))')
       .order('order_index')
 
     if (!error && data) {
@@ -20,13 +20,16 @@ export default async function QuoteTemplatesSettingsPage() {
         name: t.name,
         description: t.description ?? null,
         orderIndex: t.order_index,
+        // Included sections first, then optional ones — see the builder's
+        // total divider.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         sections: ((t.quote_preset_sections ?? []) as any[])
           .slice()
-          .sort((a, b) => a.order_index - b.order_index)
+          .sort((a, b) => Number(!!a.exclude_from_total) - Number(!!b.exclude_from_total) || a.order_index - b.order_index)
           .map((s, sIdx) => ({
             name: s.name,
             orderIndex: sIdx,
+            excludeFromTotal: !!s.exclude_from_total,
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             items: ((s.quote_preset_items ?? []) as any[])
               .slice()

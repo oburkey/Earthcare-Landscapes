@@ -86,7 +86,7 @@ export default async function ExtraJobPage({ params }: Props) {
   const sourceQuoteId = (job as any).source_quote_id as string | null
   let sourceQuote: {
     siteName: string | null; reference: string; description: string;
-    lineItems: { description: string; qty: number; unit: string; rate: number }[];
+    lineItems: { description: string; qty: number; unit: string; rate: number; optional: boolean }[];
     notes: string;
   } | null = null
 
@@ -94,27 +94,31 @@ export default async function ExtraJobPage({ params }: Props) {
     try {
       const { data: sq } = await supabase
         .from('quotes')
-        .select('reference, description, notes, sites(name), quote_sections(order_index, quote_line_items(description, qty, unit, rate, order_index))')
+        .select('reference, description, notes, sites(name), quote_sections(order_index, exclude_from_total, quote_line_items(description, qty, unit, rate, order_index))')
         .eq('id', sourceQuoteId)
         .single()
       if (sq) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const sqAny = sq as any
+        // Optional (below-the-total) sections are kept but flagged, so the
+        // source quote reads like the original (they may or may not have been
+        // carried into this job — see convertQuoteToExtraJob).
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const flatItems = ((sqAny.quote_sections ?? []) as any[])
           .slice()
-          .sort((a, b) => a.order_index - b.order_index)
+          .sort((a, b) => Number(!!a.exclude_from_total) - Number(!!b.exclude_from_total) || a.order_index - b.order_index)
           .flatMap((s) =>
             ((s.quote_line_items ?? []) as { description: string; qty: number; unit: string; rate: number; order_index: number }[])
               .slice()
               .sort((a, b) => a.order_index - b.order_index)
+              .map((li) => ({ ...li, optional: !!s.exclude_from_total }))
           )
         sourceQuote = {
           siteName:    sqAny.sites?.name ?? null,
           reference:   sqAny.reference ?? '',
           description: sqAny.description ?? '',
           lineItems:   flatItems.map((li) =>
-            isAdmin ? li : { description: li.description, qty: li.qty, unit: li.unit, rate: 0 }
+            isAdmin ? li : { description: li.description, qty: li.qty, unit: li.unit, rate: 0, optional: li.optional }
           ),
           notes:       sqAny.notes ?? '',
         }

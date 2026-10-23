@@ -17,6 +17,7 @@ type SavedSection = {
   orderIndex: number
   items: SavedSectionItem[]
   overrideSubtotal?: number | null
+  excludeFromTotal?: boolean
 }
 
 // New DB ids from a save, in the same order as the sections/items sent —
@@ -47,6 +48,7 @@ async function replaceSections(
         name:              section.name,
         order_index:       section.orderIndex,
         override_subtotal: section.overrideSubtotal ?? null,
+        exclude_from_total: section.excludeFromTotal ?? false,
       })
       .select('id')
       .single()
@@ -179,8 +181,10 @@ export async function saveQuote(
 // sections/items that already have a DB id (i.e. the quote has been saved
 // at least once) — see QuotesView.tsx.
 
+// `excludeFromTotal` reflects which side of the builder's total divider the
+// section was dropped on.
 export async function reorderQuoteSections(
-  updates: { id: string; orderIndex: number }[]
+  updates: { id: string; orderIndex: number; excludeFromTotal: boolean }[]
 ): Promise<{ error: string } | null> {
   const profile = await requireAuth()
   if (profile.role !== 'admin' && profile.role !== 'supervisor') {
@@ -190,7 +194,10 @@ export async function reorderQuoteSections(
 
   const supabase = await createClient()
   const results = await Promise.all(
-    updates.map((u) => supabase.from('quote_sections').update({ order_index: u.orderIndex }).eq('id', u.id))
+    updates.map((u) => supabase
+      .from('quote_sections')
+      .update({ order_index: u.orderIndex, exclude_from_total: u.excludeFromTotal })
+      .eq('id', u.id))
   )
   const failed = results.find((r) => r.error)
   if (failed?.error) return { error: failed.error.message }
@@ -271,6 +278,7 @@ export async function convertQuoteToExtraJob(
   const quoteId = formData.get('quote_id') as string
   const stageId = formData.get('stage_id') as string
   const siteId  = formData.get('site_id') as string
+  const includeOptional = formData.get('include_optional') === 'true'
 
   if (!quoteId || !stageId || !siteId) {
     return { error: 'Missing required fields.' }
@@ -280,7 +288,7 @@ export async function convertQuoteToExtraJob(
 
   const { data: quote, error: quoteError } = await supabase
     .from('quotes')
-    .select('description, reference, quote_sections(order_index, quote_line_items(description, qty, unit, rate, order_index))')
+    .select('description, reference, quote_sections(order_index, exclude_from_total, quote_line_items(description, qty, unit, rate, order_index))')
     .eq('id', quoteId)
     .single()
 
@@ -310,10 +318,13 @@ export async function convertQuoteToExtraJob(
 
   if (jobError || !job) return { error: jobError?.message ?? 'Failed to create extra job.' }
 
+  // Optional sections (below the total) only become extra-job pricing lines
+  // when the "Include optional sections" box was ticked (accepted options).
+  // Included sections come first, matching the quote's own order.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sections = ((quote.quote_sections as any[]) ?? [])
-    .slice()
-    .sort((a, b) => a.order_index - b.order_index)
+    .filter((s) => includeOptional || !s.exclude_from_total)
+    .sort((a, b) => Number(!!a.exclude_from_total) - Number(!!b.exclude_from_total) || a.order_index - b.order_index)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const lineItems: any[] = sections.flatMap((section) =>
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

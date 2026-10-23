@@ -23,6 +23,7 @@ type SavedSection = {
   name: string
   orderIndex: number
   items: SavedItem[]
+  excludeFromTotal?: boolean
 }
 
 export async function createTemplate(
@@ -109,7 +110,12 @@ export async function saveTemplate(formData: FormData): Promise<MutationState> {
   for (const section of sections) {
     const { data: sectionRow, error: sectionError } = await supabase
       .from('quote_preset_sections')
-      .insert({ preset_id: id, name: section.name, order_index: section.orderIndex })
+      .insert({
+        preset_id:          id,
+        name:               section.name,
+        order_index:        section.orderIndex,
+        exclude_from_total: section.excludeFromTotal ?? false,
+      })
       .select('id')
       .single()
     if (sectionError || !sectionRow) return { error: sectionError?.message ?? 'Failed to save section.' }

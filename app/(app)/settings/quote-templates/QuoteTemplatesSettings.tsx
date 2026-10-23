@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { Fragment, useState, useTransition } from 'react'
 import { createTemplate, deleteTemplate, saveTemplate } from './actions'
 import {
-  SortableSections, SortableSectionCard, SortableItems, SortableRow, DragHandle, EmptySectionNotice,
-  newUid, withUids, sectionLabel,
+  SortableSections, SortableSectionCard, SortableItems, SortableRow, SortableTotalDivider, DragHandle, EmptySectionNotice,
+  newUid, withUids, sectionLabel, dividerIndex,
 } from '@/app/_components/SortableSections'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -24,6 +24,8 @@ type TemplateSection = {
   orderIndex: number
   items: TemplateItem[]
   uid?: string
+  // Optional section (below the total divider) — copied into new quotes.
+  excludeFromTotal?: boolean
 }
 
 export type TemplateRow = {
@@ -84,8 +86,12 @@ export default function QuoteTemplatesSettings({ templates: initialTemplates }: 
 
   // ── Section / item editing ───────────────────────────────────────────────
 
+  // New sections go just above the total divider, keeping optional ones last.
   function addSection() {
-    setEditSections((prev) => reindex([...prev, emptySection(0)]))
+    setEditSections((prev) => {
+      const at = dividerIndex(prev)
+      return reindex([...prev.slice(0, at), emptySection(0), ...prev.slice(at)])
+    })
   }
 
   function removeSection(idx: number) {
@@ -187,6 +193,16 @@ export default function QuoteTemplatesSettings({ templates: initialTemplates }: 
     })
   }
 
+  // Fixed row between included and optional sections — same as the quote
+  // builder's, minus the amount (templates don't show totals).
+  const totalDividerIdx = dividerIndex(editSections)
+  const totalDivider = (
+    <SortableTotalDivider className="rounded-lg border-2 border-border bg-surface px-3 py-2.5">
+      <p className="text-sm font-semibold text-fg">Total (ex GST)</p>
+      <p className="text-xs text-fg-muted">Drag sections below this line to make them optional — they&apos;re listed on the PDF but not included in the total.</p>
+    </SortableTotalDivider>
+  )
+
   return (
     <div className="space-y-4">
       {templates.length === 0 && !addingNew && (
@@ -267,12 +283,18 @@ export default function QuoteTemplatesSettings({ templates: initialTemplates }: 
                         onChange={setEditSections}
                         sectionLabel={sectionLabel}
                         itemLabel={(item) => item.description || 'Line item'}
+                        withDivider
                       >
                       {editSections.map((section, sIdx) => (
-                        <SortableSectionCard key={section.uid} uid={section.uid} className="rounded-lg border border-border-subtle overflow-hidden bg-surface">
+                        <Fragment key={section.uid}>
+                        {sIdx === totalDividerIdx && totalDivider}
+                        <SortableSectionCard uid={section.uid} className="rounded-lg border border-border-subtle overflow-hidden bg-surface">
                           {(sectionHandle) => (<>
                           <div className="flex items-center gap-2 bg-surface-raised px-3 py-2">
                             <DragHandle handle={sectionHandle} label="Drag to reorder section" />
+                            {section.excludeFromTotal && (
+                              <span className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-xs font-medium text-fg-muted">Optional</span>
+                            )}
                             <input
                               type="text"
                               value={section.name}
@@ -388,7 +410,9 @@ export default function QuoteTemplatesSettings({ templates: initialTemplates }: 
                           </div>
                           </>)}
                         </SortableSectionCard>
+                        </Fragment>
                       ))}
+                      {totalDividerIdx === editSections.length && totalDivider}
                       </SortableSections>
 
                       <button

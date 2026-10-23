@@ -1,6 +1,6 @@
 'use client'
 
-import { useOptimistic, useState, useTransition } from 'react'
+import { Fragment, useOptimistic, useState, useTransition } from 'react'
 import {
   saveQuote, deleteQuote, getStagesForSite, convertQuoteToExtraJob,
   reorderQuoteSections, reorderQuoteLineItems,
@@ -8,8 +8,8 @@ import {
 import { LOGO_DATA_URL } from '@/lib/pdfAssets'
 import { LABOUR_HOURLY_RATE, BOBCAT_HOURLY_RATE } from '@/lib/pricingPresets'
 import {
-  SortableSections, SortableSectionCard, SortableItems, SortableRow, DragHandle, EmptySectionNotice,
-  newUid, withUids, sectionLabel,
+  SortableSections, SortableSectionCard, SortableItems, SortableRow, SortableTotalDivider, DragHandle, EmptySectionNotice,
+  newUid, withUids, sectionLabel, dividerIndex,
 } from '@/app/_components/SortableSections'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -36,6 +36,10 @@ export type QuoteSection = {
   // QuoteSection without an override (presets, the extra-job source-quote
   // PDF) don't need to be touched.
   overrideSubtotal?: number | null
+  // Optional section, dragged below the builder's total divider: listed
+  // with its own subtotal but not counted in the grand total. Sections are
+  // always ordered included-first (see page.tsx).
+  excludeFromTotal?: boolean
 }
 
 export type CustomTotalLine = {
@@ -104,10 +108,11 @@ function calcSectionSubtotal(section: QuoteSection): number {
 }
 
 // `overrideTotal` wins outright when set; otherwise it's the sum of each
-// section's subtotal (which itself may be overridden).
+// included section's subtotal (which itself may be overridden) — optional
+// sections below the total never count.
 function calcGrandTotal(sections: QuoteSection[], overrideTotal?: number | null): number {
   if (overrideTotal != null) return overrideTotal
-  return sections.reduce((sum, s) => sum + calcSectionSubtotal(s), 0)
+  return sections.reduce((sum, s) => (s.excludeFromTotal ? sum : sum + calcSectionSubtotal(s)), 0)
 }
 
 function statusLabel(s: string): string {
@@ -167,6 +172,7 @@ const QUOTE_STYLES = `
 .html2pdf__container tr.subtotal .gst-breakdown { font-weight: 500; font-size: 9px; color: #555; white-space: nowrap; }
 .html2pdf__container tr.grand td { background: #f0f0f0; font-weight: bold; font-size: 12px; border-top: 3px solid #999; padding: 11px 8px; }
 .html2pdf__container tr.grand .gst-breakdown { font-size: 10px; color: #555; font-weight: 500; white-space: nowrap; }
+.html2pdf__container tr.opt-hdr td { padding: 22px 8px 8px; font-weight: bold; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #444; border-bottom: 2px solid #bbb; }
 .html2pdf__container .quote-notes { margin-top: 18px; padding: 10px 12px; background: #f9f9f9; border: 1px solid #e8e8e8; font-size: 10px; color: #444; white-space: pre-wrap; line-height: 1.5; page-break-inside: avoid; break-inside: avoid; }
 .html2pdf__container .quote-notes .notes-lbl { font-size: 9px; font-weight: bold; text-transform: uppercase; color: #888; letter-spacing: 0.05em; margin-bottom: 4px; }
 .html2pdf__container .note { margin-top: 20px; font-size: 9px; color: #999; }
@@ -191,6 +197,18 @@ function gstAwareAmountCell(exGst: number, includeGst: boolean): string {
 // they carry a subtotal override, since that still counts toward the total.
 function pdfSections(sections: QuoteSection[]): QuoteSection[] {
   return sections.filter((s) => s.items.length > 0 || s.overrideSubtotal != null)
+}
+
+// Optional sections render after the total row(s) under their own heading,
+// each always with its own subtotal (none of them count toward the total).
+const OPTIONAL_HEADING = 'Optional items — not included in total'
+
+function splitPdfSections(sections: QuoteSection[]): { included: QuoteSection[]; optional: QuoteSection[] } {
+  const visible = pdfSections(sections)
+  return {
+    included: visible.filter((s) => !s.excludeFromTotal),
+    optional: visible.filter((s) => s.excludeFromTotal),
+  }
 }
 
 function quoteSectionRows(section: QuoteSection, includeGst: boolean, showSubtotal: boolean): string {
@@ -231,10 +249,13 @@ export function buildQuoteHtml(
 ): string {
   const date = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
   const grandTotal = calcGrandTotal(sections, overrideTotal)
-  const visibleSections = pdfSections(sections)
-  const showSectionSubtotals = visibleSections.length >= 2
+  const { included, optional } = splitPdfSections(sections)
+  const showSectionSubtotals = included.length >= 2
 
-  const rows = visibleSections.map((s) => quoteSectionRows(s, includeGst, showSectionSubtotals)).join('')
+  const rows = included.map((s) => quoteSectionRows(s, includeGst, showSectionSubtotals)).join('')
+  const optionalHtml = optional.length === 0 ? '' : `
+      <tr class="opt-hdr"><td colspan="6">${OPTIONAL_HEADING}</td></tr>
+      ${optional.map((s) => quoteSectionRows(s, includeGst, true)).join('')}`
 
   const totalRowHtml = hideTotal ? '' : `
       <tr class="grand">
@@ -273,9 +294,10 @@ export function buildQuoteHtml(
       </tr>
     </thead>
     <tbody>
-      ${rows || '<tr><td colspan="6" style="color:#aaa;font-style:italic;padding:6px">No sections</td></tr>'}
+      ${rows || optionalHtml ? rows : '<tr><td colspan="6" style="color:#aaa;font-style:italic;padding:6px">No sections</td></tr>'}
       ${totalRowHtml}
       ${customTotalsHtml}
+      ${optionalHtml}
     </tbody>
   </table>
   ${notes ? `<div class="quote-notes"><div class="notes-lbl">Notes / Conditions</div>${notes.replace(/\n/g, '<br>')}</div>` : ''}
@@ -307,6 +329,7 @@ const COMBINED_STYLES = `
 .html2pdf__container tr.sec td { background: #f5f5f5; font-weight: 600; padding-top: 8px; padding-bottom: 8px; border-top: 1px solid #ddd; border-bottom: 1px solid #ddd; }
 .html2pdf__container tr.subtotal td { background: #fafafa; font-weight: 600; padding-top: 8px; padding-bottom: 8px; border-top: 1px solid #ddd; border-bottom: 1px solid #ddd; }
 .html2pdf__container tr.grand td { background: #f0f0f0; font-weight: bold; font-size: 12px; border-top: 3px solid #999; padding: 11px 8px; }
+.html2pdf__container tr.opt-hdr td { padding: 22px 8px 8px; font-weight: bold; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #444; border-bottom: 2px solid #bbb; }
 </style>`
 
 function buildCombinedQuotesPdf(selectedQuotes: QuoteRow[], logoSrc: string): string {
@@ -316,10 +339,10 @@ function buildCombinedQuotesPdf(selectedQuotes: QuoteRow[], logoSrc: string): st
   const quoteBlocks = selectedQuotes.map((q, idx) => {
     const quoteTotal = calcGrandTotal(q.sections, q.overrideTotal)
     grandTotal += quoteTotal
-    const visibleSections = pdfSections(q.sections)
-    const showSectionSubtotals = visibleSections.length >= 2
+    const { included, optional } = splitPdfSections(q.sections)
+    const showSectionSubtotals = included.length >= 2
 
-    const sectionRows = visibleSections.map((section) => {
+    const renderSection = (section: QuoteSection, showSubtotal: boolean) => {
       const subtotal = calcSectionSubtotal(section)
       const rows = section.items.map((item, i) => {
         const lineTotal = (item.qty || 0) * (item.rate || 0)
@@ -334,14 +357,19 @@ function buildCombinedQuotesPdf(selectedQuotes: QuoteRow[], logoSrc: string): st
           </tr>`
       }).join('')
       const header = section.name.trim() ? `<tr class="sec"><td colspan="6">${section.name}</td></tr>` : ''
-      const subtotalRow = showSectionSubtotals
+      const subtotalRow = showSubtotal
         ? `<tr class="subtotal"><td colspan="5">Subtotal</td><td class="r">${fmt(subtotal)}</td></tr>`
         : ''
       return `
         ${header}
         ${rows}
         ${subtotalRow}`
-    }).join('')
+    }
+
+    const sectionRows = included.map((s) => renderSection(s, showSectionSubtotals)).join('')
+    const optionalRows = optional.length === 0 ? '' : `
+          <tr class="opt-hdr"><td colspan="6">${OPTIONAL_HEADING}</td></tr>
+          ${optional.map((s) => renderSection(s, true)).join('')}`
 
     const sectionTitle = [q.siteName, q.reference].filter(Boolean).join(' — ')
 
@@ -369,7 +397,7 @@ function buildCombinedQuotesPdf(selectedQuotes: QuoteRow[], logoSrc: string): st
           </tr>
         </thead>
         <tbody>
-          ${sectionRows || '<tr><td colspan="6" style="color:#aaa;font-style:italic;padding:6px">No sections</td></tr>'}
+          ${sectionRows || optionalRows ? sectionRows : '<tr><td colspan="6" style="color:#aaa;font-style:italic;padding:6px">No sections</td></tr>'}
           ${q.hideTotal ? '' : `
           <tr class="subtotal">
             <td colspan="5">Quote total</td>
@@ -380,6 +408,7 @@ function buildCombinedQuotesPdf(selectedQuotes: QuoteRow[], logoSrc: string): st
             <td colspan="5">${ct.label || ''}</td>
             <td class="r">${fmt(ct.amount)}</td>
           </tr>`).join('')}
+          ${optionalRows}
         </tbody>
       </table>
       ${q.notes ? `<div class="sec-notes">${q.notes.replace(/\n/g, '<br>')}</div>` : ''}
@@ -530,6 +559,9 @@ export default function QuotesView({
   const [convertStages, setConvertStages]     = useState<{ id: string; name: string }[]>([])
   const [converting, startConvertTransition]  = useTransition()
   const [convertError, setConvertError]       = useState<string | null>(null)
+  // Carry optional (below-the-total) sections into the extra job's pricing —
+  // for when the client accepted some of the options.
+  const [convertIncludeOptional, setConvertIncludeOptional] = useState(false)
   const [loadingStages, setLoadingStages]     = useState(false)
 
   // ── Navigation ─────────────────────────────────────────────────────────────
@@ -560,6 +592,7 @@ export default function QuotesView({
             orderIndex: 0,
             items: s.items.length > 0 ? reindex(s.items.map((i) => ({ ...i, id: undefined, uid: undefined }))) : [emptyLine(0)],
             overrideSubtotal: null,
+            excludeFromTotal: s.excludeFromTotal ?? false,
           }))))
         : [emptySection(0)]
     )
@@ -599,8 +632,13 @@ export default function QuotesView({
 
   // ── Section / line item helpers ─────────────────────────────────────────────
 
+  // New sections go at the end of the included ones (just above the total
+  // divider), keeping optional sections last.
   function addSection() {
-    setSections((prev) => reindex([...prev, emptySection(0)]))
+    setSections((prev) => {
+      const at = dividerIndex(prev)
+      return reindex([...prev.slice(0, at), emptySection(0), ...prev.slice(at)])
+    })
   }
 
   function removeSection(sectionIdx: number) {
@@ -663,10 +701,13 @@ export default function QuotesView({
     if (view === 'new') return
     setQuotes((prev) => prev.map((q) => (q.id === view ? { ...q, sections: after } : q)))
 
-    const prevSectionOrder = new Map(before.filter((s) => s.id).map((s) => [s.id, s.orderIndex]))
+    const prevSections = new Map(before.filter((s) => s.id).map((s) => [s.id, s]))
     const sectionUpdates = after
-      .filter((s) => s.id && prevSectionOrder.get(s.id) !== s.orderIndex)
-      .map((s) => ({ id: s.id!, orderIndex: s.orderIndex }))
+      .filter((s) => {
+        const prev = s.id ? prevSections.get(s.id) : undefined
+        return s.id && (prev?.orderIndex !== s.orderIndex || !!prev?.excludeFromTotal !== !!s.excludeFromTotal)
+      })
+      .map((s) => ({ id: s.id!, orderIndex: s.orderIndex, excludeFromTotal: !!s.excludeFromTotal }))
 
     const prevItems = new Map<string, { orderIndex: number; sectionId?: string }>()
     for (const s of before) {
@@ -701,10 +742,12 @@ export default function QuotesView({
     }))
   }
 
+  // Adds to the last included section (above the total), falling back to
+  // the last section when every section is optional.
   function addPreset(desc: string, rate: number) {
     setSections((prev) => {
       if (prev.length === 0) return prev
-      const lastIdx = prev.length - 1
+      const lastIdx = Math.max(dividerIndex(prev), 1) - 1
       return prev.map((s, idx) =>
         idx === lastIdx ? { ...s, items: reindex([...s.items, { description: desc, qty: 1, unit: 'hr', rate, orderIndex: 0, uid: newUid() }]) } : s
       )
@@ -829,6 +872,7 @@ export default function QuotesView({
     setConvertSiteId(quoteSiteId)
     setConvertStageId(quoteStageId)
     setConvertError(null)
+    setConvertIncludeOptional(false)
     fetchStages(quoteSiteId)
   }
 
@@ -844,6 +888,7 @@ export default function QuotesView({
     const targetStageId = convertStageId
     const targetSiteId  = convertSiteId
     const targetStageName = convertStages.find((s) => s.id === targetStageId)?.name ?? ''
+    const includeOptional = convertIncludeOptional
 
     setConvertError(null)
 
@@ -861,6 +906,7 @@ export default function QuotesView({
         fd.set('quote_id', quoteId)
         fd.set('stage_id', targetStageId)
         fd.set('site_id', targetSiteId)
+        fd.set('include_optional', String(includeOptional))
         result = await convertQuoteToExtraJob(fd)
       } catch {
         setConvertError('Failed to convert quote. Please try again.')
@@ -918,6 +964,27 @@ export default function QuotesView({
 
   if (view !== 'list') {
     const isNew = view === 'new'
+
+    // Fixed row between included and optional sections — dragging a section
+    // across it toggles excludeFromTotal (see SortableSections withDivider).
+    const totalDividerIdx = dividerIndex(sections)
+    const totalDivider = (
+      <SortableTotalDivider className="flex items-center justify-between gap-3 flex-wrap rounded-lg border-2 border-border bg-surface-raised px-3 py-2.5">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-fg">
+            Total (ex GST)
+            {hideTotal && <span className="ml-2 text-xs font-normal text-fg-muted">hidden on PDF</span>}
+          </p>
+          <p className="text-xs text-fg-muted">Drag sections below this line to make them optional — they&apos;re listed on the PDF but not included in the total.</p>
+        </div>
+        <span className="flex items-baseline gap-2">
+          <span className="text-sm font-semibold tabular-nums text-fg">{fmt(grandTotal)}</span>
+          {overrideTotal != null && (
+            <span className="text-xs text-fg-muted tabular-nums">(calc {fmt(calculatedGrandTotal)})</span>
+          )}
+        </span>
+      </SortableTotalDivider>
+    )
 
     return (
       <div className="space-y-5">
@@ -1046,16 +1113,24 @@ export default function QuotesView({
               onDrop={persistOrder}
               sectionLabel={sectionLabel}
               itemLabel={(item) => item.description || 'Line item'}
+              withDivider
             >
             {sections.map((section, sIdx) => {
               const sectionSubtotal = calcSectionSubtotal(section)
-              const showSubtotal = sections.length >= 2
+              // Optional sections always show their own subtotal; included
+              // ones only when 2+ sections count toward the total.
+              const showSubtotal = section.excludeFromTotal || totalDividerIdx >= 2
               return (
-                <SortableSectionCard key={section.uid} uid={section.uid} className="rounded-lg border border-border-subtle overflow-hidden">
+                <Fragment key={section.uid}>
+                {sIdx === totalDividerIdx && totalDivider}
+                <SortableSectionCard uid={section.uid} className="rounded-lg border border-border-subtle overflow-hidden">
                   {(sectionHandle) => (<>
                   {/* Section header — name only */}
                   <div className="flex items-center gap-2 bg-surface-raised px-3 py-2">
                     <DragHandle handle={sectionHandle} label="Drag to reorder section" />
+                    {section.excludeFromTotal && (
+                      <span className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-xs font-medium text-fg-muted">Optional</span>
+                    )}
                     <input
                       type="text"
                       value={section.name}
@@ -1201,8 +1276,10 @@ export default function QuotesView({
                   </div>
                   </>)}
                 </SortableSectionCard>
+                </Fragment>
               )
             })}
+            {totalDividerIdx === sections.length && totalDivider}
             </SortableSections>
 
             <button
@@ -1669,6 +1746,22 @@ export default function QuotesView({
                 ))}
               </select>
             </div>
+
+            {/* Only offered when the saved quote actually has optional sections. */}
+            {quotes.find((q) => q.id === convertingQuoteId)?.sections.some((s) => s.excludeFromTotal) && (
+              <label className="flex items-start gap-2 text-sm text-fg-secondary cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={convertIncludeOptional}
+                  onChange={(e) => setConvertIncludeOptional(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-border text-accent-fg focus:ring-green-600 cursor-pointer"
+                />
+                <span>
+                  Include optional sections
+                  <span className="block text-xs text-fg-muted">Tick if the client accepted the optional items — they&apos;ll be added to the extra job&apos;s pricing.</span>
+                </span>
+              </label>
+            )}
 
             {convertError && (
               <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{convertError}</p>
