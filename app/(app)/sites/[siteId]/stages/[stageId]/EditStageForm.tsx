@@ -36,7 +36,7 @@ export default function EditStageForm({ siteId, stageId, name, isAdmin, isContra
       <form action={action} className="space-y-3">
         <input type="hidden" name="site_id"  value={siteId} />
         <input type="hidden" name="stage_id" value={stageId} />
-        <input type="hidden" name="is_contract_pricing" value={contractPricing ? 'true' : 'false'} />
+        {isAdmin && <input type="hidden" name="is_contract_pricing" value={contractPricing ? 'true' : 'false'} />}
 
         <div className="flex items-center gap-2 flex-wrap">
           <input
@@ -62,7 +62,8 @@ export default function EditStageForm({ siteId, stageId, name, isAdmin, isContra
           </button>
         </div>
 
-        {/* Contract pricing toggle */}
+        {/* Contract pricing toggle — admin only */}
+        {isAdmin && (
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-fg-muted">Contract pricing</span>
@@ -94,6 +95,7 @@ export default function EditStageForm({ siteId, stageId, name, isAdmin, isContra
             </div>
           )}
         </div>
+        )}
 
         {state?.error && (
           <p className="text-sm text-red-600 w-full">{state.error}</p>

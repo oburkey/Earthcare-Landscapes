@@ -112,8 +112,8 @@ export default function EditLotForm({
         </div>
       )}
 
-      {/* Contract price — only when stage has contract pricing enabled */}
-      {isContractPricing && canManage && (
+      {/* Contract price — admin only, and only when stage has contract pricing enabled */}
+      {isContractPricing && isAdmin && (
         <div>
           <label htmlFor="contract_price" className="block text-sm font-medium text-fg-secondary">
             Contract price

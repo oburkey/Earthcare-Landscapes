@@ -476,13 +476,16 @@ export async function updateLot(
     updated_by: profile.id,
   }
 
-  // Leading hands, supervisors and admins can also update dates and contract price
+  // Leading hands, supervisors and admins can also update dates
   if (profile.role === 'leading_hand' || profile.role === 'supervisor' || profile.role === 'admin') {
     const rawDue = formData.get('due_date') as string
     const rawScheduled = formData.get('scheduled_date') as string
     updates.due_date = rawDue || null
     updates.scheduled_date = rawScheduled || null
+  }
 
+  // Contract price is admin-only (also enforced by the lots_guard_columns trigger)
+  if (profile.role === 'admin') {
     const rawContractPrice = formData.get('contract_price') as string | null
     if (rawContractPrice !== null) {
       updates.contract_price = rawContractPrice ? parseFloat(rawContractPrice) : null

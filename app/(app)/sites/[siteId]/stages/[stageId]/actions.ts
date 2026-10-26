@@ -389,27 +389,32 @@ export async function updateStage(
 
   if (!name) return { error: 'Stage name is required.' }
 
+  // Contract pricing is admin-only (also enforced by the stages_guard_pricing
+  // trigger) — supervisors can only rename the stage.
+  const isAdmin = profile.role === 'admin'
   const isContractPricing = formData.get('is_contract_pricing') === 'true'
   const rawPrice = formData.get('default_contract_price') as string
   const defaultContractPrice = rawPrice ? parseFloat(rawPrice) : null
 
-  if (isContractPricing && defaultContractPrice !== null && (isNaN(defaultContractPrice) || defaultContractPrice < 0)) {
+  if (isAdmin && isContractPricing && defaultContractPrice !== null && (isNaN(defaultContractPrice) || defaultContractPrice < 0)) {
     return { error: 'Default contract price must be a valid positive number.' }
   }
 
   const supabase = await createClient()
   const { error } = await supabase
     .from('stages')
-    .update({
-      name,
-      is_contract_pricing: isContractPricing,
-      default_contract_price: isContractPricing ? defaultContractPrice : null,
-    })
+    .update(isAdmin
+      ? {
+          name,
+          is_contract_pricing: isContractPricing,
+          default_contract_price: isContractPricing ? defaultContractPrice : null,
+        }
+      : { name })
     .eq('id', stageId)
 
   if (error) return { error: error.message }
 
-  if (isContractPricing && defaultContractPrice !== null) {
+  if (isAdmin && isContractPricing && defaultContractPrice !== null) {
     await supabase
       .from('lots')
       .update({ contract_price: defaultContractPrice, updated_by: profile.id })

@@ -3,8 +3,20 @@
 //   email-only  (profile_id null): admin invited by email, user sets their own name
 
 import { notFound } from 'next/navigation'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import AcceptInviteForm from './AcceptInviteForm'
+
+// Row shape returned by get_invitation_by_token()
+// (supabase/migration_rls_invites_profiles.sql)
+type InvitationLookup = {
+  email:      string
+  role:       string
+  profile_id: string | null
+  sent_at:    string | null
+  created_at: string
+  first_name: string | null
+  last_name:  string | null
+}
 
 export const metadata = { title: 'Accept Invitation — Earthcare Landscapes' }
 
@@ -21,14 +33,13 @@ export default async function InvitePage({ searchParams }: Props) {
   const { token } = await searchParams
   if (!token) notFound()
 
-  const supabase = createAdminClient()
+  // Anonymous visitors can't read invitations directly (RLS) — the
+  // get_invitation_by_token() security definer function returns just this one
+  // pending invite, plus the staff member's name for staff-first invites.
+  const supabase = await createClient()
 
-  const { data: invitation } = await supabase
-    .from('invitations')
-    .select('*')
-    .eq('token', token)
-    .is('accepted_at', null)
-    .single()
+  const { data: rows } = await supabase.rpc('get_invitation_by_token', { p_token: token })
+  const invitation = (rows as InvitationLookup[] | null)?.[0] ?? null
 
   if (!invitation) {
     return (
@@ -61,21 +72,11 @@ export default async function InvitePage({ searchParams }: Props) {
     )
   }
 
-  // For staff-first invites, fetch the name already set by the admin
-  let existingFirstName: string | null = null
-  let existingLastName:  string | null = null
+  // For staff-first invites, the name already set by the admin
+  const existingFirstName = invitation.profile_id ? invitation.first_name : null
+  const existingLastName  = invitation.profile_id ? invitation.last_name  : null
 
-  if (invitation.profile_id) {
-    const { data: p } = await supabase
-      .from('profiles')
-      .select('first_name, last_name')
-      .eq('id', invitation.profile_id)
-      .single()
-    existingFirstName = p?.first_name ?? null
-    existingLastName  = p?.last_name  ?? null
-  }
-
-  const roleLabel   = ROLE_LABELS[invitation.role as string] ?? invitation.role
+  const roleLabel   = ROLE_LABELS[invitation.role] ?? invitation.role
   const displayName = existingFirstName ? `${existingFirstName}${existingLastName ? ` ${existingLastName}` : ''}` : null
 
   return (
