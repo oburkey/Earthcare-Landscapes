@@ -1564,5 +1564,1134 @@ CREATE POLICY "house_types: staff read"
 
 
 -- =============================================================================
+-- 3c. Consolidated from migrations added after 2026-07-22
+-- Structure only (tables, columns, constraints, indexes, triggers, RLS, views).
+-- One-off data fixes, backfills and seed rows from those migrations are NOT
+-- repeated here — see the migration files themselves for those:
+--   quant_sheet_changes, corner_lot_merge, checklist_yesno_to_checkbox,
+--   front_rear_pot_split (5L → 200mm rename), materials_categories_restructure
+--   (unit renames), quote_sections (line_items backfill), budget_quant_sheet
+--   (quote_type backfill), flexible_stock_system (site_stock data copy +
+--   material_types seed), materials_orders / materials_conversion_links /
+--   quote_presets (seed rows).
+-- =============================================================================
+
+
+-- ── Contract pricing (from migration_contract_pricing.sql) ────────────────────
+ALTER TABLE stages ADD COLUMN IF NOT EXISTS is_contract_pricing    boolean NOT NULL DEFAULT false;
+ALTER TABLE stages ADD COLUMN IF NOT EXISTS default_contract_price numeric(10,2);
+ALTER TABLE lots   ADD COLUMN IF NOT EXISTS contract_price         numeric(10,2);
+
+
+-- ── Lot / extra job status columns ───────────────────────────────────────────
+-- delayed / delay_reason (migration_delayed_status.sql)
+ALTER TABLE lots       ADD COLUMN IF NOT EXISTS delayed      boolean NOT NULL DEFAULT false;
+ALTER TABLE lots       ADD COLUMN IF NOT EXISTS delay_reason text;
+ALTER TABLE extra_jobs ADD COLUMN IF NOT EXISTS delayed      boolean NOT NULL DEFAULT false;
+ALTER TABLE extra_jobs ADD COLUMN IF NOT EXISTS delay_reason text;
+
+-- expected_completion_date (migration_prices_delays_photos_species.sql)
+ALTER TABLE lots       ADD COLUMN IF NOT EXISTS expected_completion_date date;
+ALTER TABLE extra_jobs ADD COLUMN IF NOT EXISTS expected_completion_date date;
+
+-- extra_jobs.due_date (migration_extra_job_due_date.sql)
+ALTER TABLE extra_jobs ADD COLUMN IF NOT EXISTS due_date date;
+
+-- extra_jobs.approved_by_name — free text, not a profiles FK
+-- (migration_extra_jobs_approved_by.sql)
+ALTER TABLE extra_jobs ADD COLUMN IF NOT EXISTS approved_by_name text;
+
+-- extra_jobs.finance_notes (migration_extra_job_finance_notes.sql)
+ALTER TABLE extra_jobs ADD COLUMN IF NOT EXISTS finance_notes text;
+
+-- lots.updated_by / lot_checklist_items.completed_by
+-- (migration_lot_activity_attribution.sql)
+ALTER TABLE lots                ADD COLUMN IF NOT EXISTS updated_by   uuid REFERENCES profiles(id) ON DELETE SET NULL;
+ALTER TABLE lot_checklist_items ADD COLUMN IF NOT EXISTS completed_by uuid REFERENCES profiles(id) ON DELETE SET NULL;
+
+-- lots.is_corner (migration_lot_corner_flag.sql)
+ALTER TABLE lots ADD COLUMN IF NOT EXISTS is_corner boolean NOT NULL DEFAULT false;
+
+-- approved_for_invoicing_at (migration_quant_issues.sql)
+ALTER TABLE lots       ADD COLUMN IF NOT EXISTS approved_for_invoicing_at timestamptz;
+ALTER TABLE extra_jobs ADD COLUMN IF NOT EXISTS approved_for_invoicing_at timestamptz;
+
+
+-- ── Photo notes + categories (from migration_prices_delays_photos_species.sql) ─
+ALTER TABLE lot_photos       ADD COLUMN IF NOT EXISTS notes          text;
+ALTER TABLE lot_photos       ADD COLUMN IF NOT EXISTS photo_category text;
+ALTER TABLE extra_job_photos ADD COLUMN IF NOT EXISTS notes          text;
+ALTER TABLE extra_job_photos ADD COLUMN IF NOT EXISTS photo_category text;
+
+DO $$ BEGIN
+  ALTER TABLE lot_photos ADD CONSTRAINT lot_photos_photo_category_check
+    CHECK (photo_category IS NULL OR photo_category IN ('hardscape', 'softscape', 'issue', 'general'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE extra_job_photos ADD CONSTRAINT extra_job_photos_photo_category_check
+    CHECK (photo_category IS NULL OR photo_category IN ('hardscape', 'softscape', 'issue', 'general'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+
+-- ── Plant ratio front/rear pot splits (from migration_front_rear_pot_split.sql) ─
+ALTER TABLE plant_ratio_settings ADD COLUMN IF NOT EXISTS front_pot_split jsonb NOT NULL DEFAULT '{"130mm": 75, "200mm": 25}'::jsonb;
+ALTER TABLE plant_ratio_settings ADD COLUMN IF NOT EXISTS rear_pot_split  jsonb NOT NULL DEFAULT '{"130mm": 75, "200mm": 25}'::jsonb;
+
+
+-- ── Incidents (from migration_incidents.sql) ──────────────────────────────────
+-- reported_by / uploaded_by are nullable + ON DELETE SET NULL per
+-- migration_profile_fk_set_null.sql.
+CREATE TABLE IF NOT EXISTS incidents (
+  id               uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  site_id          uuid        NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+  date             date        NOT NULL,
+  time             time,
+  type             text        NOT NULL CHECK (type IN ('incident', 'near_miss', 'first_aid', 'property_damage')),
+  description      text        NOT NULL,
+  people_involved  text,
+  immediate_action text,
+  reported_by      uuid        REFERENCES profiles(id) ON DELETE SET NULL,
+  admin_notes      text,
+  created_at       timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS incident_photos (
+  id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  incident_id  uuid        NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
+  storage_path text        NOT NULL,
+  uploaded_by  uuid        REFERENCES profiles(id) ON DELETE SET NULL,
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS incidents_site_id_idx           ON incidents(site_id);
+CREATE INDEX IF NOT EXISTS incidents_date_idx              ON incidents(date);
+CREATE INDEX IF NOT EXISTS incidents_type_idx              ON incidents(type);
+CREATE INDEX IF NOT EXISTS incident_photos_incident_id_idx ON incident_photos(incident_id);
+
+ALTER TABLE incidents       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE incident_photos ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "incidents: staff read all" ON incidents;
+CREATE POLICY "incidents: staff read all"
+  ON incidents FOR SELECT
+  USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
+
+DROP POLICY IF EXISTS "incidents: leading_hand+ insert" ON incidents;
+CREATE POLICY "incidents: leading_hand+ insert"
+  ON incidents FOR INSERT
+  WITH CHECK (
+    reported_by = auth.uid()
+    AND current_user_role() IN ('leading_hand', 'supervisor', 'admin')
+  );
+
+DROP POLICY IF EXISTS "incidents: admin update" ON incidents;
+CREATE POLICY "incidents: admin update"
+  ON incidents FOR UPDATE
+  USING (current_user_role() = 'admin')
+  WITH CHECK (current_user_role() = 'admin');
+
+DROP POLICY IF EXISTS "incidents: admin delete" ON incidents;
+CREATE POLICY "incidents: admin delete"
+  ON incidents FOR DELETE
+  USING (current_user_role() = 'admin');
+
+DROP POLICY IF EXISTS "incident_photos: staff read all" ON incident_photos;
+CREATE POLICY "incident_photos: staff read all"
+  ON incident_photos FOR SELECT
+  USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
+
+DROP POLICY IF EXISTS "incident_photos: leading_hand+ insert" ON incident_photos;
+CREATE POLICY "incident_photos: leading_hand+ insert"
+  ON incident_photos FOR INSERT
+  WITH CHECK (
+    uploaded_by = auth.uid()
+    AND current_user_role() IN ('leading_hand', 'supervisor', 'admin')
+  );
+
+DROP POLICY IF EXISTS "incident_photos: admin delete" ON incident_photos;
+CREATE POLICY "incident_photos: admin delete"
+  ON incident_photos FOR DELETE
+  USING (current_user_role() = 'admin');
+
+
+-- ── Quotes (from migration_quote_conversion.sql, migration_quote_fk_fix.sql) ──
+-- line_items is deprecated (replaced by quote_sections / quote_line_items
+-- below) but still exists in the database — not dropped.
+-- created_by is nullable + ON DELETE SET NULL per migration_profile_fk_set_null.sql.
+CREATE TABLE IF NOT EXISTS quotes (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  site_id     uuid REFERENCES sites(id),
+  stage_id    uuid REFERENCES stages(id),
+  reference   text NOT NULL DEFAULT '',
+  description text NOT NULL DEFAULT '',
+  status      text NOT NULL DEFAULT 'draft',
+  line_items  jsonb NOT NULL DEFAULT '[]'::jsonb,
+  notes       text NOT NULL DEFAULT '',
+  created_by  uuid REFERENCES profiles(id) ON DELETE SET NULL,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE quotes ADD COLUMN IF NOT EXISTS stage_id uuid REFERENCES stages(id);
+
+DROP TRIGGER IF EXISTS quotes_updated_at ON quotes;
+CREATE TRIGGER quotes_updated_at
+  BEFORE UPDATE ON quotes
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+ALTER TABLE quotes ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "quotes: supervisor+ full access" ON quotes;
+CREATE POLICY "quotes: supervisor+ full access"
+  ON quotes FOR ALL
+  USING (current_user_role() IN ('supervisor', 'admin'));
+
+-- Extra jobs converted from a quote. Deleting the quote nulls the link.
+ALTER TABLE extra_jobs ADD COLUMN IF NOT EXISTS source_quote_id uuid;
+ALTER TABLE extra_jobs DROP CONSTRAINT IF EXISTS extra_jobs_source_quote_id_fkey;
+ALTER TABLE extra_jobs ADD CONSTRAINT extra_jobs_source_quote_id_fkey
+  FOREIGN KEY (source_quote_id) REFERENCES quotes(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS extra_jobs_source_quote_id_idx ON extra_jobs(source_quote_id);
+
+
+-- ── Quote sections + line items (from migration_quote_sections.sql,
+--    migration_quote_section_exclude_from_total.sql) ─────────────────────────
+-- exclude_from_total = section sits below the builder's total divider
+-- (optional items, not counted in the quote total).
+CREATE TABLE IF NOT EXISTS quote_sections (
+  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  quote_id           uuid NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
+  name               text NOT NULL,
+  order_index        integer NOT NULL DEFAULT 0,
+  exclude_from_total boolean NOT NULL DEFAULT false,
+  created_at         timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE quote_sections ADD COLUMN IF NOT EXISTS exclude_from_total boolean NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS quote_sections_quote_id_idx ON quote_sections(quote_id);
+
+ALTER TABLE quote_sections ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "quote_sections: supervisor+ full access" ON quote_sections;
+CREATE POLICY "quote_sections: supervisor+ full access"
+  ON quote_sections FOR ALL
+  USING (current_user_role() IN ('supervisor', 'admin'));
+
+CREATE TABLE IF NOT EXISTS quote_line_items (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  section_id  uuid NOT NULL REFERENCES quote_sections(id) ON DELETE CASCADE,
+  description text NOT NULL DEFAULT '',
+  qty         numeric(10,3) NOT NULL DEFAULT 0,
+  unit        text NOT NULL DEFAULT 'hr',
+  rate        numeric(10,2) NOT NULL DEFAULT 0,
+  order_index integer NOT NULL DEFAULT 0,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS quote_line_items_section_id_idx ON quote_line_items(section_id);
+
+ALTER TABLE quote_line_items ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "quote_line_items: supervisor+ full access" ON quote_line_items;
+CREATE POLICY "quote_line_items: supervisor+ full access"
+  ON quote_line_items FOR ALL
+  USING (current_user_role() IN ('supervisor', 'admin'));
+
+
+-- ── Quote presets — /quotes builder templates (from migration_quote_presets.sql,
+--    migration_quote_section_exclude_from_total.sql) ─────────────────────────
+-- Not the same as quote_template_* above (those drive the per-lot quant sheet).
+CREATE TABLE IF NOT EXISTS quote_presets (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name        text NOT NULL,
+  description text,
+  is_default  boolean NOT NULL DEFAULT false,
+  order_index integer NOT NULL DEFAULT 0,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE quote_presets ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "quote_presets: internal users read" ON quote_presets;
+CREATE POLICY "quote_presets: internal users read"
+  ON quote_presets FOR SELECT
+  USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
+
+DROP POLICY IF EXISTS "quote_presets: admin write" ON quote_presets;
+CREATE POLICY "quote_presets: admin write"
+  ON quote_presets FOR ALL
+  USING (current_user_role() = 'admin');
+
+CREATE TABLE IF NOT EXISTS quote_preset_sections (
+  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  preset_id          uuid NOT NULL REFERENCES quote_presets(id) ON DELETE CASCADE,
+  name               text NOT NULL DEFAULT '',
+  order_index        integer NOT NULL DEFAULT 0,
+  exclude_from_total boolean NOT NULL DEFAULT false
+);
+ALTER TABLE quote_preset_sections ADD COLUMN IF NOT EXISTS exclude_from_total boolean NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS qpts_preset_id_idx ON quote_preset_sections(preset_id);
+
+ALTER TABLE quote_preset_sections ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "quote_preset_sections: internal users read" ON quote_preset_sections;
+CREATE POLICY "quote_preset_sections: internal users read"
+  ON quote_preset_sections FOR SELECT
+  USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
+
+DROP POLICY IF EXISTS "quote_preset_sections: admin write" ON quote_preset_sections;
+CREATE POLICY "quote_preset_sections: admin write"
+  ON quote_preset_sections FOR ALL
+  USING (current_user_role() = 'admin');
+
+CREATE TABLE IF NOT EXISTS quote_preset_items (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  section_id  uuid NOT NULL REFERENCES quote_preset_sections(id) ON DELETE CASCADE,
+  description text NOT NULL DEFAULT '',
+  qty         numeric NOT NULL DEFAULT 1,
+  unit        text NOT NULL DEFAULT '',
+  rate        numeric NOT NULL DEFAULT 0,
+  order_index integer NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS qpti_section_id_idx ON quote_preset_items(section_id);
+
+ALTER TABLE quote_preset_items ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "quote_preset_items: internal users read" ON quote_preset_items;
+CREATE POLICY "quote_preset_items: internal users read"
+  ON quote_preset_items FOR SELECT
+  USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
+
+DROP POLICY IF EXISTS "quote_preset_items: admin write" ON quote_preset_items;
+CREATE POLICY "quote_preset_items: admin write"
+  ON quote_preset_items FOR ALL
+  USING (current_user_role() = 'admin');
+
+
+-- ── Lot quotes: quote_type + estimate admin-only (from
+--    migration_budget_quant_sheet.sql, migration_lot_quotes_last_edited.sql) ─
+-- quote_type is the source of truth ('budget' is retired: rows kept, never
+-- shown or saved). is_estimated is kept, not dropped.
+ALTER TABLE lot_quotes ADD COLUMN IF NOT EXISTS quote_type text NOT NULL DEFAULT 'final';
+ALTER TABLE lot_quotes ALTER COLUMN quote_type SET DEFAULT 'final';
+ALTER TABLE lot_quotes DROP CONSTRAINT IF EXISTS lot_quotes_quote_type_check;
+ALTER TABLE lot_quotes ADD CONSTRAINT lot_quotes_quote_type_check
+  CHECK (quote_type IN ('estimate', 'budget', 'final'));
+
+ALTER TABLE lot_quotes DROP CONSTRAINT IF EXISTS lot_quotes_lot_id_is_estimated_key;
+ALTER TABLE lot_quotes DROP CONSTRAINT IF EXISTS lot_quotes_lot_id_quote_type_key;
+ALTER TABLE lot_quotes ADD CONSTRAINT lot_quotes_lot_id_quote_type_key UNIQUE (lot_id, quote_type);
+
+ALTER TABLE lot_quotes ADD COLUMN IF NOT EXISTS last_edited_by uuid REFERENCES profiles(id) ON DELETE SET NULL;
+ALTER TABLE lot_quotes ADD COLUMN IF NOT EXISTS last_edited_at timestamptz;
+
+-- Replaces "lot_quotes: leading_hand+ access" / "lot_quote_items: leading_hand+
+-- access" created earlier in this file.
+DROP POLICY IF EXISTS "lot_quotes: leading_hand+ access"                ON lot_quotes;
+DROP POLICY IF EXISTS "lot_quotes: leading_hand+ access to budget/final" ON lot_quotes;
+DROP POLICY IF EXISTS "lot_quotes: admin access to estimate"            ON lot_quotes;
+
+CREATE POLICY "lot_quotes: leading_hand+ access to budget/final"
+  ON lot_quotes FOR ALL
+  USING (
+    quote_type <> 'estimate'
+    AND current_user_role() IN ('leading_hand', 'supervisor', 'admin')
+  );
+
+CREATE POLICY "lot_quotes: admin access to estimate"
+  ON lot_quotes FOR ALL
+  USING (
+    quote_type = 'estimate'
+    AND current_user_role() = 'admin'
+  );
+
+DROP POLICY IF EXISTS "lot_quote_items: leading_hand+ access"                ON lot_quote_items;
+DROP POLICY IF EXISTS "lot_quote_items: leading_hand+ access to budget/final" ON lot_quote_items;
+DROP POLICY IF EXISTS "lot_quote_items: admin access to estimate"            ON lot_quote_items;
+
+CREATE POLICY "lot_quote_items: leading_hand+ access to budget/final"
+  ON lot_quote_items FOR ALL
+  USING (
+    current_user_role() IN ('leading_hand', 'supervisor', 'admin')
+    AND EXISTS (
+      SELECT 1 FROM lot_quotes q
+      WHERE q.id = lot_quote_items.quote_id AND q.quote_type <> 'estimate'
+    )
+  );
+
+CREATE POLICY "lot_quote_items: admin access to estimate"
+  ON lot_quote_items FOR ALL
+  USING (
+    current_user_role() = 'admin'
+    AND EXISTS (
+      SELECT 1 FROM lot_quotes q
+      WHERE q.id = lot_quote_items.quote_id AND q.quote_type = 'estimate'
+    )
+  );
+
+
+-- ── Materials: orders, conversion settings + links (from
+--    migration_materials_orders.sql, migration_materials_orders_rls_fix.sql,
+--    migration_materials_categories_restructure.sql,
+--    migration_materials_conversion_links.sql,
+--    migration_prices_delays_photos_species.sql) ─────────────────────────────
+CREATE TABLE IF NOT EXISTS material_orders (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  site_id         uuid NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+  supplier_id     uuid REFERENCES contacts(id) ON DELETE SET NULL,
+  order_date      date NOT NULL DEFAULT CURRENT_DATE,
+  delivery_date   date,
+  status          text NOT NULL DEFAULT 'draft'
+                  CHECK (status IN ('draft', 'ordered', 'on_hold', 'delivered')),
+  notes           text,
+  invoice_amount  numeric(10,2),
+  delivered_at    timestamptz,
+  created_by      uuid REFERENCES profiles(id) ON DELETE SET NULL,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  updated_at      timestamptz NOT NULL DEFAULT now()
+);
+
+DROP TRIGGER IF EXISTS material_orders_updated_at ON material_orders;
+CREATE TRIGGER material_orders_updated_at
+  BEFORE UPDATE ON material_orders
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- category is free text validated by the app (the original CHECK was dropped
+-- by migration_materials_categories_restructure.sql). plant_type is info
+-- only. stock_field names the material a suggestion-added line item updates.
+CREATE TABLE IF NOT EXISTS material_order_items (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  order_id     uuid NOT NULL REFERENCES material_orders(id) ON DELETE CASCADE,
+  category     text NOT NULL,
+  description  text NOT NULL DEFAULT '',
+  quantity     numeric NOT NULL DEFAULT 0,
+  unit         text NOT NULL DEFAULT '',
+  unit_price   numeric(10,2),
+  notes        text,
+  order_index  int NOT NULL DEFAULT 0,
+  plant_type   text,
+  stock_field  text
+);
+ALTER TABLE material_order_items DROP CONSTRAINT IF EXISTS material_order_items_category_check;
+ALTER TABLE material_order_items ADD COLUMN IF NOT EXISTS plant_type  text;
+ALTER TABLE material_order_items ADD COLUMN IF NOT EXISTS stock_field text;
+
+CREATE TABLE IF NOT EXISTS material_order_attachments (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  order_id        uuid NOT NULL REFERENCES material_orders(id) ON DELETE CASCADE,
+  attachment_type text NOT NULL CHECK (attachment_type IN ('invoice', 'photo', 'document')),
+  storage_path    text NOT NULL,
+  file_name       text NOT NULL,
+  uploaded_by     uuid REFERENCES profiles(id) ON DELETE SET NULL,
+  created_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS material_conversion_settings (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name                text NOT NULL,
+  unit_from           text NOT NULL,
+  unit_to             text NOT NULL,
+  conversion_rate     numeric(10,4) NOT NULL,
+  wastage_pct         numeric(5,2) NOT NULL DEFAULT 0,
+  notes               text,
+  order_index         int NOT NULL DEFAULT 0,
+  created_at          timestamptz NOT NULL DEFAULT now(),
+  default_unit_price  numeric(10,2)
+);
+ALTER TABLE material_conversion_settings ADD COLUMN IF NOT EXISTS default_unit_price numeric(10,2);
+
+CREATE TABLE IF NOT EXISTS material_conversion_links (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  parent_setting_id uuid NOT NULL REFERENCES material_conversion_settings(id) ON DELETE CASCADE,
+  name              text NOT NULL,
+  rate              numeric NOT NULL,
+  unit              text NOT NULL,
+  stock_field       text,
+  order_index       int NOT NULL DEFAULT 0,
+  created_at        timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE material_orders              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE material_order_items         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE material_order_attachments   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE material_conversion_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE material_conversion_links    ENABLE ROW LEVEL SECURITY;
+
+-- material_orders: all staff read, leading_hand+ insert/update, admin delete
+DROP POLICY IF EXISTS "material_orders: all staff read" ON material_orders;
+CREATE POLICY "material_orders: all staff read"
+  ON material_orders FOR SELECT
+  USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
+
+DROP POLICY IF EXISTS "material_orders: leading_hand+ insert" ON material_orders;
+CREATE POLICY "material_orders: leading_hand+ insert"
+  ON material_orders FOR INSERT
+  WITH CHECK (current_user_role() IN ('leading_hand', 'supervisor', 'admin'));
+
+DROP POLICY IF EXISTS "material_orders: leading_hand+ update" ON material_orders;
+CREATE POLICY "material_orders: leading_hand+ update"
+  ON material_orders FOR UPDATE
+  USING (current_user_role() IN ('leading_hand', 'supervisor', 'admin'))
+  WITH CHECK (current_user_role() IN ('leading_hand', 'supervisor', 'admin'));
+
+DROP POLICY IF EXISTS "material_orders: admin delete" ON material_orders;
+CREATE POLICY "material_orders: admin delete"
+  ON material_orders FOR DELETE
+  USING (current_user_role() = 'admin');
+
+-- material_order_items: all staff read, leading_hand+ insert/update/delete
+DROP POLICY IF EXISTS "material_order_items: all staff read" ON material_order_items;
+CREATE POLICY "material_order_items: all staff read"
+  ON material_order_items FOR SELECT
+  USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
+
+DROP POLICY IF EXISTS "material_order_items: leading_hand+ insert" ON material_order_items;
+CREATE POLICY "material_order_items: leading_hand+ insert"
+  ON material_order_items FOR INSERT
+  WITH CHECK (current_user_role() IN ('leading_hand', 'supervisor', 'admin'));
+
+DROP POLICY IF EXISTS "material_order_items: leading_hand+ update" ON material_order_items;
+CREATE POLICY "material_order_items: leading_hand+ update"
+  ON material_order_items FOR UPDATE
+  USING (current_user_role() IN ('leading_hand', 'supervisor', 'admin'))
+  WITH CHECK (current_user_role() IN ('leading_hand', 'supervisor', 'admin'));
+
+DROP POLICY IF EXISTS "material_order_items: leading_hand+ delete" ON material_order_items;
+CREATE POLICY "material_order_items: leading_hand+ delete"
+  ON material_order_items FOR DELETE
+  USING (current_user_role() IN ('leading_hand', 'supervisor', 'admin'));
+
+-- material_order_attachments: all staff read, leading_hand+ insert/delete
+DROP POLICY IF EXISTS "material_order_attachments: all staff read" ON material_order_attachments;
+CREATE POLICY "material_order_attachments: all staff read"
+  ON material_order_attachments FOR SELECT
+  USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
+
+DROP POLICY IF EXISTS "material_order_attachments: leading_hand+ insert" ON material_order_attachments;
+CREATE POLICY "material_order_attachments: leading_hand+ insert"
+  ON material_order_attachments FOR INSERT
+  WITH CHECK (current_user_role() IN ('leading_hand', 'supervisor', 'admin'));
+
+DROP POLICY IF EXISTS "material_order_attachments: leading_hand+ delete" ON material_order_attachments;
+CREATE POLICY "material_order_attachments: leading_hand+ delete"
+  ON material_order_attachments FOR DELETE
+  USING (current_user_role() IN ('leading_hand', 'supervisor', 'admin'));
+
+-- material_conversion_settings / links: all staff read, admin write
+DROP POLICY IF EXISTS "material_conversion_settings: all staff read" ON material_conversion_settings;
+CREATE POLICY "material_conversion_settings: all staff read"
+  ON material_conversion_settings FOR SELECT
+  USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
+
+DROP POLICY IF EXISTS "material_conversion_settings: admin write" ON material_conversion_settings;
+CREATE POLICY "material_conversion_settings: admin write"
+  ON material_conversion_settings FOR ALL
+  USING (current_user_role() = 'admin')
+  WITH CHECK (current_user_role() = 'admin');
+
+DROP POLICY IF EXISTS "material_conversion_links: all staff read" ON material_conversion_links;
+CREATE POLICY "material_conversion_links: all staff read"
+  ON material_conversion_links FOR SELECT
+  USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
+
+DROP POLICY IF EXISTS "material_conversion_links: admin write" ON material_conversion_links;
+CREATE POLICY "material_conversion_links: admin write"
+  ON material_conversion_links FOR ALL
+  USING (current_user_role() = 'admin')
+  WITH CHECK (current_user_role() = 'admin');
+
+
+-- ── Materials: flexible stock (from migration_flexible_stock_system.sql) ──────
+-- Replaces the fixed-column site_stock table (created by
+-- migration_materials_orders.sql, dropped by this migration — so it is not
+-- defined here).
+CREATE TABLE IF NOT EXISTS material_types (
+  id                     uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name                   text NOT NULL,
+  unit                   text NOT NULL,
+  stock_group            text NOT NULL CHECK (stock_group IN ('Plants', 'Mulch', 'Hardscape', 'Retic')),
+  quant_item_names       text[] NOT NULL DEFAULT '{}',
+  conversion_setting_id  uuid REFERENCES material_conversion_settings(id) ON DELETE SET NULL,
+  is_active              boolean NOT NULL DEFAULT true,
+  order_index            int NOT NULL DEFAULT 0,
+  created_at             timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE material_types ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "material_types: all staff read" ON material_types;
+CREATE POLICY "material_types: all staff read"
+  ON material_types FOR SELECT
+  USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
+
+DROP POLICY IF EXISTS "material_types: admin write" ON material_types;
+CREATE POLICY "material_types: admin write"
+  ON material_types FOR ALL
+  USING (current_user_role() = 'admin')
+  WITH CHECK (current_user_role() = 'admin');
+
+CREATE TABLE IF NOT EXISTS site_stock_items (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  site_id             uuid NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+  material_type_id    uuid NOT NULL REFERENCES material_types(id) ON DELETE CASCADE,
+  quantity            numeric(10,3) NOT NULL DEFAULT 0,
+  last_updated_by     uuid REFERENCES profiles(id) ON DELETE SET NULL,
+  last_update_source  text, -- 'manual' | 'order_delivery' | 'quant_deduction'
+  last_update_lot     text, -- lot number, only set when last_update_source = 'quant_deduction'
+  updated_at          timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (site_id, material_type_id)
+);
+
+DROP TRIGGER IF EXISTS site_stock_items_updated_at ON site_stock_items;
+CREATE TRIGGER site_stock_items_updated_at
+  BEFORE UPDATE ON site_stock_items
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+ALTER TABLE site_stock_items ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "site_stock_items: all staff read" ON site_stock_items;
+CREATE POLICY "site_stock_items: all staff read"
+  ON site_stock_items FOR SELECT
+  USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
+
+DROP POLICY IF EXISTS "site_stock_items: leading_hand+ insert" ON site_stock_items;
+CREATE POLICY "site_stock_items: leading_hand+ insert"
+  ON site_stock_items FOR INSERT
+  WITH CHECK (current_user_role() IN ('leading_hand', 'supervisor', 'admin'));
+
+DROP POLICY IF EXISTS "site_stock_items: leading_hand+ update" ON site_stock_items;
+CREATE POLICY "site_stock_items: leading_hand+ update"
+  ON site_stock_items FOR UPDATE
+  USING (current_user_role() IN ('leading_hand', 'supervisor', 'admin'))
+  WITH CHECK (current_user_role() IN ('leading_hand', 'supervisor', 'admin'));
+
+
+-- ── Plant species dictionary (from migration_prices_delays_photos_species.sql) ─
+-- Admin write; the Orders bulk-add flow writes via the admin client.
+CREATE TABLE IF NOT EXISTS plant_species (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name             text UNIQUE NOT NULL,
+  default_pot_size text,
+  created_at       timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE plant_species ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "plant_species: all staff read" ON plant_species;
+CREATE POLICY "plant_species: all staff read"
+  ON plant_species FOR SELECT
+  USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
+
+DROP POLICY IF EXISTS "plant_species: admin write" ON plant_species;
+CREATE POLICY "plant_species: admin write"
+  ON plant_species FOR ALL
+  USING (current_user_role() = 'admin')
+  WITH CHECK (current_user_role() = 'admin');
+
+
+-- ── Email recipients (from migration_email_recipients.sql,
+--    migration_email_recipients_type.sql, migration_quant_issues.sql) ────────
+-- email_type: 'weekly' | 'monthly' | 'both', or NULL for an issues-only
+-- recipient. wants_issues is the independent issues-email flag.
+CREATE TABLE IF NOT EXISTS email_recipients (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  email        text NOT NULL UNIQUE,
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  created_by   uuid REFERENCES profiles(id),
+  email_type   text CHECK (email_type IN ('weekly', 'monthly', 'both')),
+  wants_issues boolean NOT NULL DEFAULT false
+);
+ALTER TABLE email_recipients ADD COLUMN IF NOT EXISTS email_type text CHECK (email_type IN ('weekly', 'monthly', 'both'));
+ALTER TABLE email_recipients ALTER COLUMN email_type DROP NOT NULL;
+ALTER TABLE email_recipients ALTER COLUMN email_type DROP DEFAULT;
+ALTER TABLE email_recipients ADD COLUMN IF NOT EXISTS wants_issues boolean NOT NULL DEFAULT false;
+
+ALTER TABLE email_recipients ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "email_recipients: admin full access" ON email_recipients;
+CREATE POLICY "email_recipients: admin full access"
+  ON email_recipients FOR ALL
+  USING (current_user_role() = 'admin')
+  WITH CHECK (current_user_role() = 'admin');
+
+
+-- ── Invoice run PDF snapshots (from migration_invoice_snapshots.sql) ──────────
+-- NOTE: invoice_runs itself is not defined in this file (created directly in
+-- the Supabase dashboard). snapshot_paths = { lot_id: r2_path }.
+ALTER TABLE invoice_runs ADD COLUMN IF NOT EXISTS snapshot_paths jsonb DEFAULT '{}';
+ALTER TABLE invoice_runs ADD COLUMN IF NOT EXISTS invoiced_at    timestamptz DEFAULT now();
+
+
+-- ── Site files + files_index view (from migration_site_files.sql) ─────────────
+CREATE TABLE IF NOT EXISTS site_files (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  site_id      uuid NOT NULL REFERENCES sites(id)  ON DELETE CASCADE,
+  stage_id     uuid          REFERENCES stages(id) ON DELETE CASCADE,
+  lot_id       uuid          REFERENCES lots(id)   ON DELETE CASCADE,
+  storage_path text NOT NULL,
+  file_name    text NOT NULL,
+  file_type    text NOT NULL CHECK (file_type IN ('photo', 'pdf')),
+  notes        text,
+  uploaded_by  uuid REFERENCES profiles(id) ON DELETE SET NULL,
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  -- A lot can only be linked alongside its stage
+  CONSTRAINT site_files_lot_needs_stage CHECK (lot_id IS NULL OR stage_id IS NOT NULL)
+);
+
+CREATE INDEX IF NOT EXISTS site_files_site_created_idx ON site_files(site_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS site_files_stage_id_idx     ON site_files(stage_id);
+CREATE INDEX IF NOT EXISTS site_files_lot_id_idx       ON site_files(lot_id);
+
+ALTER TABLE site_files ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "site_files: staff read all"           ON site_files;
+DROP POLICY IF EXISTS "site_files: staff insert own"         ON site_files;
+DROP POLICY IF EXISTS "site_files: uploader or admin delete" ON site_files;
+
+CREATE POLICY "site_files: staff read all"
+  ON site_files FOR SELECT
+  USING (current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin'));
+
+CREATE POLICY "site_files: staff insert own"
+  ON site_files FOR INSERT
+  WITH CHECK (
+    current_user_role() IN ('worker', 'leading_hand', 'supervisor', 'admin')
+    AND uploaded_by = auth.uid()
+  );
+
+-- No UPDATE policy — files are immutable once uploaded.
+CREATE POLICY "site_files: uploader or admin delete"
+  ON site_files FOR DELETE
+  USING (
+    current_user_role() = 'admin'
+    OR (
+      current_user_role() IN ('worker', 'leading_hand', 'supervisor')
+      AND uploaded_by = auth.uid()
+    )
+  );
+
+-- Union of every non-pricing file source. security_invoker = true so the
+-- caller's RLS on each underlying table still applies. Housing claims,
+-- invoice snapshots, quote PDFs and material order attachments are
+-- deliberately excluded (pricing).
+DROP VIEW IF EXISTS files_index;
+CREATE VIEW files_index WITH (security_invoker = true) AS
+  SELECT
+    lp.id, 'lot_photo'::text AS source, 'photo'::text AS kind,
+    st.site_id, l.stage_id, lp.lot_id, NULL::uuid AS extra_job_id,
+    lp.storage_path, NULL::text AS file_name, lp.notes,
+    lp.uploaded_by, lp.created_at
+  FROM lot_photos lp
+  JOIN lots   l  ON l.id  = lp.lot_id
+  JOIN stages st ON st.id = l.stage_id
+
+  UNION ALL
+  SELECT
+    ejp.id, 'extra_job_photo', 'photo',
+    st.site_id, ej.stage_id, NULL::uuid, ejp.extra_job_id,
+    ejp.storage_path, NULL::text, ejp.notes,
+    ejp.uploaded_by, ejp.created_at
+  FROM extra_job_photos ejp
+  JOIN extra_jobs ej ON ej.id = ejp.extra_job_id
+  JOIN stages     st ON st.id = ej.stage_id
+
+  UNION ALL
+  SELECT
+    ld.id, 'lot_document', 'document',
+    st.site_id, l.stage_id, ld.lot_id, NULL::uuid,
+    ld.storage_path, ld.document_name, NULL::text,
+    ld.uploaded_by, ld.created_at
+  FROM lot_documents ld
+  JOIN lots   l  ON l.id  = ld.lot_id
+  JOIN stages st ON st.id = l.stage_id
+  WHERE ld.document_type::text <> 'housing_claim'   -- claims can carry pricing
+
+  UNION ALL
+  SELECT
+    spd.id, 'site_plan', 'document',
+    spd.site_id, NULL::uuid, NULL::uuid, NULL::uuid,
+    spd.storage_path, COALESCE(spd.label, 'Site plan'), NULL::text,
+    spd.uploaded_by, spd.created_at
+  FROM site_plan_documents spd
+
+  UNION ALL
+  SELECT
+    sf.id, 'site_file', CASE WHEN sf.file_type = 'pdf' THEN 'document' ELSE 'photo' END,
+    sf.site_id, sf.stage_id, sf.lot_id, NULL::uuid,
+    sf.storage_path, sf.file_name, sf.notes,
+    sf.uploaded_by, sf.created_at
+  FROM site_files sf;
+
+REVOKE ALL    ON files_index FROM anon;
+GRANT  SELECT ON files_index TO authenticated;
+
+
+-- ── Profile FKs → ON DELETE SET NULL (from migration_profile_fk_set_null.sql,
+--    migration_profile_fk_set_null_part2.sql) ──────────────────────────────
+-- Deleting a user nulls author/uploader columns instead of being blocked by
+-- them. Tables defined in section 3c above already declare this inline.
+ALTER TABLE extra_job_photos ALTER COLUMN uploaded_by DROP NOT NULL;
+ALTER TABLE extra_job_photos DROP CONSTRAINT IF EXISTS extra_job_photos_uploaded_by_fkey;
+ALTER TABLE extra_job_photos ADD CONSTRAINT extra_job_photos_uploaded_by_fkey
+  FOREIGN KEY (uploaded_by) REFERENCES profiles(id) ON DELETE SET NULL;
+
+ALTER TABLE lot_photos ALTER COLUMN uploaded_by DROP NOT NULL;
+ALTER TABLE lot_photos DROP CONSTRAINT IF EXISTS lot_photos_uploaded_by_fkey;
+ALTER TABLE lot_photos ADD CONSTRAINT lot_photos_uploaded_by_fkey
+  FOREIGN KEY (uploaded_by) REFERENCES profiles(id) ON DELETE SET NULL;
+
+ALTER TABLE lot_documents ALTER COLUMN uploaded_by DROP NOT NULL;
+ALTER TABLE lot_documents DROP CONSTRAINT IF EXISTS lot_documents_uploaded_by_fkey;
+ALTER TABLE lot_documents ADD CONSTRAINT lot_documents_uploaded_by_fkey
+  FOREIGN KEY (uploaded_by) REFERENCES profiles(id) ON DELETE SET NULL;
+
+ALTER TABLE invitations ALTER COLUMN invited_by DROP NOT NULL;
+ALTER TABLE invitations DROP CONSTRAINT IF EXISTS invitations_invited_by_fkey;
+ALTER TABLE invitations ADD CONSTRAINT invitations_invited_by_fkey
+  FOREIGN KEY (invited_by) REFERENCES profiles(id) ON DELETE SET NULL;
+
+ALTER TABLE site_plan_documents ALTER COLUMN uploaded_by DROP NOT NULL;
+ALTER TABLE site_plan_documents DROP CONSTRAINT IF EXISTS site_plan_documents_uploaded_by_fkey;
+ALTER TABLE site_plan_documents ADD CONSTRAINT site_plan_documents_uploaded_by_fkey
+  FOREIGN KEY (uploaded_by) REFERENCES profiles(id) ON DELETE SET NULL;
+
+ALTER TABLE toolbox_meetings ALTER COLUMN submitted_by DROP NOT NULL;
+ALTER TABLE toolbox_meetings DROP CONSTRAINT IF EXISTS toolbox_meetings_submitted_by_fkey;
+ALTER TABLE toolbox_meetings ADD CONSTRAINT toolbox_meetings_submitted_by_fkey
+  FOREIGN KEY (submitted_by) REFERENCES profiles(id) ON DELETE SET NULL;
+
+ALTER TABLE lot_quotes DROP CONSTRAINT IF EXISTS lot_quotes_quoted_by_fkey;
+ALTER TABLE lot_quotes ADD CONSTRAINT lot_quotes_quoted_by_fkey
+  FOREIGN KEY (quoted_by) REFERENCES profiles(id) ON DELETE SET NULL;
+
+ALTER TABLE plant_ratio_settings DROP CONSTRAINT IF EXISTS plant_ratio_settings_updated_by_fkey;
+ALTER TABLE plant_ratio_settings ADD CONSTRAINT plant_ratio_settings_updated_by_fkey
+  FOREIGN KEY (updated_by) REFERENCES profiles(id) ON DELETE SET NULL;
+
+ALTER TABLE lot_trade_status DROP CONSTRAINT IF EXISTS lot_trade_status_updated_by_fkey;
+ALTER TABLE lot_trade_status ADD CONSTRAINT lot_trade_status_updated_by_fkey
+  FOREIGN KEY (updated_by) REFERENCES profiles(id) ON DELETE SET NULL;
+
+-- NOTE: pre_starts, safety_form_completions, safety_documents and
+-- document_signoffs are not defined in this file (created directly in the
+-- Supabase dashboard); their FK changes are recorded here for accuracy.
+ALTER TABLE pre_starts ALTER COLUMN submitted_by DROP NOT NULL;
+ALTER TABLE pre_starts DROP CONSTRAINT IF EXISTS pre_starts_submitted_by_fkey;
+ALTER TABLE pre_starts ADD CONSTRAINT pre_starts_submitted_by_fkey
+  FOREIGN KEY (submitted_by) REFERENCES profiles(id) ON DELETE SET NULL;
+
+ALTER TABLE safety_form_completions DROP CONSTRAINT IF EXISTS safety_form_completions_profile_id_fkey;
+ALTER TABLE safety_form_completions ADD CONSTRAINT safety_form_completions_profile_id_fkey
+  FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE SET NULL;
+
+ALTER TABLE safety_documents ALTER COLUMN uploaded_by DROP NOT NULL;
+ALTER TABLE safety_documents DROP CONSTRAINT IF EXISTS safety_documents_uploaded_by_fkey;
+ALTER TABLE safety_documents ADD CONSTRAINT safety_documents_uploaded_by_fkey
+  FOREIGN KEY (uploaded_by) REFERENCES profiles(id) ON DELETE SET NULL;
+
+ALTER TABLE document_signoffs ALTER COLUMN signed_by DROP NOT NULL;
+ALTER TABLE document_signoffs DROP CONSTRAINT IF EXISTS document_signoffs_signed_by_fkey;
+ALTER TABLE document_signoffs ADD CONSTRAINT document_signoffs_signed_by_fkey
+  FOREIGN KEY (signed_by) REFERENCES profiles(id) ON DELETE SET NULL;
+
+
+-- =============================================================================
+-- 3d. RLS hardening (from migration_rls_invites_profiles.sql,
+--     migration_rls_lots_extrajobs.sql)
+-- =============================================================================
+
+-- ── Shared helper: which columns changed outside an allowed list ────────────
+-- Returns NULL when nothing outside `allowed` changed. Compares whole rows as
+-- jsonb so columns added later are protected automatically.
+CREATE OR REPLACE FUNCTION changed_columns(old_row jsonb, new_row jsonb, allowed text[])
+RETURNS text[]
+LANGUAGE sql IMMUTABLE
+SET search_path = public
+AS $
+  SELECT array_agg(n.key ORDER BY n.key)
+  FROM jsonb_each(new_row) n
+  WHERE NOT (n.key = ANY (allowed))
+    AND n.value IS DISTINCT FROM (old_row -> n.key);
+$;
+
+
+-- ── 1. invitations: token lookup function replaces "read by token" ─────────
+
+DROP POLICY IF EXISTS "invitations: read by token (unauthenticated)" ON invitations;
+
+-- One pending (not yet accepted) invite for the given token, with only the
+-- fields the invite page shows. Expiry is still checked by the page and by
+-- acceptInvite. The token is compared as text so a malformed token returns
+-- no rows instead of a uuid cast error.
+CREATE OR REPLACE FUNCTION get_invitation_by_token(p_token text)
+RETURNS TABLE (
+  email      text,
+  role       text,
+  profile_id uuid,
+  sent_at    timestamptz,
+  created_at timestamptz,
+  first_name text,
+  last_name  text
+)
+LANGUAGE sql STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $
+  SELECT
+    i.email::text,
+    i.role::text,
+    i.profile_id,
+    i.sent_at::timestamptz,
+    i.created_at,
+    p.first_name::text,
+    p.last_name::text
+  FROM invitations i
+  LEFT JOIN profiles p ON p.id = i.profile_id
+  WHERE i.token::text = p_token
+    AND i.accepted_at IS NULL
+  LIMIT 1;
+$;
+
+REVOKE ALL     ON FUNCTION get_invitation_by_token(text) FROM PUBLIC;
+GRANT  EXECUTE ON FUNCTION get_invitation_by_token(text) TO anon, authenticated;
+
+
+-- ── 2. invitations: supervisors can no longer create invites ────────────────
+
+DROP POLICY IF EXISTS "invitations: supervisors create" ON invitations;
+
+
+-- ── 3. profiles: non-admins can only change their name and phone ───────────
+
+CREATE OR REPLACE FUNCTION profiles_guard_columns()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $
+DECLARE
+  bad text[];
+BEGIN
+  -- Service-role client / SQL editor (no signed-in user), or an admin
+  IF auth.uid() IS NULL OR current_user_role() = 'admin' THEN
+    RETURN NEW;
+  END IF;
+
+  bad := changed_columns(to_jsonb(OLD), to_jsonb(NEW), ARRAY['first_name', 'last_name', 'phone_number']);
+  IF bad IS NOT NULL THEN
+    RAISE EXCEPTION 'Not allowed to change profile field(s): %', array_to_string(bad, ', ')
+      USING ERRCODE = '42501';
+  END IF;
+
+  RETURN NEW;
+END;
+$;
+
+DROP TRIGGER IF EXISTS profiles_guard_columns ON profiles;
+CREATE TRIGGER profiles_guard_columns
+  BEFORE UPDATE ON profiles
+  FOR EACH ROW EXECUTE FUNCTION profiles_guard_columns();
+
+
+-- ── 4. invoice_runs: one current_user_role() policy ─────────────────────────
+
+DROP POLICY IF EXISTS "Admins can manage invoice runs" ON invoice_runs;
+DROP POLICY IF EXISTS "invoice_runs: admin delete"     ON invoice_runs;
+DROP POLICY IF EXISTS "invoice_runs: admin full access" ON invoice_runs;
+
+CREATE POLICY "invoice_runs: admin full access"
+  ON invoice_runs FOR ALL
+  USING (current_user_role() = 'admin')
+  WITH CHECK (current_user_role() = 'admin');
+
+
+-- ── 5. quotes: drop the EXISTS(profiles …) duplicate ────────────────────────
+-- "quotes: supervisor+ full access" (current_user_role(), same roles) stays.
+
+DROP POLICY IF EXISTS "Supervisors and admins can manage quotes" ON quotes;
+
+
+-- ── 1. lots policies ─────────────────────────────────────────────────────────
+
+DROP POLICY IF EXISTS "lots: workers update own status"     ON lots;
+DROP POLICY IF EXISTS "lots: leading_hands write"           ON lots;
+DROP POLICY IF EXISTS "lots: supervisors and admins write"  ON lots;
+DROP POLICY IF EXISTS "lots: leading_hand+ insert"          ON lots;
+DROP POLICY IF EXISTS "lots: leading_hand+ update"          ON lots;
+DROP POLICY IF EXISTS "lots: admin delete"                  ON lots;
+
+-- Read policies ("workers and leading_hands read all", "supervisors and
+-- admins read all", "clients read permitted lots") and "workers update
+-- status" are unchanged.
+
+CREATE POLICY "lots: leading_hand+ insert"
+  ON lots FOR INSERT
+  WITH CHECK (current_user_role() IN ('leading_hand', 'supervisor', 'admin'));
+
+CREATE POLICY "lots: leading_hand+ update"
+  ON lots FOR UPDATE
+  USING (current_user_role() IN ('leading_hand', 'supervisor', 'admin'))
+  WITH CHECK (current_user_role() IN ('leading_hand', 'supervisor', 'admin'));
+
+CREATE POLICY "lots: admin delete"
+  ON lots FOR DELETE
+  USING (current_user_role() = 'admin');
+
+
+-- ── 2. lots column guard ─────────────────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION lots_guard_columns()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $
+DECLARE
+  r          role;
+  admin_cols text[] := ARRAY['contract_price', 'invoiced', 'approved_for_invoicing',
+                             'approved_for_invoicing_at', 'has_client_extras'];
+  bad        text[];
+BEGIN
+  IF auth.uid() IS NULL THEN RETURN NEW; END IF;   -- service role / SQL editor
+  r := current_user_role();
+  IF r = 'admin' THEN RETURN NEW; END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.contract_price IS NOT NULL
+       OR NEW.invoiced
+       OR NEW.approved_for_invoicing
+       OR NEW.approved_for_invoicing_at IS NOT NULL
+       OR NEW.pending_review
+       OR NOT NEW.has_client_extras THEN
+      RAISE EXCEPTION 'Only admins can set pricing or invoicing fields on a new lot'
+        USING ERRCODE = '42501';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF r = 'worker' THEN
+    bad := changed_columns(to_jsonb(OLD), to_jsonb(NEW),
+             ARRAY['status', 'notes', 'completion_date', 'updated_by', 'updated_at']);
+  ELSE
+    bad := ARRAY(
+      SELECT c FROM unnest(admin_cols) c
+      WHERE (to_jsonb(NEW) -> c) IS DISTINCT FROM (to_jsonb(OLD) -> c)
+    );
+    -- Leading hand+ may flag a lot for review, but not clear the flag
+    IF NEW.pending_review IS DISTINCT FROM OLD.pending_review AND NOT NEW.pending_review THEN
+      bad := bad || 'pending_review';
+    END IF;
+    IF cardinality(bad) = 0 THEN bad := NULL; END IF;
+  END IF;
+
+  IF bad IS NOT NULL THEN
+    RAISE EXCEPTION 'Not allowed to change lot field(s): %', array_to_string(bad, ', ')
+      USING ERRCODE = '42501';
+  END IF;
+
+  RETURN NEW;
+END;
+$;
+
+DROP TRIGGER IF EXISTS lots_guard_columns ON lots;
+CREATE TRIGGER lots_guard_columns
+  BEFORE INSERT OR UPDATE ON lots
+  FOR EACH ROW EXECUTE FUNCTION lots_guard_columns();
+
+
+-- ── 3. extra_jobs policies + column guard ───────────────────────────────────
+
+DROP POLICY IF EXISTS "extra_jobs: leading_hands and above write" ON extra_jobs;
+DROP POLICY IF EXISTS "extra_jobs: leading_hand+ insert"          ON extra_jobs;
+DROP POLICY IF EXISTS "extra_jobs: leading_hand+ update"          ON extra_jobs;
+DROP POLICY IF EXISTS "extra_jobs: admin delete"                  ON extra_jobs;
+
+-- Read policies ("staff read all", "clients read permitted") are unchanged.
+
+CREATE POLICY "extra_jobs: leading_hand+ insert"
+  ON extra_jobs FOR INSERT
+  WITH CHECK (current_user_role() IN ('leading_hand', 'supervisor', 'admin'));
+
+CREATE POLICY "extra_jobs: leading_hand+ update"
+  ON extra_jobs FOR UPDATE
+  USING (current_user_role() IN ('leading_hand', 'supervisor', 'admin'))
+  WITH CHECK (current_user_role() IN ('leading_hand', 'supervisor', 'admin'));
+
+CREATE POLICY "extra_jobs: admin delete"
+  ON extra_jobs FOR DELETE
+  USING (current_user_role() = 'admin');
+
+CREATE OR REPLACE FUNCTION extra_jobs_guard_columns()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $
+DECLARE
+  admin_cols text[] := ARRAY['invoiced', 'approved_for_invoicing', 'approved_for_invoicing_at',
+                             'pending_review', 'finance_notes', 'approved_by_name'];
+  bad        text[];
+BEGIN
+  IF auth.uid() IS NULL OR current_user_role() = 'admin' THEN RETURN NEW; END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.invoiced
+       OR NEW.approved_for_invoicing
+       OR NEW.approved_for_invoicing_at IS NOT NULL
+       OR NEW.pending_review
+       OR NEW.finance_notes IS NOT NULL
+       OR NEW.approved_by_name IS NOT NULL THEN
+      RAISE EXCEPTION 'Only admins can set invoicing fields on a new extra job'
+        USING ERRCODE = '42501';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  bad := ARRAY(
+    SELECT c FROM unnest(admin_cols) c
+    WHERE (to_jsonb(NEW) -> c) IS DISTINCT FROM (to_jsonb(OLD) -> c)
+  );
+  IF cardinality(bad) > 0 THEN
+    RAISE EXCEPTION 'Not allowed to change extra job field(s): %', array_to_string(bad, ', ')
+      USING ERRCODE = '42501';
+  END IF;
+
+  RETURN NEW;
+END;
+$;
+
+DROP TRIGGER IF EXISTS extra_jobs_guard_columns ON extra_jobs;
+CREATE TRIGGER extra_jobs_guard_columns
+  BEFORE INSERT OR UPDATE ON extra_jobs
+  FOR EACH ROW EXECUTE FUNCTION extra_jobs_guard_columns();
+
+
+-- ── 4. stages: contract pricing admin only ───────────────────────────────────
+
+CREATE OR REPLACE FUNCTION stages_guard_pricing()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $
+BEGIN
+  IF auth.uid() IS NULL OR current_user_role() = 'admin' THEN RETURN NEW; END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.is_contract_pricing OR NEW.default_contract_price IS NOT NULL THEN
+      RAISE EXCEPTION 'Only admins can set contract pricing on a stage'
+        USING ERRCODE = '42501';
+    END IF;
+  ELSIF NEW.is_contract_pricing IS DISTINCT FROM OLD.is_contract_pricing
+     OR NEW.default_contract_price IS DISTINCT FROM OLD.default_contract_price THEN
+    RAISE EXCEPTION 'Only admins can change contract pricing on a stage'
+      USING ERRCODE = '42501';
+  END IF;
+
+  RETURN NEW;
+END;
+$;
+
+DROP TRIGGER IF EXISTS stages_guard_pricing ON stages;
+CREATE TRIGGER stages_guard_pricing
+  BEFORE INSERT OR UPDATE ON stages
+  FOR EACH ROW EXECUTE FUNCTION stages_guard_pricing();
+
+
+-- =============================================================================
 -- END OF SCHEMA
 -- =============================================================================
