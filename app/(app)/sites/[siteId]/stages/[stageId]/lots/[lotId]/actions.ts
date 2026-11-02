@@ -41,14 +41,20 @@ export async function toggleLotFlag(
   if (flag === 'build_complete') {
     update.build_completed_at = value ? new Date().toISOString() : null
   }
-  if (flag === 'approved_for_invoicing' && value === true) {
-    update.pending_review = false
+  // Same as the Invoices page: approving clears pending_review in the same
+  // update, and approved_for_invoicing_at tracks when the flag turned on.
+  // Un-approving leaves pending_review alone.
+  if (flag === 'approved_for_invoicing') {
+    update.approved_for_invoicing_at = value ? new Date().toISOString() : null
+    if (value) update.pending_review = false
   }
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('lots')
     .update(update)
     .eq('id', lotId)
+    .select('id')
   if (error) return { error: error.message }
+  if (!data || data.length === 0) return { error: 'Update failed — the lot could not be found or you do not have permission to edit it.' }
 
   revalidatePath(`/sites/${siteId}/stages/${stageId}/lots/${lotId}`)
   revalidatePath(`/sites/${siteId}/stages/${stageId}`)

@@ -124,11 +124,13 @@ export async function toggleApprovedForInvoicing(
   }
   if (value) update.pending_review = false
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('lots')
     .update(update)
     .eq('id', lotId)
+    .select('id')
   if (error) return { error: error.message }
+  if (!data || data.length === 0) return { error: 'Update failed — the lot could not be found or you do not have permission to edit it.' }
 
   revalidatePath('/invoices')
   revalidateTag('stages')
@@ -198,11 +200,13 @@ export async function toggleExtraJobApprovedForInvoicing(
   }
   if (value) update.pending_review = false
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('extra_jobs')
     .update(update)
     .eq('id', extraJobId)
+    .select('id')
   if (error) return { error: error.message }
+  if (!data || data.length === 0) return { error: 'Update failed — the extra job could not be found or you do not have permission to edit it.' }
 
   revalidatePath('/invoices')
   return null

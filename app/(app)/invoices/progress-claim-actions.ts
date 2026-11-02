@@ -80,11 +80,13 @@ export async function toggleProgressClaimApprovedForInvoicing(
   if (value) update.pending_review = false
 
   const supabase = await createClient()
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('progress_claims')
     .update(update)
     .eq('id', id)
+    .select('id')
   if (error) return { error: error.message }
+  if (!data || data.length === 0) return { error: 'Update failed — the progress claim could not be found or you do not have permission to edit it.' }
 
   revalidatePath('/invoices')
   return null

@@ -315,13 +315,26 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
     }
   }
 
-  // Saving a final quant sheet flags the lot for admin review.
+  // Saving a final quant sheet flags the lot for admin review — unless the lot
+  // is already approved for invoicing, where re-flagging would leave both
+  // Pending review and Approved ticked.
   if (quoteType === 'final') {
-    const { error: pendingReviewError } = await supabase
+    const { data: lotFlags, error: lotFlagsError } = await supabase
       .from('lots')
-      .update({ pending_review: true, updated_by: profile.id })
+      .select('approved_for_invoicing')
       .eq('id', lotId)
-    if (pendingReviewError) return { error: pendingReviewError.message }
+      .single()
+    if (lotFlagsError) return { error: lotFlagsError.message }
+
+    if (!lotFlags.approved_for_invoicing) {
+      const { data: flagged, error: pendingReviewError } = await supabase
+        .from('lots')
+        .update({ pending_review: true, updated_by: profile.id })
+        .eq('id', lotId)
+        .select('id')
+      if (pendingReviewError) return { error: pendingReviewError.message }
+      if (!flagged || flagged.length === 0) return { error: 'Update failed — the lot could not be found or you do not have permission to edit it.' }
+    }
   }
 
   // Final quant sheet -> site stock deduction. Only deducts the DIFFERENCE
