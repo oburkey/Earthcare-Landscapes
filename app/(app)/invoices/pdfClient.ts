@@ -6,6 +6,7 @@
 // equivalent of this renderer.
 
 import { LOGO_DATA_URL } from '@/lib/pdfAssets'
+import { lotInvoiceTotal } from '@/lib/lotTotals'
 import type { LotSection } from './InvoicesView'
 
 export type ClaimLotData = {
@@ -89,14 +90,15 @@ export const CLAIM_STYLES = `
 
 export function lotClaimHtml(lot: ClaimLotData, hidePricing: boolean = false): string {
   const date  = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
-  // Contract price replaces the Providence Works subtotal only — client
-  // extras always come from the quant sheet regardless of contract pricing.
-  const grand = (lot.contractPrice ?? lot.standardAmount) + lot.clientExtrasAmount
+  // Contract-priced lots: the contract price is the whole amount — client
+  // extras are never added on top (lib/lotTotals.ts).
+  const grand = lotInvoiceTotal(lot) ?? 0
 
   // When hidePricing, a client-extras section with no actual line items
   // (e.g. a template section the lot never used) is dropped entirely rather
-  // than showing an empty header with nothing under it.
-  const extras = lot.showClientExtras
+  // than showing an empty header with nothing under it. On a priced sheet for
+  // a contract lot the extras aren't billed, so they're left off entirely.
+  const extras = lot.showClientExtras && (hidePricing || lot.contractPrice == null)
     ? lot.sections.filter((s) => s.isClientExtra && (!hidePricing || s.items.length > 0))
     : []
   let secIdx = 0

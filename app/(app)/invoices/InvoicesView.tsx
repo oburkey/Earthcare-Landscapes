@@ -10,6 +10,7 @@ import {
 import { getExtraJobsPricing } from '@/app/(app)/sites/[siteId]/stages/[stageId]/extra-jobs/[extraJobId]/pricing-actions'
 import { LOGO_DATA_URL } from '@/lib/pdfAssets'
 import { generateExtraJobPdfBlob, extraJobPdfFilename, downloadBlob, canProduceClaimSheet } from './pdfClient'
+import { lotInvoiceTotal, billedClientExtras } from '@/lib/lotTotals'
 import ProgressClaimsSection from './ProgressClaimsSection'
 import type { ProgressClaimRow } from './ProgressClaimsSection'
 import FinanceNotesField from './FinanceNotesField'
@@ -56,13 +57,11 @@ export type LotRow = {
   hasFinal: boolean
 }
 
-// A lot's real (non-estimate) total. With a Final quant sheet the contract
-// price, if set, still replaces the Providence Works subtotal (client extras
-// always come from the quant sheet); with no Final it's the contract price
-// alone; with neither it's null — callers then show the Estimate as "(est.)".
+// A lot's real (non-estimate) total — see lib/lotTotals.ts. Contract-priced
+// lots are the contract price only; with neither a contract price nor a Final
+// it's null and callers show the Estimate as "(est.)".
 function confirmedTotal(lot: LotRow): number | null {
-  if (lot.hasFinal) return (lot.contractPrice ?? lot.standardAmount) + lot.clientExtrasAmount
-  return lot.contractPrice
+  return lotInvoiceTotal(lot)
 }
 
 // Estimate shown in place of a total when the lot has no confirmed total.
@@ -160,14 +159,15 @@ function claimSheetBody(
 ): string {
   const date = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
 
-  // Contract price replaces the Providence Works subtotal only — client
-  // extras always come from the quant sheet regardless of contract pricing.
-  const grand = (lot.contractPrice ?? lot.standardAmount) + lot.clientExtrasAmount
+  // Contract-priced lots: the contract price is the whole amount — client
+  // extras are never added on top (lib/lotTotals.ts).
+  const grand = lotInvoiceTotal(lot) ?? 0
 
   // When hidePricing, a client-extras section with no actual line items
   // (e.g. a template section the lot never used) is dropped entirely rather
-  // than showing an empty header with nothing under it.
-  const extras = lot.showClientExtras
+  // than showing an empty header with nothing under it. On a priced sheet for
+  // a contract lot the extras aren't billed, so they're left off entirely.
+  const extras = lot.showClientExtras && (hidePricing || lot.contractPrice == null)
     ? lot.sections.filter((s) => s.isClientExtra && (!hidePricing || s.items.length > 0))
     : []
   let secIdx = 0
@@ -307,7 +307,7 @@ function stageSummaryBody(
   const date     = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
   const hasAnyFinalStd = stage.lots.some((l) => l.hasFinal && l.contractPrice == null)
   const totStd   = stage.lots.reduce((s, l) => s + (l.contractPrice != null ? 0 : l.standardAmount), 0)
-  const totExtra = stage.lots.reduce((s, l) => s + l.clientExtrasAmount, 0)
+  const totExtra = stage.lots.reduce((s, l) => s + billedClientExtras(l), 0)
   const totAmt   = stage.lots.reduce((s, l) => s + (confirmedTotal(l) ?? 0), 0)
   const totEst   = stage.lots.reduce((s, l) => s + (estimateFallbackTotal(l) ?? 0), 0)
   const estCell  = (amount: number) => `<span style="color:#888;font-weight:normal">${fmt(amount)} (est.)</span>`
@@ -321,7 +321,7 @@ function stageSummaryBody(
       <td>Lot ${lot.lotNumber}${lot.contractPrice != null ? ' <span style="color:#7c3aed;font-size:9px;font-weight:600">CONTRACT</span>' : ''}</td>
       <td class="c">${lot.buildComplete ? '✓' : '—'}</td>
       <td class="r">${lot.contractPrice != null || !lot.hasFinal ? '—' : fmt(lot.standardAmount)}</td>
-      <td class="r">${lot.clientExtrasAmount > 0 ? fmt(lot.clientExtrasAmount) : '—'}</td>
+      <td class="r">${billedClientExtras(lot) > 0 ? fmt(billedClientExtras(lot)) : '—'}</td>
       <td class="r" style="font-weight:600">${totalCell}</td>
       <td class="c">${inv ? '✓' : ''}</td>
     </tr>`
@@ -955,7 +955,7 @@ export default function InvoicesView({
                   // contract-priced lots; lots with no Final contribute nothing.
                   const hasAnyFinal   = stage.lots.some((l) => l.hasFinal)
                   const totStdDisplay = stage.lots.reduce((s, l) => s + l.standardAmount, 0)
-                  const totExtra      = stage.lots.reduce((s, l) => s + l.clientExtrasAmount, 0)
+                  const totExtra      = stage.lots.reduce((s, l) => s + billedClientExtras(l), 0)
                   const totAmt             = stage.lots.reduce((s, l) => s + (confirmedTotal(l) ?? 0), 0)
                   // Estimates standing in for lots with no Final and no contract price —
                   // kept out of totAmt and shown separately as "(est.)".
@@ -1074,7 +1074,11 @@ export default function InvoicesView({
                                     {lot.hasFinal ? fmt(lot.standardAmount) : <span className="text-fg-muted">—</span>}
                                   </td>
                                   <td className="py-2.5 px-3 text-right tabular-nums text-fg-secondary">
-                                    {lot.clientExtrasAmount > 0 ? fmt(lot.clientExtrasAmount) : <span className="text-fg-muted">—</span>}
+                                    {lot.clientExtrasAmount <= 0 ? <span className="text-fg-muted">—</span>
+                                      : lot.contractPrice != null
+                                        // Info only — never added on top of a contract price
+                                        ? <span className="text-fg-muted line-through" title="Not added — contract price is the full amount">{fmt(lot.clientExtrasAmount)}</span>
+                                        : fmt(lot.clientExtrasAmount)}
                                   </td>
                                   <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-fg whitespace-nowrap">
                                     {total != null ? fmt(total)

@@ -182,7 +182,6 @@ export async function getStageEstimatesExport(
     // This is an estimates export — client extras always come from the
     // estimate quant sheet, same as Budget and the m² columns.
     const clientExtras = clientExtrasTotal(estimateItems)
-    const total        = actual + clientExtras
 
     const rawNotes = (lot as { notes?: string | null }).notes ?? null
     const isCorner = (lot as { is_corner?: boolean }).is_corner ?? false
@@ -190,6 +189,10 @@ export async function getStageEstimatesExport(
 
     const ownContractPrice = (lot as { contract_price?: number | null }).contract_price
     const contractPrice = (ownContractPrice != null ? Number(ownContractPrice) : null) ?? stageDefaultContractPrice
+
+    // Contract-priced lots: Total = contract price only, never + client extras
+    // (lib/lotTotals.ts). The Client Extras column stays as info.
+    const total = contractPrice != null ? contractPrice : actual + clientExtras
 
     result.push({
       lotNumber: lot.lot_number,

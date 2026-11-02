@@ -4,6 +4,7 @@ import { useState, useTransition, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { markAsInvoiced, uploadInvoiceSnapshot, getClaimExtraJobData } from './actions'
 import { generateClaimPdfBlob, pdfFilename, generateExtraJobPdfBlob, extraJobPdfFilename, canProduceClaimSheet, type ClaimLotData } from './pdfClient'
+import { lotInvoiceTotal } from '@/lib/lotTotals'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -189,7 +190,7 @@ export default function ApprovedPanel({
   const selectedClaims = progressClaims.filter((c) => selectedClaimIds.has(c.id))
 
   const runningTotal =
-    selectedLots.reduce((s, l) => s + (l.contractPrice ?? (l.standardAmount + l.clientExtrasAmount)), 0) +
+    selectedLots.reduce((s, l) => s + (lotInvoiceTotal(l) ?? 0), 0) +
     selectedJobs.reduce((s, j) => s + j.amount, 0) +
     selectedClaims.reduce((s, c) => s + c.amount, 0)
 
@@ -293,7 +294,7 @@ export default function ApprovedPanel({
               <div className="rounded-xl border border-green-200 dark:border-green-800 overflow-hidden divide-y divide-green-100 dark:divide-green-900">
                 {lots.map((lot) => {
                   const claimable = canProduceClaimSheet(lot)
-                  const amount  = lot.contractPrice ?? (lot.standardAmount + lot.clientExtrasAmount)
+                  const amount  = lotInvoiceTotal(lot) ?? 0
                   const checked = claimable && selectedLotIds.has(lot.id)
                   return (
                     <label

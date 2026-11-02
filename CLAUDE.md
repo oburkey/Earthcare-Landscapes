@@ -36,7 +36,8 @@
 - Any delete-and-reinsert save must preserve rows the current user can't see (e.g. admin-only Preliminaries). Hidden in the UI must never mean wiped on save
 - Preliminaries must always be present on every estimate and final quant sheet
 - Never silently fall back to a different figure (e.g. showing the Estimate as the Final). If a fallback is shown, label it clearly
-- Contract price = lot contract_price, else stage default. It replaces the Providence Works total only — client extras always come from the quant sheet and are added on top
+- Contract price = lot contract_price, else stage default
+- Contract-priced lots: Total = contract price only. Never add client extras on top of a contract price. (Shared rule: lib/lotTotals.ts)
 - Invoice PDF snapshots always keep full pricing, regardless of any hide-pricing setting
 - Totals are calculated in several places: invoices page, claim sheet PDFs, Approved panel, invoice snapshots, Excel export, analytics. Any change to a total calculation must be checked in all of them; the report must list each and confirm they agree
 - Before finishing any pricing/invoicing change, state whether it could change an invoiced amount. If yes, show a before/after example
