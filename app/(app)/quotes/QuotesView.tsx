@@ -211,27 +211,31 @@ function splitPdfSections(sections: QuoteSection[]): { included: QuoteSection[];
   }
 }
 
-function quoteSectionRows(section: QuoteSection, includeGst: boolean, showSubtotal: boolean): string {
+// hidePricing drops the Rate/Total cells and the subtotal row, leaving a
+// 4-column scope-of-works table (#, description, qty, unit).
+function quoteSectionRows(section: QuoteSection, includeGst: boolean, showSubtotal: boolean, hidePricing: boolean = false): string {
+  const cols = hidePricing ? 4 : 6
   const subtotal = calcSectionSubtotal(section)
   const rows = section.items.map((item, i) => {
     const lineTotal = (item.qty || 0) * (item.rate || 0)
+    const pricingCells = hidePricing ? '' : `
+        <td class="r">${item.rate > 0 ? fmt(item.rate) : '—'}</td>
+        <td class="r">${lineTotal > 0 ? fmt(lineTotal) : '—'}</td>`
     return `
       <tr>
         <td class="n">${i + 1}</td>
         <td>${item.description || ''}</td>
         <td class="r">${item.qty != null ? item.qty : ''}</td>
-        <td>${item.unit || ''}</td>
-        <td class="r">${item.rate > 0 ? fmt(item.rate) : '—'}</td>
-        <td class="r">${lineTotal > 0 ? fmt(lineTotal) : '—'}</td>
+        <td>${item.unit || ''}</td>${pricingCells}
       </tr>`
   }).join('')
-  const header = section.name.trim() ? `<tr class="sec"><td colspan="6">${section.name}</td></tr>` : ''
-  const subtotalRow = showSubtotal
+  const header = section.name.trim() ? `<tr class="sec"><td colspan="${cols}">${section.name}</td></tr>` : ''
+  const subtotalRow = showSubtotal && !hidePricing
     ? `<tr class="subtotal"><td colspan="5">Subtotal</td><td class="r">${gstAwareAmountCell(subtotal, includeGst)}</td></tr>`
     : ''
   return `
     ${header}
-    ${rows || '<tr><td colspan="6" style="color:#aaa;font-style:italic;padding:6px">No line items</td></tr>'}
+    ${rows || `<tr><td colspan="${cols}" style="color:#aaa;font-style:italic;padding:6px">No line items</td></tr>`}
     ${subtotalRow}`
 }
 
@@ -245,24 +249,33 @@ export function buildQuoteHtml(
   includeGst: boolean,
   overrideTotal: number | null = null,
   hideTotal: boolean = false,
-  customTotals: CustomTotalLine[] = []
+  customTotals: CustomTotalLine[] = [],
+  // Export-only "Scope of Works" view: no rates, line totals, subtotals,
+  // totals or $ amounts anywhere. Never saved on the quote.
+  hidePricing: boolean = false
 ): string {
   const date = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
   const grandTotal = calcGrandTotal(sections, overrideTotal)
-  const { included, optional } = splitPdfSections(sections)
+  const split = splitPdfSections(sections)
+  // A section with no items is only kept for its subtotal override — with
+  // pricing hidden there's nothing left to show for it.
+  const hasItems = (s: QuoteSection) => s.items.length > 0
+  const included = hidePricing ? split.included.filter(hasItems) : split.included
+  const optional = hidePricing ? split.optional.filter(hasItems) : split.optional
   const showSectionSubtotals = included.length >= 2
+  const cols = hidePricing ? 4 : 6
 
-  const rows = included.map((s) => quoteSectionRows(s, includeGst, showSectionSubtotals)).join('')
+  const rows = included.map((s) => quoteSectionRows(s, includeGst, showSectionSubtotals, hidePricing)).join('')
   const optionalHtml = optional.length === 0 ? '' : `
-      <tr class="opt-hdr"><td colspan="6">${OPTIONAL_HEADING}</td></tr>
-      ${optional.map((s) => quoteSectionRows(s, includeGst, true)).join('')}`
+      <tr class="opt-hdr"><td colspan="${cols}">${OPTIONAL_HEADING}</td></tr>
+      ${optional.map((s) => quoteSectionRows(s, includeGst, true, hidePricing)).join('')}`
 
-  const totalRowHtml = hideTotal ? '' : `
+  const totalRowHtml = hideTotal || hidePricing ? '' : `
       <tr class="grand">
         <td colspan="5">Total (ex GST)</td>
         <td class="r">${gstAwareAmountCell(grandTotal, includeGst)}</td>
       </tr>`
-  const customTotalsHtml = customTotals.map((ct) => `
+  const customTotalsHtml = hidePricing ? '' : customTotals.map((ct) => `
       <tr class="grand">
         <td colspan="5">${ct.label || ''}</td>
         <td class="r">${fmt(ct.amount)}</td>
@@ -272,7 +285,7 @@ export function buildQuoteHtml(
 <div class="quote-page">
   <div class="hdr">
     <div class="hdr-left">
-      <div class="label">Quote</div>
+      <div class="label">${hidePricing ? 'Scope of Works' : 'Quote'}</div>
       ${siteName ? `<div class="site">${siteName}</div>` : ''}
       ${reference ? `<div class="ref">${reference}</div>` : ''}
       ${description ? `<div class="sub">${description}</div>` : ''}
@@ -288,13 +301,13 @@ export function buildQuoteHtml(
         <th>#</th>
         <th>Description</th>
         <th class="r">Qty</th>
-        <th>Unit</th>
+        <th>Unit</th>${hidePricing ? '' : `
         <th class="r">Rate</th>
-        <th class="r">Total</th>
+        <th class="r">Total</th>`}
       </tr>
     </thead>
     <tbody>
-      ${rows || optionalHtml ? rows : '<tr><td colspan="6" style="color:#aaa;font-style:italic;padding:6px">No sections</td></tr>'}
+      ${rows || optionalHtml ? rows : `<tr><td colspan="${cols}" style="color:#aaa;font-style:italic;padding:6px">No sections</td></tr>`}
       ${totalRowHtml}
       ${customTotalsHtml}
       ${optionalHtml}
@@ -530,6 +543,7 @@ export default function QuotesView({
   const [loadingFormStages, setLoadingFormStages] = useState(false)
   const [convertValidation, setConvertValidation] = useState(false)
   const [includeGst, setIncludeGst]   = useState(false)
+  const [hidePricing, setHidePricing] = useState(false)
 
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set())
   const [saving, setSaving]             = useState(false)
@@ -574,7 +588,7 @@ export default function QuotesView({
     setOverrideTotal(null)
     setHideTotal(false)
     setCustomTotals([])
-    setFormStages([]); setConvertValidation(false); setIncludeGst(false)
+    setFormStages([]); setConvertValidation(false); setIncludeGst(false); setHidePricing(false)
     setActionError(null); setView('new'); setPickerOpen(false)
   }
 
@@ -600,7 +614,7 @@ export default function QuotesView({
     setOverrideTotal(null)
     setHideTotal(false)
     setCustomTotals([])
-    setFormStages([]); setConvertValidation(false); setIncludeGst(false)
+    setFormStages([]); setConvertValidation(false); setIncludeGst(false); setHidePricing(false)
     setActionError(null); setView('new'); setPickerOpen(false)
   }
 
@@ -617,6 +631,7 @@ export default function QuotesView({
     setCustomTotals(q.customTotals ?? [])
     setConvertValidation(false)
     setIncludeGst(false)
+    setHidePricing(false)
     setActionError(null)
     setView(q.id)
     if (q.siteId) {
@@ -946,8 +961,8 @@ export default function QuotesView({
 
   function handleDownloadPDF() {
     const resolvedSiteName = sites.find((s) => s.id === siteId)?.name ?? null
-    const filename = slug(resolvedSiteName, reference || 'Quote') + '.pdf'
-    const html = buildQuoteHtml(resolvedSiteName, reference, description, sections, notes, LOGO_DATA_URL, includeGst, overrideTotal, hideTotal, customTotals)
+    const filename = slug(resolvedSiteName, reference || 'Quote', hidePricing ? 'Scope-of-Works' : null) + '.pdf'
+    const html = buildQuoteHtml(resolvedSiteName, reference, description, sections, notes, LOGO_DATA_URL, includeGst, overrideTotal, hideTotal, customTotals, hidePricing)
     setPdfGenerating(true)
     downloadPDF(html, filename, setActionError, () => setPdfGenerating(false))
   }
@@ -1454,6 +1469,15 @@ export default function QuotesView({
             {pdfGenerating ? <Spinner /> : <PdfIcon />}
             {pdfGenerating ? 'Generating…' : 'Download PDF'}
           </button>
+          <label className="flex items-center gap-1.5 text-sm text-fg-muted cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={hidePricing}
+              onChange={(e) => setHidePricing(e.target.checked)}
+              className="h-4 w-4 rounded border-border text-accent-fg focus:ring-green-600 cursor-pointer"
+            />
+            Hide pricing
+          </label>
           <label className="flex items-center gap-1.5 text-sm text-fg-muted cursor-pointer select-none">
             <input
               type="checkbox"
