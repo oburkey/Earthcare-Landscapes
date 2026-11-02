@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { createTemplate, updateTemplate, setTemplateActive } from './forms-actions'
 import type { SafetyFormType, FormSection, FormItem, FormItemType } from '@/types/database'
+import Modal from '@/app/_components/Modal'
 
 export type TemplateRow = {
   id: string
@@ -220,11 +221,31 @@ export default function FormTemplatesTab({ templates: initial, tableExists }: Pr
 
       {/* Create / Edit modal */}
       {modal && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 overflow-y-auto py-8 px-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-border bg-surface shadow-xl space-y-5 p-6">
-            <h3 className="text-base font-semibold text-fg">
-              {modal.mode === 'create' ? 'New form template' : 'Edit template'}
-            </h3>
+        <Modal
+          title={modal.mode === 'create' ? 'New form template' : 'Edit template'}
+          width="2xl"
+          onClose={() => setModal(null)}
+          footer={
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setModal(null)}
+                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-fg-secondary hover:bg-surface-raised transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50 transition-colors"
+              >
+                {saving ? 'Saving…' : modal.mode === 'create' ? 'Create template' : 'Save changes'}
+              </button>
+            </div>
+          }
+        >
+          <div className="space-y-5">
 
             {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
@@ -389,25 +410,8 @@ export default function FormTemplatesTab({ templates: initial, tableExists }: Pr
               </div>
             )}
 
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setModal(null)}
-                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-fg-secondary hover:bg-surface-raised transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving}
-                className="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50 transition-colors"
-              >
-                {saving ? 'Saving…' : modal.mode === 'create' ? 'Create template' : 'Save changes'}
-              </button>
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
     </>
   )

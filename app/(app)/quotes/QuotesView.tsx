@@ -11,6 +11,7 @@ import {
   SortableSections, SortableSectionCard, SortableItems, SortableRow, SortableTotalDivider, DragHandle, EmptySectionNotice,
   newUid, withUids, sectionLabel, dividerIndex,
 } from '@/app/_components/SortableSections'
+import Modal from '@/app/_components/Modal'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1696,9 +1697,21 @@ export default function QuotesView({
 
       {/* New quote — template picker */}
       {pickerOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-xl border border-border bg-surface p-5 shadow-lg space-y-3">
-            <h2 className="text-lg font-semibold text-fg">New quote</h2>
+        <Modal
+          title="New quote"
+          width="md"
+          onClose={() => setPickerOpen(false)}
+          footer={
+            <button
+              type="button"
+              onClick={() => setPickerOpen(false)}
+              className="py-1 text-sm text-fg-muted hover:text-fg-secondary transition-colors"
+            >
+              Cancel
+            </button>
+          }
+        >
+          <div className="space-y-3">
             <p className="text-sm text-fg-muted">Start from a template or begin with a blank quote.</p>
             <div className="space-y-2">
               <button
@@ -1720,22 +1733,37 @@ export default function QuotesView({
                 </button>
               ))}
             </div>
-            <button
-              type="button"
-              onClick={() => setPickerOpen(false)}
-              className="text-sm text-fg-muted hover:text-fg-secondary transition-colors"
-            >
-              Cancel
-            </button>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Conversion modal */}
       {convertingQuoteId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-xl border border-border bg-surface p-5 shadow-lg space-y-4">
-            <h2 className="text-lg font-semibold text-fg">Convert to extra job</h2>
+        <Modal
+          title="Convert to extra job"
+          width="md"
+          onClose={() => { setConvertingQuoteId(null); setConvertError(null) }}
+          footer={
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleConvert}
+                disabled={converting || !convertStageId}
+                className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-60 transition-colors"
+              >
+                {converting ? 'Converting…' : 'Convert'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setConvertingQuoteId(null); setConvertError(null) }}
+                className="text-sm text-fg-muted hover:text-fg-secondary transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          }
+        >
+          <div className="space-y-4">
             <p className="text-sm text-fg-muted">
               This will create a new extra job on the selected stage with the quote&apos;s line items copied as pricing estimates.
             </p>
@@ -1790,26 +1818,8 @@ export default function QuotesView({
             {convertError && (
               <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{convertError}</p>
             )}
-
-            <div className="flex items-center gap-3 pt-2">
-              <button
-                type="button"
-                onClick={handleConvert}
-                disabled={converting || !convertStageId}
-                className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-60 transition-colors"
-              >
-                {converting ? 'Converting…' : 'Convert'}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setConvertingQuoteId(null); setConvertError(null) }}
-                className="text-sm text-fg-muted hover:text-fg-secondary transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

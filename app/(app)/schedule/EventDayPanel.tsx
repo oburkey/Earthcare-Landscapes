@@ -187,7 +187,7 @@ export default function EventDayPanel({ day, lots, jobs, events, canCreate, user
       />
 
       {/* Panel */}
-      <div className="relative w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl bg-bg border border-border shadow-xl max-h-[90vh] flex flex-col">
+      <div className="relative w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl bg-bg border border-border shadow-xl max-h-[92dvh] sm:max-h-[calc(100dvh-2rem)] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
           <h2 className="text-sm font-semibold text-fg">{formatDate(day)}</h2>
@@ -204,7 +204,7 @@ export default function EventDayPanel({ day, lots, jobs, events, canCreate, user
         </div>
 
         {/* Scrollable content */}
-        <div className="overflow-y-auto flex-1 px-4 py-4 space-y-5">
+        <div className="overflow-y-auto overscroll-contain min-h-0 flex-1 px-4 py-4 space-y-5">
 
           {/* Lots */}
           {lots.length > 0 && (

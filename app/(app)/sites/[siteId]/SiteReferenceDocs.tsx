@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { createReferenceDoc, updateReferenceDoc, deleteReferenceDoc } from '@/app/(app)/safety/forms-actions'
+import Modal from '@/app/_components/Modal'
 
 export type ReferenceDocRow = {
   id: string
@@ -142,35 +143,54 @@ export default function SiteReferenceDocs({ siteId, docs: initial, isAdmin }: Pr
 
       {/* View modal */}
       {modal?.mode === 'view' && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 overflow-y-auto py-8 px-4">
-          <div className="w-full max-w-3xl rounded-2xl border border-border bg-surface shadow-xl">
-            <div className="flex items-center justify-between border-b border-border px-6 py-4">
-              <h3 className="text-base font-semibold text-fg">{modal.doc.title}</h3>
-              <button
-                type="button"
-                onClick={() => setModal(null)}
-                className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-fg-secondary hover:bg-surface-raised transition-colors"
-              >
-                Close
-              </button>
-            </div>
-            <div className="p-6">
-              <div
-                className="prose prose-sm max-w-none text-fg"
-                dangerouslySetInnerHTML={{ __html: modal.doc.contentHtml }}
-              />
-            </div>
-          </div>
-        </div>
+        <Modal
+          title={modal.doc.title}
+          width="3xl"
+          onClose={() => setModal(null)}
+          headerAction={
+            <button
+              type="button"
+              onClick={() => setModal(null)}
+              className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-fg-secondary hover:bg-surface-raised transition-colors"
+            >
+              Close
+            </button>
+          }
+        >
+          <div
+            className="prose prose-sm max-w-none text-fg"
+            dangerouslySetInnerHTML={{ __html: modal.doc.contentHtml }}
+          />
+        </Modal>
       )}
 
       {/* Create / Edit modal */}
       {(modal?.mode === 'create' || modal?.mode === 'edit') && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 overflow-y-auto py-8 px-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-border bg-surface shadow-xl p-6 space-y-4">
-            <h3 className="text-base font-semibold text-fg">
-              {modal.mode === 'create' ? 'New WHS reference document' : 'Edit document'}
-            </h3>
+        <Modal
+          title={modal.mode === 'create' ? 'New WHS reference document' : 'Edit document'}
+          width="2xl"
+          onClose={() => setModal(null)}
+          footer={
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setModal(null)}
+                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-fg-secondary hover:bg-surface-raised transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50 transition-colors"
+              >
+                {saving ? 'Saving…' : modal.mode === 'create' ? 'Create' : 'Save changes'}
+              </button>
+            </div>
+          }
+        >
+          <div className="space-y-4">
 
             {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
@@ -195,25 +215,8 @@ export default function SiteReferenceDocs({ siteId, docs: initial, isAdmin }: Pr
               />
             </div>
 
-            <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setModal(null)}
-                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-fg-secondary hover:bg-surface-raised transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving}
-                className="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50 transition-colors"
-              >
-                {saving ? 'Saving…' : modal.mode === 'create' ? 'Create' : 'Save changes'}
-              </button>
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

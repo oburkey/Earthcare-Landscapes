@@ -321,10 +321,11 @@ export default async function DashboardPage() {
     <div className="min-h-screen bg-bg">
       <div className="mx-auto max-w-4xl px-4 py-6 space-y-6">
 
-        <div className="flex items-start justify-between gap-3">
+        {/* Stacks on phones so the button sits below the greeting, full width */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <Greeting name={profile.first_name} />
           {sitesForModal.length > 0 && (
-            <div className="hidden sm:block shrink-0 pt-1">
+            <div className="sm:shrink-0 sm:pt-1">
               <QuickAddExtraJobModal sites={sitesForModal} />
             </div>
           )}
