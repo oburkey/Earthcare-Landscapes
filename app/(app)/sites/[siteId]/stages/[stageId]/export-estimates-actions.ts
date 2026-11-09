@@ -7,6 +7,7 @@ export type StageEstimateExportLot = {
   lotNumber: string
   homeDesign: string | null
   notes: string | null
+  isCorner: boolean
   frontM2: number
   rearM2: number
   totalM2: number
@@ -198,6 +199,7 @@ export async function getStageEstimatesExport(
       lotNumber: lot.lot_number,
       homeDesign: (lot as { home_design?: string | null }).home_design ?? null,
       notes,
+      isCorner,
       frontM2, rearM2, totalM2,
       costPerM2: totalM2 > 0 ? budget / totalM2 : null,
       budget, contractPrice, actual, clientExtras, total,
