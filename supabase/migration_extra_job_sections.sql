@@ -214,10 +214,10 @@ BEGIN
         UPDATE extra_job_quote_items SET
           description = v_line->>'description',
           unit        = COALESCE(NULLIF(v_line->>'unit', ''), 'No.'),
-          quantity    = (v_line->>'quantity')::numeric,
+          quantity    = NULLIF(v_line->>'quantity', '')::numeric,
           unit_price  = CASE WHEN COALESCE((v_line->>'keep_price')::boolean, false)
                              THEN unit_price
-                             ELSE (v_line->>'unit_price')::numeric END,
+                             ELSE NULLIF(v_line->>'unit_price', '')::numeric END,
           item_type   = 'line',
           section_id  = CASE WHEN v_legacy THEN COALESCE(section_id, v_section_id)
                              ELSE v_section_id END,
@@ -234,10 +234,10 @@ BEGIN
           v_section_id,
           v_line->>'description',
           COALESCE(NULLIF(v_line->>'unit', ''), 'No.'),
-          (v_line->>'quantity')::numeric,
+          NULLIF(v_line->>'quantity', '')::numeric,
           CASE WHEN COALESCE((v_line->>'keep_price')::boolean, false)
                THEN NULL
-               ELSE (v_line->>'unit_price')::numeric END,
+               ELSE NULLIF(v_line->>'unit_price', '')::numeric END,
           'line',
           v_index
         )
@@ -269,3 +269,5 @@ $$;
 
 REVOKE EXECUTE ON FUNCTION save_extra_job_lines(uuid, timestamptz, jsonb) FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION save_extra_job_lines(uuid, timestamptz, jsonb) TO authenticated;
+
+NOTIFY pgrst, 'reload schema';
