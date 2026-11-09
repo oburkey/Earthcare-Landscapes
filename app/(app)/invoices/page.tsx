@@ -7,6 +7,7 @@ import type { ApprovedLot, ApprovedExtraJob, ApprovedProgressClaim } from './App
 import type { InvoiceRun } from './InvoiceHistory'
 import type { ProgressClaimRow } from './ProgressClaimsSection'
 import { getExtraJobsPricing } from '@/app/(app)/sites/[siteId]/stages/[stageId]/extra-jobs/[extraJobId]/pricing-actions'
+import { calcGrandTotal } from '@/lib/quoteTotals'
 
 export const metadata = { title: 'Invoices — Earthcare Landscapes' }
 
@@ -226,23 +227,30 @@ export default async function InvoicesPage() {
     }
   }
 
-  // Quoted amount for extra jobs converted from a quote — sum(qty * rate)
-  // over the source quote's line_items. Jobs created directly (no
-  // source_quote_id) have no quoted amount and show a dash.
+  // Quoted amount for extra jobs converted from a quote — the quote's own
+  // total, same rule as the quote builder (lib/quoteTotals.ts): the total
+  // override if set, else each included section's subtotal (its override if
+  // set, else sum of qty × rate). Optional sections below the total never
+  // count. Jobs created directly (no source_quote_id) show a dash.
   async function fetchQuotedAmountBySourceQuoteId() {
     const byQuoteId = new Map<string, number>()
     if (sourceQuoteIds.length === 0) return byQuoteId
     try {
       const { data, error } = await supabase
         .from('quotes')
-        .select('id, line_items')
+        .select('id, override_total, quote_sections(override_subtotal, exclude_from_total, quote_line_items(qty, rate))')
         .in('id', [...new Set(sourceQuoteIds)])
       if (error || !data) return byQuoteId
       for (const q of data) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const lineItems: any[] = Array.isArray(q.line_items) ? q.line_items : []
-        const total = lineItems.reduce((s, item) => s + (Number(item.qty ?? 0) * Number(item.rate ?? 0)), 0)
-        byQuoteId.set(q.id, total)
+        const sections = ((q.quote_sections ?? []) as any[]).map((s) => ({
+          overrideSubtotal: s.override_subtotal != null ? Number(s.override_subtotal) : null,
+          excludeFromTotal: !!s.exclude_from_total,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          items: ((s.quote_line_items ?? []) as any[]).map((li) => ({ qty: Number(li.qty ?? 0), rate: Number(li.rate ?? 0) })),
+        }))
+        const overrideTotal = q.override_total != null ? Number(q.override_total) : null
+        byQuoteId.set(q.id, calcGrandTotal(sections, overrideTotal))
       }
     } catch {
       // quotes table may not exist yet — skip gracefully

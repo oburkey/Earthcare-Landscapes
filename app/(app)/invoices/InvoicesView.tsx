@@ -3,7 +3,8 @@
 import { Fragment, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSyncedFlagMap } from '@/lib/useSyncedState'
-import { UNAPPROVE_FIRST } from '@/lib/lotReview'
+import { UNAPPROVE_FIRST, UNAPPROVE_FIRST_EXTRA_JOB } from '@/lib/lotReview'
+import { sectionGroups } from '@/lib/extraJobLines'
 import {
   toggleInvoiced, togglePendingReview, toggleApprovedForInvoicing,
   toggleExtraJobComplete, toggleExtraJobPendingReview, toggleExtraJobApprovedForInvoicing, toggleExtraJobInvoiced,
@@ -384,6 +385,8 @@ const EXTRAS_STYLES = `
 .html2pdf__container td { padding: 7px 8px; border-bottom: 1px solid #eee; }
 .html2pdf__container td.r { text-align: right; white-space: nowrap; }
 .html2pdf__container td.code { color: #888; font-size: 10px; white-space: nowrap; }
+.html2pdf__container tr.sec td { background: #e3e3e3; font-weight: bold; font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; padding: 8px 8px 6px; border-bottom: 1px solid #bbb; }
+.html2pdf__container tr.secsub td { font-size: 10px; font-weight: 600; color: #777; padding-top: 5px; padding-bottom: 9px; }
 .html2pdf__container tr.subtotal td { font-weight: 600; border-top: 1px solid #ddd; border-bottom: 2px solid #ccc; background: #fafafa; padding-top: 8px; padding-bottom: 8px; }
 .html2pdf__container tr.grand-total td { font-weight: bold; font-size: 12px; border-top: 3px solid #999; background: #f0f0f0; padding: 11px 8px; }
 .html2pdf__container .note { margin-top: 20px; font-size: 9px; color: #999; }
@@ -397,19 +400,32 @@ function buildExtrasHtml(
   let grandTotal = 0
 
   const jobSections = jobs.map((job, jobIdx) => {
-    const itemRows = job.items.map((item, itemIdx) => {
+    let itemIdx = 0
+    const itemRow = (item: (typeof job.items)[number]) => {
       const total = item.unit_price != null ? item.quantity * item.unit_price : null
       if (total != null) grandTotal += total
       const qty = item.quantity % 1 === 0 ? String(item.quantity) : item.quantity.toFixed(2)
+      itemIdx += 1
       return `<tr>
-        <td class="code">E${jobIdx + 1}.${itemIdx + 1}</td>
+        <td class="code">E${jobIdx + 1}.${itemIdx}</td>
         <td>${item.item_name}</td>
         <td class="r">${qty}</td>
         <td>${item.unit}</td>
         <td class="r">${item.unit_price != null ? fmt(item.unit_price) : '—'}</td>
         <td class="r">${total != null ? fmt(total) : '—'}</td>
       </tr>`
-    }).join('')
+    }
+    // Section headings and subtotals only when the job has a named section.
+    // Display only — the job subtotal is still job.total.
+    const { sectioned, groups } = sectionGroups(job.items, (i) => i.section_id, (i) => i.section_name)
+    const itemRows = !sectioned
+      ? job.items.map(itemRow).join('')
+      : groups.map((g) => {
+          const subtotal = g.items.reduce((sum, i) => (i.unit_price != null ? sum + i.quantity * i.unit_price : sum), 0)
+          return `${g.name ? `<tr class="sec"><td colspan="6">${g.name}</td></tr>` : ''}
+          ${g.items.map(itemRow).join('')}
+          <tr class="secsub"><td colspan="5">Subtotal${g.name ? ` — ${g.name}` : ''}</td><td class="r">${fmt(subtotal)}</td></tr>`
+        }).join('')
 
     return `
       <div class="job-title">${jobIdx + 1}. ${job.title}</div>
@@ -661,6 +677,10 @@ export default function InvoicesView({
 
   function handleToggleExtraJobPendingReview(jobId: string, current: boolean) {
     const next = !current
+    if (next && extraJobApprovedMap[jobId]) {
+      setActionError(UNAPPROVE_FIRST_EXTRA_JOB)
+      return
+    }
     setExtraJobPendingMap((prev) => ({ ...prev, [jobId]: next }))
     setActionError(null)
     const fd = new FormData()
@@ -1221,7 +1241,10 @@ export default function InvoicesView({
                                             type="button"
                                             disabled={!isAdmin}
                                             onClick={() => handleToggleExtraJobPendingReview(job.id, jobPending)}
+                                            title={jobApproved && !jobPending ? 'Un-approve first' : undefined}
                                             className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors whitespace-nowrap disabled:opacity-40 ${
+                                              jobApproved && !jobPending ? 'opacity-50 ' : ''
+                                            }${
                                               jobPending
                                                 ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
                                                 : 'bg-surface-raised text-fg-muted hover:bg-border'

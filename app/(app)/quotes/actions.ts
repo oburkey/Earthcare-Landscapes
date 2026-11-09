@@ -288,7 +288,7 @@ export async function convertQuoteToExtraJob(
 
   const { data: quote, error: quoteError } = await supabase
     .from('quotes')
-    .select('description, reference, quote_sections(order_index, exclude_from_total, quote_line_items(description, qty, unit, rate, order_index))')
+    .select('description, reference, quote_sections(name, order_index, exclude_from_total, quote_line_items(description, qty, unit, rate, order_index))')
     .eq('id', quoteId)
     .single()
 
@@ -318,29 +318,39 @@ export async function convertQuoteToExtraJob(
 
   if (jobError || !job) return { error: jobError?.message ?? 'Failed to create extra job.' }
 
-  // Optional sections (below the total) only become extra-job pricing lines
-  // when the "Include optional sections" box was ticked (accepted options).
-  // Included sections come first, matching the quote's own order.
+  // Every included section is copied with its name and lines (qty, unit and
+  // rate as the line's price), in the quote's order. Optional sections (below
+  // the total) are only copied when "Include optional sections" was ticked,
+  // after the included ones. Section subtotal / total overrides aren't
+  // carried over — the extra job's total is always the sum of its lines.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sections = ((quote.quote_sections as any[]) ?? [])
     .filter((s) => includeOptional || !s.exclude_from_total)
     .sort((a, b) => Number(!!a.exclude_from_total) - Number(!!b.exclude_from_total) || a.order_index - b.order_index)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const lineItems: any[] = sections.flatMap((section) =>
+
+  for (const [sectionIdx, section] of sections.entries()) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ((section.quote_line_items as any[]) ?? [])
+    const lineItems: any[] = ((section.quote_line_items as any[]) ?? [])
       .slice()
       .sort((a, b) => a.order_index - b.order_index)
-  )
-  if (lineItems.length > 0) {
+    if (lineItems.length === 0) continue
+
+    const { data: newSection, error: sectionError } = await supabase
+      .from('extra_job_sections')
+      .insert({ extra_job_id: job.id, name: section.name ?? '', sort_order: sectionIdx })
+      .select('id')
+      .single()
+    if (sectionError || !newSection) return { error: sectionError?.message ?? 'Failed to copy the quote sections.' }
+
     const items = lineItems.map((item, i) => ({
       extra_job_id: job.id,
+      section_id:   newSection.id,
       description:  item.description || '',
       unit:         item.unit || 'hr',
       quantity:     item.qty ?? 0,
       unit_price:   item.rate != null ? item.rate : null,
-      item_type:    `additional_${i + 1}`,
-      sort_order:   200 + i + 1,
+      item_type:    'line',
+      sort_order:   i,
     }))
 
     const { error: itemsError } = await supabase

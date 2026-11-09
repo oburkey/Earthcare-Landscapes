@@ -8,6 +8,7 @@
 import { LOGO_DATA_URL } from '@/lib/pdfAssets'
 import { lotInvoiceTotal } from '@/lib/lotTotals'
 import type { LotSection } from './InvoicesView'
+import { sectionGroups } from '@/lib/extraJobLines'
 
 export type ClaimLotData = {
   id: string
@@ -41,6 +42,8 @@ export type ClaimExtraJobItem = {
   unit: string
   rate: number
   total: number
+  sectionId: string | null
+  sectionName: string
 }
 
 export type ClaimExtraJobData = {
@@ -196,16 +199,31 @@ export function pdfFilename(lot: ClaimLotData): string {
 export function extraJobClaimHtml(job: ClaimExtraJobData): string {
   const date = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
 
-  const tableContent = job.items.length > 0
-    ? `${job.items.map((item, i) => `
+  let itemNo = 0
+  const itemRow = (item: ClaimExtraJobItem) => {
+    itemNo += 1
+    return `
         <tr>
-          <td class="r" style="color:#888;font-size:10px">${i + 1}</td>
+          <td class="r" style="color:#888;font-size:10px">${itemNo}</td>
           <td>${item.name}</td>
           <td class="r">${fmtQty(item.quantity)}</td>
           <td class="u">${item.unit}</td>
           <td class="r">${item.rate > 0 ? fmt(item.rate) : '—'}</td>
           <td class="r">${item.rate > 0 ? fmt(item.total) : '—'}</td>
-        </tr>`).join('')}
+        </tr>`
+  }
+  // Section headings and subtotals only when the job has a named section.
+  // Display only — the grand total is still job.total.
+  const { sectioned, groups } = sectionGroups(job.items, (i) => i.sectionId, (i) => i.sectionName)
+  const itemRows = !sectioned
+    ? job.items.map(itemRow).join('')
+    : groups.map((g) => `
+        ${g.name ? `<tr class="sec"><td colspan="6">${g.name}</td></tr>` : ''}
+        ${g.items.map(itemRow).join('')}
+        <tr class="secsub"><td colspan="5">Subtotal${g.name ? ` — ${g.name}` : ''}</td><td class="r">${fmt(g.items.reduce((sum, i) => sum + i.total, 0))}</td></tr>`).join('')
+
+  const tableContent = job.items.length > 0
+    ? `${itemRows}
       <tr class="grand"><td colspan="5">Grand Total (ex GST)</td><td class="r">${fmt(job.total)}</td></tr>`
     : `
       <tr><td></td><td>Agreed Amount</td><td class="r">1</td><td class="u">Job</td><td class="r">${fmt(job.total)}</td><td class="r">${fmt(job.total)}</td></tr>

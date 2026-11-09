@@ -12,6 +12,7 @@ import {
   newUid, withUids, sectionLabel, dividerIndex,
 } from '@/app/_components/SortableSections'
 import Modal from '@/app/_components/Modal'
+import { calcItemsTotal, calcSectionSubtotal, calcGrandTotal } from '@/lib/quoteTotals'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -98,22 +99,6 @@ type Filter = 'all' | 'draft' | 'sent' | 'accepted'
 
 function fmt(n: number): string {
   return '$' + n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-
-function calcItemsTotal(items: QuoteLineItem[]): number {
-  return items.reduce((sum, item) => sum + (item.qty || 0) * (item.rate || 0), 0)
-}
-
-function calcSectionSubtotal(section: QuoteSection): number {
-  return section.overrideSubtotal ?? calcItemsTotal(section.items)
-}
-
-// `overrideTotal` wins outright when set; otherwise it's the sum of each
-// included section's subtotal (which itself may be overridden) — optional
-// sections below the total never count.
-function calcGrandTotal(sections: QuoteSection[], overrideTotal?: number | null): number {
-  if (overrideTotal != null) return overrideTotal
-  return sections.reduce((sum, s) => (s.excludeFromTotal ? sum : sum + calcSectionSubtotal(s)), 0)
 }
 
 function statusLabel(s: string): string {

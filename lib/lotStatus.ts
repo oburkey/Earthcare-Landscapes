@@ -92,6 +92,18 @@ export function formatDate(dateStr: string | null | undefined): string {
 }
 
 // Short form for inline badges (no year), e.g. "15 Aug".
+// Formats an ISO timestamp as "5 Aug 2026 at 2:30 pm" in Australia/Perth,
+// whatever the viewer's timezone (same output on the server and client).
+export function formatPerthDateTime(iso: string): string {
+  const date = new Intl.DateTimeFormat('en-AU', {
+    timeZone: 'Australia/Perth', day: 'numeric', month: 'short', year: 'numeric',
+  }).format(new Date(iso))
+  const time = new Intl.DateTimeFormat('en-AU', {
+    timeZone: 'Australia/Perth', hour: 'numeric', minute: '2-digit', hour12: true,
+  }).format(new Date(iso)).toLowerCase()
+  return `${date} at ${time}`
+}
+
 export function formatDateShort(dateStr: string | null | undefined): string {
   if (!dateStr) return ''
   const [y, m, d] = dateStr.split('-')

@@ -6,7 +6,7 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { uploadToR2, getR2FileAsDataUrl } from '@/lib/r2'
 import { getExtraJobsPricing } from '@/app/(app)/sites/[siteId]/stages/[stageId]/extra-jobs/[extraJobId]/pricing-actions'
 import type { ActionState } from '@/types/actions'
-import { flagLotForReview, UNAPPROVE_FIRST } from '@/lib/lotReview'
+import { flagLotForReview, flagExtraJobForReview, UNAPPROVE_FIRST, UNAPPROVE_FIRST_EXTRA_JOB } from '@/lib/lotReview'
 import type { ClaimLotData, ClaimExtraJobData } from './pdfClient'
 import type { LotSection } from './InvoicesView'
 
@@ -153,6 +153,15 @@ export async function toggleApprovedForInvoicing(
 
 // ── Extra jobs — same toggle flow as lots ────────────────────────────────────
 
+// The extra job page posts its site/stage ids so its own path is refreshed
+// too; the Invoices page doesn't need them.
+function revalidateExtraJob(formData: FormData, extraJobId: string) {
+  revalidatePath('/invoices')
+  const siteId  = formData.get('site_id') as string | null
+  const stageId = formData.get('stage_id') as string | null
+  if (siteId && stageId) revalidatePath(`/sites/${siteId}/stages/${stageId}/extra-jobs/${extraJobId}`)
+}
+
 export async function toggleExtraJobComplete(
   _prev: ActionState,
   formData: FormData
@@ -190,15 +199,22 @@ export async function toggleExtraJobPendingReview(
   const value = formData.get('value') === 'true'
 
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('extra_jobs')
-    .update({ pending_review: value })
-    .eq('id', extraJobId)
-    .select('id')
-  if (error) return { error: error.message }
-  if (!data || data.length === 0) return { error: 'Update failed — the extra job could not be found or you do not have permission to edit it.' }
+  if (value) {
+    // One-statement update — refuses an approved extra job.
+    const { flagged, error } = await flagExtraJobForReview(supabase, extraJobId)
+    if (error) return { error }
+    if (!flagged) return { error: UNAPPROVE_FIRST_EXTRA_JOB }
+  } else {
+    const { data, error } = await supabase
+      .from('extra_jobs')
+      .update({ pending_review: false })
+      .eq('id', extraJobId)
+      .select('id')
+    if (error) return { error: error.message }
+    if (!data || data.length === 0) return { error: 'Update failed — the extra job could not be found or you do not have permission to edit it.' }
+  }
 
-  revalidatePath('/invoices')
+  revalidateExtraJob(formData, extraJobId)
   return null
 }
 
@@ -227,7 +243,7 @@ export async function toggleExtraJobApprovedForInvoicing(
   if (error) return { error: error.message }
   if (!data || data.length === 0) return { error: 'Update failed — the extra job could not be found or you do not have permission to edit it.' }
 
-  revalidatePath('/invoices')
+  revalidateExtraJob(formData, extraJobId)
   return null
 }
 
@@ -629,6 +645,8 @@ export async function getClaimExtraJobData(
       unit:     i.unit,
       rate:     i.unit_price as number,
       total:    i.quantity * (i.unit_price as number),
+      sectionId:   i.section_id,
+      sectionName: i.section_name,
     }))
 
   const data: ClaimExtraJobData = {

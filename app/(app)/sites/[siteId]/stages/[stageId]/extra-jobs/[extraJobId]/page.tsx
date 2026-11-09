@@ -4,13 +4,14 @@ import { requireAuth } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { getR2SignedUrlSafe } from '@/lib/r2'
 import type { ExtraJobStatus } from '@/types/database'
-import { EXTRA_JOB_STATUS_CONFIG, PHOTO_TYPE_LABELS, formatDate, PHOTO_CATEGORY_LABELS, PHOTO_CATEGORY_BADGE_CLASS } from '@/lib/lotStatus'
+import { EXTRA_JOB_STATUS_CONFIG, PHOTO_TYPE_LABELS, formatDate, formatPerthDateTime, PHOTO_CATEGORY_LABELS, PHOTO_CATEGORY_BADGE_CLASS } from '@/lib/lotStatus'
 import { uploadExtraJobPhoto, setExtraJobDelayed, clearExtraJobDelayed } from './actions'
 import EditExtraJobForm from './EditExtraJobForm'
 import ExtraJobLineItems from './ExtraJobLineItems'
+import ExtraJobInvoicingToggles from './ExtraJobInvoicingToggles'
 import { getExtraJobPresetRates } from './pricing-actions'
 import { MULCH_PRESET_OPTIONS } from '@/lib/extraJobPresets'
-import { EXTRA_JOB_LINES_SELECT, toExtraJobLines } from '@/lib/extraJobLines'
+import { EXTRA_JOB_LINES_SELECT, EXTRA_JOB_SECTIONS_SELECT, toExtraJobSections } from '@/lib/extraJobLines'
 import PhotoUpload from '@/app/_components/PhotoUpload'
 import DelayControl from '@/app/_components/DelayControl'
 import SourceQuotePdf from './SourceQuotePdf'
@@ -47,6 +48,7 @@ export default async function ExtraJobPage({ params }: Props) {
     { data: job },
     { data: photoRows },
     { data: existingItems },
+    { data: existingSections },
     presetRates,
     { data: linesVersion },
   ] = await Promise.all([
@@ -54,6 +56,7 @@ export default async function ExtraJobPage({ params }: Props) {
       .from('extra_jobs')
       .select(`
         id, title, description, status, notes, due_date, source_quote_id, delayed, delay_reason, expected_completion_date,
+        pending_review, approved_for_invoicing, updated_at,
         stages!inner(
           id, name,
           sites!inner(id, name)
@@ -71,12 +74,15 @@ export default async function ExtraJobPage({ params }: Props) {
       .select(EXTRA_JOB_LINES_SELECT)
       .eq('extra_job_id', extraJobId)
       .order('sort_order', { ascending: true }),
+    supabase
+      .from('extra_job_sections')
+      .select(EXTRA_JOB_SECTIONS_SELECT)
+      .eq('extra_job_id', extraJobId),
     getExtraJobPresetRates(),
-    // Separate query so the page still loads before
-    // migration_extra_job_lines_save.sql has added the column.
+    // Separate query so a missing migration column can't stop the page loading
     supabase
       .from('extra_jobs')
-      .select('lines_updated_at')
+      .select('lines_updated_at, profiles!updated_by(first_name, last_name)')
       .eq('id', extraJobId)
       .maybeSingle(),
   ])
@@ -162,6 +168,14 @@ export default async function ExtraJobPage({ params }: Props) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const dueDate = (job as any).due_date as string | null
 
+  // Last edited — any change to the job row (details, status, line saves,
+  // toggles). The name is missing for system writes and for edits made
+  // before migration_extra_job_sections.sql.
+  const editorRaw = (linesVersion as { profiles?: unknown } | null)?.profiles
+  const editor = (Array.isArray(editorRaw) ? editorRaw[0] : editorRaw) as { first_name: string | null; last_name: string | null } | null | undefined
+  const editorName = editor ? [editor.first_name, editor.last_name].filter(Boolean).join(' ') : ''
+  const updatedAt = (job as { updated_at?: string | null }).updated_at ?? null
+
   return (
     <div className="min-h-screen bg-bg">
       <div className="mx-auto max-w-4xl px-4 py-6 space-y-5">
@@ -184,6 +198,22 @@ export default async function ExtraJobPage({ params }: Props) {
             {cfg.label}
           </span>
         </div>
+        {canManage && updatedAt && (
+          <p className="-mt-3 text-xs text-fg-muted">
+            {editorName ? `Last edited by ${editorName}` : 'Last edited'} · {formatPerthDateTime(updatedAt)}
+          </p>
+        )}
+
+        {/* Invoicing — admin only, same rules as the Invoices page */}
+        {isAdmin && (
+          <ExtraJobInvoicingToggles
+            extraJobId={extraJobId}
+            siteId={siteId}
+            stageId={stageId}
+            pendingReview={(job as { pending_review?: boolean }).pending_review ?? false}
+            approvedForInvoicing={(job as { approved_for_invoicing?: boolean }).approved_for_invoicing ?? false}
+          />
+        )}
 
         {/* Delayed */}
         <DelayControl
@@ -299,7 +329,7 @@ export default async function ExtraJobPage({ params }: Props) {
             stageId={stageId}
             canManage={canManage}
             isAdmin={isAdmin}
-            existingLines={toExtraJobLines(existingItems ?? [], isAdmin)}
+            existingSections={toExtraJobSections(existingSections ?? [], existingItems ?? [], isAdmin)}
             linesUpdatedAt={(linesVersion as { lines_updated_at?: string | null } | null)?.lines_updated_at ?? null}
             presets={{
               labourRate:   isAdmin ? presetRates.labour : null,

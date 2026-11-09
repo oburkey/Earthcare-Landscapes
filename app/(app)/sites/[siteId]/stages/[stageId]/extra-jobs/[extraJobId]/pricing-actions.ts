@@ -5,7 +5,7 @@ import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { LABOUR_HOURLY_RATE, BOBCAT_HOURLY_RATE } from '@/lib/pricingPresets'
 import { TEMPLATE_PRESET_ITEM_NAMES } from '@/lib/extraJobPresets'
-import { EXTRA_JOB_LINES_SELECT, toExtraJobLines, type ExtraJobLine } from '@/lib/extraJobLines'
+import { EXTRA_JOB_LINES_SELECT, EXTRA_JOB_SECTIONS_SELECT, toExtraJobSections, type ExtraJobSection } from '@/lib/extraJobLines'
 
 // ── Quick-add presets ───────────────────────────────────────────────────────────
 // Rates for the "Mulch / Edging / Turf" quick-add chips are pulled live from
@@ -56,17 +56,23 @@ type LinePayload = {
   presetKey: string | null
 }
 
+type SectionPayload = {
+  id: string | null
+  name: string
+  lines: LinePayload[]
+}
+
 export type SaveExtraJobLinesResult = {
   error?: string
-  lines?: ExtraJobLine[]
+  sections?: ExtraJobSection[]
   linesUpdatedAt?: string | null
 }
 
-// Saves through save_extra_job_lines (migration_extra_job_lines_save.sql) —
-// one transaction that updates existing lines in place by id, inserts new
-// ones, deletes removed ones, and refuses the save if someone else saved the
-// lines since this page loaded. Returns the saved lines so the table picks up
-// the ids of newly inserted rows.
+// Saves through save_extra_job_lines (migration_extra_job_sections.sql) —
+// one transaction that updates existing sections and lines in place by id,
+// inserts new ones, deletes removed ones, and refuses the save if someone
+// else saved the lines since this page loaded. Returns the saved sections so
+// the table picks up the ids of newly inserted rows.
 export async function saveExtraJobLineItems(
   _prev: unknown,
   formData: FormData
@@ -84,71 +90,88 @@ export async function saveExtraJobLineItems(
   // comparison is exact to the microsecond.
   const expectedLinesUpdatedAt = (formData.get('lines_updated_at') as string) || null
 
-  let lines: LinePayload[] = []
+  let sections: SectionPayload[] = []
   try {
-    lines = JSON.parse((formData.get('lines') as string) || '[]')
+    sections = JSON.parse((formData.get('sections') as string) || '[]')
   } catch {
     return { error: 'Invalid line items payload.' }
   }
+  if (!Array.isArray(sections)) return { error: 'Invalid line items payload.' }
 
   const supabase = await createClient()
   const isAdmin = profile.role === 'admin'
   const presetRates = await getExtraJobPresetRates()
 
   const payload = []
-  for (const line of lines) {
-    const description = (line.description ?? '').trim()
-    const qtyText     = (line.qty ?? '').trim()
-    // Non-admins never see or send rates
-    const rateText    = isAdmin ? (line.rate ?? '').trim() : ''
-    // Only completely blank rows are dropped. Anything with a description is
-    // kept, with an empty qty / price saved as null (counted as $0).
-    if (!description && !qtyText && !rateText) continue
+  for (const section of sections) {
+    const name  = (section.name ?? '').trim()
+    const lines = []
+    for (const line of section.lines ?? []) {
+      const description = (line.description ?? '').trim()
+      const qtyText     = (line.qty ?? '').trim()
+      // Non-admins never see or send rates
+      const rateText    = isAdmin ? (line.rate ?? '').trim() : ''
+      // Only completely blank rows are dropped. Anything with a description
+      // is kept, with an empty qty / price saved as null (counted as $0).
+      if (!description && !qtyText && !rateText) continue
 
-    const qty = parseFloat(qtyText)
+      const qty = parseFloat(qtyText)
 
-    // keep_price: leave an existing line's price (and template link) as it
-    // is — non-admins can't see prices, so their save must never change one.
-    let unitPrice: number | null = null
-    let keepPrice = false
-    if (line.presetKey && presetRates[line.presetKey] != null) {
-      // Preset-sourced lines always take the live rate, so a price changed
-      // in Settings applies even to lines quick-added by a leading hand.
-      unitPrice = presetRates[line.presetKey]
-    } else if (isAdmin) {
-      const parsed = parseFloat(rateText)
-      unitPrice = isNaN(parsed) ? null : parsed
-    } else {
-      keepPrice = true
+      // keep_price: leave an existing line's price (and template link) as it
+      // is — non-admins can't see prices, so their save must never change one.
+      let unitPrice: number | null = null
+      let keepPrice = false
+      if (line.presetKey && presetRates[line.presetKey] != null) {
+        // Preset-sourced lines always take the live rate, so a price changed
+        // in Settings applies even to lines quick-added by a leading hand.
+        unitPrice = presetRates[line.presetKey]
+      } else if (isAdmin) {
+        const parsed = parseFloat(rateText)
+        unitPrice = isNaN(parsed) ? null : parsed
+      } else {
+        keepPrice = true
+      }
+
+      lines.push({
+        id:          line.id,
+        description: description || null,
+        unit:        (line.unit ?? '').trim() || 'No.',
+        quantity:    isNaN(qty) ? null : qty,
+        unit_price:  unitPrice,
+        keep_price:  keepPrice,
+      })
     }
-
-    payload.push({
-      id:          line.id,
-      description: description || null,
-      unit:        (line.unit ?? '').trim() || 'No.',
-      quantity:    isNaN(qty) ? null : qty,
-      unit_price:  unitPrice,
-      keep_price:  keepPrice,
-    })
+    // An unnamed section left with no lines is dropped; a named one is kept
+    // even when empty.
+    if (!name && lines.length === 0) continue
+    payload.push({ id: section.id, name, lines })
   }
 
   const { data: linesUpdatedAt, error } = await supabase.rpc('save_extra_job_lines', {
     p_extra_job_id:              extraJobId,
     p_expected_lines_updated_at: expectedLinesUpdatedAt,
-    p_lines:                     payload,
+    p_lines:                     { sections: payload },
   })
   if (error) return { error: error.message }
 
-  const { data: rows, error: reloadError } = await supabase
-    .from('extra_job_quote_items')
-    .select(EXTRA_JOB_LINES_SELECT)
-    .eq('extra_job_id', extraJobId)
-    .order('sort_order', { ascending: true })
+  const [{ data: sectionRows, error: sectionsError }, { data: lineRows, error: linesError }] = await Promise.all([
+    supabase
+      .from('extra_job_sections')
+      .select(EXTRA_JOB_SECTIONS_SELECT)
+      .eq('extra_job_id', extraJobId),
+    supabase
+      .from('extra_job_quote_items')
+      .select(EXTRA_JOB_LINES_SELECT)
+      .eq('extra_job_id', extraJobId)
+      .order('sort_order', { ascending: true }),
+  ])
+  const reloadError = sectionsError ?? linesError
   if (reloadError) return { error: `Saved, but reloading the lines failed: ${reloadError.message}. Reload the page.` }
 
   revalidatePath(`/sites/${siteId}/stages/${stageId}/extra-jobs/${extraJobId}`)
+  revalidatePath('/invoices')
   return {
-    lines: toExtraJobLines(rows ?? [], isAdmin),
+    sections: toExtraJobSections(sectionRows ?? [], lineRows ?? [], isAdmin),
     linesUpdatedAt: (linesUpdatedAt as string | null) ?? null,
   }
 }
@@ -162,6 +185,9 @@ export type ExtraJobPricingItem = {
   unit_price: number | null
   item_type: string
   sort_order: number
+  // null only for a line not yet in a section (shown first)
+  section_id: string | null
+  section_name: string
 }
 
 export type ExtraJobPricingData = {
@@ -180,8 +206,9 @@ export async function getExtraJobsPricing(jobIds: string[]): Promise<ExtraJobPri
     supabase
       .from('extra_job_quote_items')
       .select(`
-        extra_job_id, description, unit, quantity, unit_price, item_type, sort_order,
-        quote_template_items(name, unit_price)
+        extra_job_id, section_id, description, unit, quantity, unit_price, item_type, sort_order,
+        quote_template_items(name, unit_price),
+        extra_job_sections(name, sort_order)
       `)
       .in('extra_job_id', jobIds)
       .order('extra_job_id')
@@ -198,7 +225,19 @@ export async function getExtraJobsPricing(jobIds: string[]): Promise<ExtraJobPri
   const byJob = new Map<string, ExtraJobPricingItem[]>()
   for (const jobId of jobIds) byJob.set(jobId, [])
 
-  for (const item of itemsData ?? []) {
+  // Lines in section order, then line order within a section — the order the
+  // extra job page shows them in. Lines with no section come first.
+  const sectionOf = (item: NonNullable<typeof itemsData>[number]) => {
+    const raw = (item as { extra_job_sections?: unknown }).extra_job_sections
+    return (Array.isArray(raw) ? raw[0] : raw) as { name: string | null; sort_order: number } | null | undefined
+  }
+  const orderedItems = [...(itemsData ?? [])].sort((a, b) =>
+    (sectionOf(a)?.sort_order ?? -1) - (sectionOf(b)?.sort_order ?? -1)
+    || String(a.section_id ?? '').localeCompare(String(b.section_id ?? ''))
+    || a.sort_order - b.sort_order
+  )
+
+  for (const item of orderedItems) {
     const arr = byJob.get(item.extra_job_id) ?? []
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tpl          = (item as any).quote_template_items
@@ -215,6 +254,8 @@ export async function getExtraJobsPricing(jobIds: string[]): Promise<ExtraJobPri
       unit_price: resolvedPrice,
       item_type:  item.item_type,
       sort_order: item.sort_order,
+      section_id:   item.section_id ?? null,
+      section_name: sectionOf(item)?.name ?? '',
     })
     byJob.set(item.extra_job_id, arr)
   }
