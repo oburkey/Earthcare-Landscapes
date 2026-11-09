@@ -8,6 +8,7 @@ import { uploadToR2, deleteFromR2 } from '@/lib/r2'
 import { TRADE_OPTIONS, PHOTO_CATEGORIES } from '@/lib/lotStatus'
 import { CHECKLIST_SECTIONS, GATING_ITEM_KEYS } from '@/lib/checklist'
 import type { ActionState } from '@/types/actions'
+import { flagLotForReview, UNAPPROVE_FIRST } from '@/lib/lotReview'
 
 const SUPERVISOR_FLAGS = ['build_complete'] as const
 const ADMIN_FLAGS      = ['invoiced', 'has_client_extras', 'pending_review', 'approved_for_invoicing'] as const
@@ -37,6 +38,19 @@ export async function toggleLotFlag(
   }
 
   const supabase = await createClient()
+
+  // Flagging for review goes through the shared one-statement update, which
+  // refuses an approved lot.
+  if (flag === 'pending_review' && value) {
+    const { flagged, error } = await flagLotForReview(supabase, lotId, profile.id)
+    if (error) return { error }
+    if (!flagged) return { error: UNAPPROVE_FIRST }
+    revalidatePath(`/sites/${siteId}/stages/${stageId}/lots/${lotId}`)
+    revalidatePath(`/sites/${siteId}/stages/${stageId}`)
+    revalidateTag('stages')
+    return null
+  }
+
   const update: Record<string, unknown> = { [flag as LotFlag]: value, updated_by: profile.id }
   if (flag === 'build_complete') {
     update.build_completed_at = value ? new Date().toISOString() : null

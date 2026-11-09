@@ -6,6 +6,7 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { uploadToR2, getR2FileAsDataUrl } from '@/lib/r2'
 import { getExtraJobsPricing } from '@/app/(app)/sites/[siteId]/stages/[stageId]/extra-jobs/[extraJobId]/pricing-actions'
 import type { ActionState } from '@/types/actions'
+import { flagLotForReview, UNAPPROVE_FIRST } from '@/lib/lotReview'
 import type { ClaimLotData, ClaimExtraJobData } from './pdfClient'
 import type { LotSection } from './InvoicesView'
 
@@ -25,12 +26,14 @@ export async function updateExtraJobApprovedBy(
   const approvedByName = (formData.get('approved_by_name') as string)?.trim() || null
 
   const supabase = await createClient()
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('extra_jobs')
     .update({ approved_by_name: approvedByName })
     .eq('id', extraJobId)
+    .select('id')
 
   if (error) return { error: error.message }
+  if (!data || data.length === 0) return { error: 'Update failed — the extra job could not be found or you do not have permission to edit it.' }
 
   revalidatePath('/invoices')
   return null
@@ -49,12 +52,14 @@ export async function updateExtraJobFinanceNotes(
   const financeNotes = (formData.get('finance_notes') as string)?.trim() || null
 
   const supabase = await createClient()
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('extra_jobs')
     .update({ finance_notes: financeNotes })
     .eq('id', extraJobId)
+    .select('id')
 
   if (error) return { error: error.message }
+  if (!data || data.length === 0) return { error: 'Update failed — the extra job could not be found or you do not have permission to edit it.' }
 
   revalidatePath('/invoices')
   return null
@@ -93,11 +98,20 @@ export async function togglePendingReview(
   const value = formData.get('value') === 'true'
 
   const supabase = await createClient()
-  const { error } = await supabase
-    .from('lots')
-    .update({ pending_review: value, updated_by: profile.id })
-    .eq('id', lotId)
-  if (error) return { error: error.message }
+  if (value) {
+    // Shared one-statement update — refuses an approved lot.
+    const { flagged, error } = await flagLotForReview(supabase, lotId, profile.id)
+    if (error) return { error }
+    if (!flagged) return { error: UNAPPROVE_FIRST }
+  } else {
+    const { data, error } = await supabase
+      .from('lots')
+      .update({ pending_review: false, updated_by: profile.id })
+      .eq('id', lotId)
+      .select('id')
+    if (error) return { error: error.message }
+    if (!data || data.length === 0) return { error: 'Update failed — the lot could not be found or you do not have permission to edit it.' }
+  }
 
   revalidatePath('/invoices')
   revalidateTag('stages')
@@ -152,11 +166,14 @@ export async function toggleExtraJobComplete(
   const value = formData.get('value') === 'true'
 
   const supabase = await createClient()
-  const { error } = await supabase
+  // Unticking means the job isn't finished yet, not that it never started.
+  const { data, error } = await supabase
     .from('extra_jobs')
-    .update({ status: value ? 'complete' : 'not_started' })
+    .update({ status: value ? 'complete' : 'in_progress' })
     .eq('id', extraJobId)
+    .select('id')
   if (error) return { error: error.message }
+  if (!data || data.length === 0) return { error: 'Update failed — the extra job could not be found or you do not have permission to edit it.' }
 
   revalidatePath('/invoices')
   return null
@@ -173,11 +190,13 @@ export async function toggleExtraJobPendingReview(
   const value = formData.get('value') === 'true'
 
   const supabase = await createClient()
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('extra_jobs')
     .update({ pending_review: value })
     .eq('id', extraJobId)
+    .select('id')
   if (error) return { error: error.message }
+  if (!data || data.length === 0) return { error: 'Update failed — the extra job could not be found or you do not have permission to edit it.' }
 
   revalidatePath('/invoices')
   return null
@@ -223,11 +242,13 @@ export async function toggleExtraJobInvoiced(
   const value = formData.get('value') === 'true'
 
   const supabase = await createClient()
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('extra_jobs')
     .update({ invoiced: value })
     .eq('id', extraJobId)
+    .select('id')
   if (error) return { error: error.message }
+  if (!data || data.length === 0) return { error: 'Update failed — the extra job could not be found or you do not have permission to edit it.' }
 
   revalidatePath('/invoices')
   return null

@@ -3,9 +3,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
-import type { ActionState } from '@/types/actions'
 import { LABOUR_HOURLY_RATE, BOBCAT_HOURLY_RATE } from '@/lib/pricingPresets'
 import { TEMPLATE_PRESET_ITEM_NAMES } from '@/lib/extraJobPresets'
+import { EXTRA_JOB_LINES_SELECT, toExtraJobLines, type ExtraJobLine } from '@/lib/extraJobLines'
 
 // ── Quick-add presets ───────────────────────────────────────────────────────────
 // Rates for the "Mulch / Edging / Turf" quick-add chips are pulled live from
@@ -56,12 +56,23 @@ type LinePayload = {
   presetKey: string | null
 }
 
+export type SaveExtraJobLinesResult = {
+  error?: string
+  lines?: ExtraJobLine[]
+  linesUpdatedAt?: string | null
+}
+
+// Saves through save_extra_job_lines (migration_extra_job_lines_save.sql) —
+// one transaction that updates existing lines in place by id, inserts new
+// ones, deletes removed ones, and refuses the save if someone else saved the
+// lines since this page loaded. Returns the saved lines so the table picks up
+// the ids of newly inserted rows.
 export async function saveExtraJobLineItems(
-  _prev: ActionState,
+  _prev: unknown,
   formData: FormData
-): Promise<ActionState> {
+): Promise<SaveExtraJobLinesResult> {
   const profile = await requireAuth()
-  if (profile.role === 'worker' || profile.role === 'client') {
+  if (profile.role !== 'leading_hand' && profile.role !== 'supervisor' && profile.role !== 'admin') {
     return { error: 'You do not have permission to save line items.' }
   }
 
@@ -69,6 +80,9 @@ export async function saveExtraJobLineItems(
   const siteId      = formData.get('site_id')     as string
   const stageId     = formData.get('stage_id')    as string
   if (!extraJobId) return { error: 'Extra job ID is missing.' }
+  // Passed back exactly as loaded (string, not re-parsed) so the database
+  // comparison is exact to the microsecond.
+  const expectedLinesUpdatedAt = (formData.get('lines_updated_at') as string) || null
 
   let lines: LinePayload[] = []
   try {
@@ -79,64 +93,64 @@ export async function saveExtraJobLineItems(
 
   const supabase = await createClient()
   const isAdmin = profile.role === 'admin'
-
-  // Non-admins never receive unit_price values from the server, so when they
-  // save we must look up each existing line's rate by id and carry it
-  // forward — otherwise their save would silently wipe out admin-set prices.
-  const existingRateById = new Map<string, number | null>()
-  if (!isAdmin) {
-    const { data: rows } = await supabase
-      .from('extra_job_quote_items')
-      .select('id, unit_price')
-      .eq('extra_job_id', extraJobId)
-    for (const r of rows ?? []) existingRateById.set(r.id, r.unit_price)
-  }
-
   const presetRates = await getExtraJobPresetRates()
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const toInsert: any[] = []
-  let sortOrder = 0
+  const payload = []
   for (const line of lines) {
     const description = (line.description ?? '').trim()
-    const qty = parseFloat(line.qty)
-    if (!description || !(qty > 0)) continue
-    const unit = (line.unit ?? '').trim() || 'No.'
+    const qtyText     = (line.qty ?? '').trim()
+    // Non-admins never see or send rates
+    const rateText    = isAdmin ? (line.rate ?? '').trim() : ''
+    // Only completely blank rows are dropped. Anything with a description is
+    // kept, with an empty qty / price saved as null (counted as $0).
+    if (!description && !qtyText && !rateText) continue
 
-    let rate: number | null
+    const qty = parseFloat(qtyText)
+
+    // keep_price: leave an existing line's price (and template link) as it
+    // is — non-admins can't see prices, so their save must never change one.
+    let unitPrice: number | null = null
+    let keepPrice = false
     if (line.presetKey && presetRates[line.presetKey] != null) {
-      // Always resolve preset-sourced lines from the live rate, so changing
-      // a price in Settings is reflected even if this line was quick-added
-      // by a leading hand who never saw the number.
-      rate = presetRates[line.presetKey]
+      // Preset-sourced lines always take the live rate, so a price changed
+      // in Settings applies even to lines quick-added by a leading hand.
+      unitPrice = presetRates[line.presetKey]
     } else if (isAdmin) {
-      const parsed = parseFloat(line.rate)
-      rate = isNaN(parsed) ? null : parsed
+      const parsed = parseFloat(rateText)
+      unitPrice = isNaN(parsed) ? null : parsed
     } else {
-      rate = line.id ? (existingRateById.get(line.id) ?? null) : null
+      keepPrice = true
     }
 
-    toInsert.push({
-      extra_job_id: extraJobId,
-      description,
-      unit,
-      quantity:   qty,
-      unit_price: rate,
-      item_type:  'line',
-      sort_order: sortOrder++,
+    payload.push({
+      id:          line.id,
+      description: description || null,
+      unit:        (line.unit ?? '').trim() || 'No.',
+      quantity:    isNaN(qty) ? null : qty,
+      unit_price:  unitPrice,
+      keep_price:  keepPrice,
     })
   }
 
-  // Replace all existing items for this job
-  await supabase.from('extra_job_quote_items').delete().eq('extra_job_id', extraJobId)
+  const { data: linesUpdatedAt, error } = await supabase.rpc('save_extra_job_lines', {
+    p_extra_job_id:              extraJobId,
+    p_expected_lines_updated_at: expectedLinesUpdatedAt,
+    p_lines:                     payload,
+  })
+  if (error) return { error: error.message }
 
-  if (toInsert.length > 0) {
-    const { error } = await supabase.from('extra_job_quote_items').insert(toInsert)
-    if (error) return { error: error.message }
-  }
+  const { data: rows, error: reloadError } = await supabase
+    .from('extra_job_quote_items')
+    .select(EXTRA_JOB_LINES_SELECT)
+    .eq('extra_job_id', extraJobId)
+    .order('sort_order', { ascending: true })
+  if (reloadError) return { error: `Saved, but reloading the lines failed: ${reloadError.message}. Reload the page.` }
 
   revalidatePath(`/sites/${siteId}/stages/${stageId}/extra-jobs/${extraJobId}`)
-  return null
+  return {
+    lines: toExtraJobLines(rows ?? [], isAdmin),
+    linesUpdatedAt: (linesUpdatedAt as string | null) ?? null,
+  }
 }
 
 // ── Fetch for PDF export ───────────────────────────────────────────────────────

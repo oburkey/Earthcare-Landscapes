@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { getActiveMaterialTypes, computeQuantSheetStockChanges, applyStockDelta } from '@/app/(app)/materials/stock-deduction'
+import { flagLotForReview } from '@/lib/lotReview'
 import type { ActionState } from '@/types/actions'
 
 export type QuoteItemPayload = {
@@ -317,24 +318,11 @@ export async function saveLotQuote(payload: SaveQuotePayload): Promise<ActionSta
 
   // Saving a final quant sheet flags the lot for admin review — unless the lot
   // is already approved for invoicing, where re-flagging would leave both
-  // Pending review and Approved ticked.
+  // Pending review and Approved ticked. One statement, so it can't race an
+  // Approve click.
   if (quoteType === 'final') {
-    const { data: lotFlags, error: lotFlagsError } = await supabase
-      .from('lots')
-      .select('approved_for_invoicing')
-      .eq('id', lotId)
-      .single()
-    if (lotFlagsError) return { error: lotFlagsError.message }
-
-    if (!lotFlags.approved_for_invoicing) {
-      const { data: flagged, error: pendingReviewError } = await supabase
-        .from('lots')
-        .update({ pending_review: true, updated_by: profile.id })
-        .eq('id', lotId)
-        .select('id')
-      if (pendingReviewError) return { error: pendingReviewError.message }
-      if (!flagged || flagged.length === 0) return { error: 'Update failed — the lot could not be found or you do not have permission to edit it.' }
-    }
+    const { error: flagError } = await flagLotForReview(supabase, lotId, profile.id)
+    if (flagError) return { error: flagError }
   }
 
   // Final quant sheet -> site stock deduction. Only deducts the DIFFERENCE

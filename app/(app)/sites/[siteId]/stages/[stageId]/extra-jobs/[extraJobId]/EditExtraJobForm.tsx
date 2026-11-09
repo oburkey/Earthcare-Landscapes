@@ -48,6 +48,7 @@ export default function EditExtraJobForm({
       <input type="hidden" name="extra_job_id" value={extraJobId} />
       <input type="hidden" name="site_id"      value={siteId} />
       <input type="hidden" name="stage_id"     value={stageId} />
+      <input type="hidden" name="initial_status" value={currentStatus} />
 
       {canManage && (
         <div>

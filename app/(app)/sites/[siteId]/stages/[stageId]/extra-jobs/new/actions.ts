@@ -12,8 +12,9 @@ export async function createExtraJob(
 ): Promise<ActionState> {
   const profile = await requireAuth()
 
-  if (profile.role === 'client') {
-    return { error: 'You do not have permission to add extra jobs.' }
+  // Matches the extra_jobs insert policy (leading hand and above)
+  if (profile.role !== 'leading_hand' && profile.role !== 'supervisor' && profile.role !== 'admin') {
+    return { error: 'Only leading hands and above can add extra jobs.' }
   }
 
   const stageId = formData.get('stage_id') as string

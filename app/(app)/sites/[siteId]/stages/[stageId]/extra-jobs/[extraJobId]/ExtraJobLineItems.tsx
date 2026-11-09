@@ -2,16 +2,9 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { saveExtraJobLineItems } from './pricing-actions'
+import type { ExtraJobLine as ExistingLine } from '@/lib/extraJobLines'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-type ExistingLine = {
-  id: string
-  description: string
-  qty: number | null
-  unit: string
-  rate: number | null
-}
 
 type MulchOption = { key: string; label: string; itemName: string; rate: number | null }
 
@@ -39,6 +32,9 @@ interface Props {
   canManage: boolean
   isAdmin: boolean
   existingLines: ExistingLine[]
+  // Version of the saved lines this table was loaded from — sent back on save
+  // so the server can refuse it if someone else saved in between.
+  linesUpdatedAt: string | null
   presets: Presets
 }
 
@@ -64,6 +60,13 @@ function fromExisting(e: ExistingLine): Line {
   }
 }
 
+function linesFromExisting(existing: ExistingLine[]): Line[] {
+  return existing.length > 0
+    ? existing.map(fromExisting)
+    : Array.from({ length: BLANK_LINE_COUNT }, blankLine)
+}
+
+// Empty qty or rate counts as $0
 function lineTotal(line: Line): number {
   const qty = parseFloat(line.qty) || 0
   const rate = parseFloat(line.rate) || 0
@@ -73,13 +76,10 @@ function lineTotal(line: Line): number {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ExtraJobLineItems({
-  extraJobId, siteId, stageId, canManage, isAdmin, existingLines, presets,
+  extraJobId, siteId, stageId, canManage, isAdmin, existingLines, linesUpdatedAt: initialLinesUpdatedAt, presets,
 }: Props) {
-  const [lines, setLines] = useState<Line[]>(() =>
-    existingLines.length > 0
-      ? existingLines.map(fromExisting)
-      : Array.from({ length: BLANK_LINE_COUNT }, blankLine)
-  )
+  const [lines, setLines] = useState<Line[]>(() => linesFromExisting(existingLines))
+  const [linesUpdatedAt, setLinesUpdatedAt] = useState(initialLinesUpdatedAt)
   const [mulchMenuOpen, setMulchMenuOpen] = useState(false)
   const [error, setError]             = useState<string | null>(null)
   const [saved, setSaved]             = useState(false)
@@ -124,6 +124,7 @@ export default function ExtraJobLineItems({
     fd.set('extra_job_id', extraJobId)
     fd.set('site_id', siteId)
     fd.set('stage_id', stageId)
+    fd.set('lines_updated_at', linesUpdatedAt ?? '')
     fd.set('lines', JSON.stringify(lines.map((l) => ({
       id:          l.id,
       description: l.description,
@@ -135,8 +136,15 @@ export default function ExtraJobLineItems({
 
     startTransition(async () => {
       const result = await saveExtraJobLineItems(null, fd)
-      if (result?.error) setError(result.error)
-      else setSaved(true)
+      if (result.error) {
+        setError(result.error)
+        return
+      }
+      // Reload from what was saved, so new lines carry their real ids into
+      // the next save (and prices kept server-side stay attached).
+      if (result.lines) setLines(linesFromExisting(result.lines))
+      setLinesUpdatedAt(result.linesUpdatedAt ?? null)
+      setSaved(true)
     })
   }
 

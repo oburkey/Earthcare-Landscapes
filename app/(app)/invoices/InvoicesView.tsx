@@ -2,6 +2,8 @@
 
 import { Fragment, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSyncedFlagMap } from '@/lib/useSyncedState'
+import { UNAPPROVE_FIRST } from '@/lib/lotReview'
 import {
   toggleInvoiced, togglePendingReview, toggleApprovedForInvoicing,
   toggleExtraJobComplete, toggleExtraJobPendingReview, toggleExtraJobApprovedForInvoicing, toggleExtraJobInvoiced,
@@ -531,41 +533,17 @@ export default function InvoicesView({
   const [expandedSites, setExpandedSites] = useState<Set<string>>(new Set())
   // Stages start collapsed by default
   const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set())
-  const [invoicedMap, setInvoicedMap] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(
-      sites.flatMap((s) => s.stages.flatMap((st) => st.lots.map((l) => [l.id, l.invoiced])))
-    )
-  )
-  const [pendingReviewMap, setPendingReviewMap] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(
-      sites.flatMap((s) => s.stages.flatMap((st) => st.lots.map((l) => [l.id, l.pendingReview])))
-    )
-  )
-  const [approvedMap, setApprovedMap] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(
-      sites.flatMap((s) => s.stages.flatMap((st) => st.lots.map((l) => [l.id, l.approvedForInvoicing])))
-    )
-  )
-  const [extraJobCompleteMap, setExtraJobCompleteMap] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(
-      sites.flatMap((s) => s.stages.flatMap((st) => st.extraJobs.map((j) => [j.id, j.status === 'complete'])))
-    )
-  )
-  const [extraJobPendingMap, setExtraJobPendingMap] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(
-      sites.flatMap((s) => s.stages.flatMap((st) => st.extraJobs.map((j) => [j.id, j.pendingReview])))
-    )
-  )
-  const [extraJobApprovedMap, setExtraJobApprovedMap] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(
-      sites.flatMap((s) => s.stages.flatMap((st) => st.extraJobs.map((j) => [j.id, j.approvedForInvoicing])))
-    )
-  )
-  const [extraJobInvoicedMap, setExtraJobInvoicedMap] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(
-      sites.flatMap((s) => s.stages.flatMap((st) => st.extraJobs.map((j) => [j.id, j.invoiced])))
-    )
-  )
+  // Flag maps follow the server data on every refresh (only ids whose server
+  // value changed are replaced), so they never show stale flags.
+  const allLots      = sites.flatMap((s) => s.stages.flatMap((st) => st.lots))
+  const allExtraJobs = sites.flatMap((s) => s.stages.flatMap((st) => st.extraJobs))
+  const [invoicedMap, setInvoicedMap]                 = useSyncedFlagMap(allLots.map((l) => [l.id, l.invoiced]))
+  const [pendingReviewMap, setPendingReviewMap]       = useSyncedFlagMap(allLots.map((l) => [l.id, l.pendingReview]))
+  const [approvedMap, setApprovedMap]                 = useSyncedFlagMap(allLots.map((l) => [l.id, l.approvedForInvoicing]))
+  const [extraJobCompleteMap, setExtraJobCompleteMap] = useSyncedFlagMap(allExtraJobs.map((j) => [j.id, j.status === 'complete']))
+  const [extraJobPendingMap, setExtraJobPendingMap]   = useSyncedFlagMap(allExtraJobs.map((j) => [j.id, j.pendingReview]))
+  const [extraJobApprovedMap, setExtraJobApprovedMap] = useSyncedFlagMap(allExtraJobs.map((j) => [j.id, j.approvedForInvoicing]))
+  const [extraJobInvoicedMap, setExtraJobInvoicedMap] = useSyncedFlagMap(allExtraJobs.map((j) => [j.id, j.invoiced]))
   const [selectedLots, setSelectedLots]           = useState<Set<string>>(new Set())
   const [selectedExtraJobs, setSelectedExtraJobs] = useState<Set<string>>(new Set())
   const [generating, setGenerating]               = useState<Set<string>>(new Set())
@@ -630,6 +608,10 @@ export default function InvoicesView({
 
   function handleTogglePendingReview(lotId: string, current: boolean) {
     const next = !current
+    if (next && approvedMap[lotId]) {
+      setActionError(UNAPPROVE_FIRST)
+      return
+    }
     setPendingReviewMap((prev) => ({ ...prev, [lotId]: next }))
     setActionError(null)
     const fd = new FormData()
@@ -645,6 +627,7 @@ export default function InvoicesView({
 
   function handleToggleApprovedForInvoicing(lotId: string, current: boolean) {
     const next = !current
+    const prevPending = pendingReviewMap[lotId] ?? false
     setApprovedMap((prev) => ({ ...prev, [lotId]: next }))
     if (next) setPendingReviewMap((prev) => ({ ...prev, [lotId]: false }))
     setActionError(null)
@@ -654,6 +637,8 @@ export default function InvoicesView({
     toggleApprovedForInvoicing(null, fd).then((result) => {
       if (result?.error) {
         setApprovedMap((prev) => ({ ...prev, [lotId]: current }))
+        // A failed approval didn't clear Pending review — show it again
+        if (next) setPendingReviewMap((prev) => ({ ...prev, [lotId]: prevPending }))
         setActionError(result.error)
       }
     })
@@ -691,6 +676,7 @@ export default function InvoicesView({
 
   function handleToggleExtraJobApprovedForInvoicing(jobId: string, current: boolean) {
     const next = !current
+    const prevPending = extraJobPendingMap[jobId] ?? false
     setExtraJobApprovedMap((prev) => ({ ...prev, [jobId]: next }))
     if (next) setExtraJobPendingMap((prev) => ({ ...prev, [jobId]: false }))
     setActionError(null)
@@ -700,6 +686,7 @@ export default function InvoicesView({
     toggleExtraJobApprovedForInvoicing(null, fd).then((result) => {
       if (result?.error) {
         setExtraJobApprovedMap((prev) => ({ ...prev, [jobId]: current }))
+        if (next) setExtraJobPendingMap((prev) => ({ ...prev, [jobId]: prevPending }))
         setActionError(result.error)
       }
     })
@@ -1090,7 +1077,10 @@ export default function InvoicesView({
                                       type="button"
                                       disabled={!isAdmin}
                                       onClick={() => handleTogglePendingReview(lot.id, pendingReviewMap[lot.id] ?? lot.pendingReview)}
+                                      title={(approvedMap[lot.id] ?? lot.approvedForInvoicing) && !(pendingReviewMap[lot.id] ?? lot.pendingReview) ? 'Un-approve first' : undefined}
                                       className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors whitespace-nowrap disabled:opacity-40 ${
+                                        (approvedMap[lot.id] ?? lot.approvedForInvoicing) && !(pendingReviewMap[lot.id] ?? lot.pendingReview) ? 'opacity-50 ' : ''
+                                      }${
                                         (pendingReviewMap[lot.id] ?? lot.pendingReview)
                                           ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
                                           : 'bg-surface-raised text-fg-muted hover:bg-border'

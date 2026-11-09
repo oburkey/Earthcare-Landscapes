@@ -25,19 +25,27 @@ export async function updateExtraJob(
 
   if (!title) return { error: 'Title is required.' }
 
+  const update: Record<string, string | null> = {
+    title,
+    description: (formData.get('description') as string)?.trim() || null,
+    due_date:    (formData.get('due_date') as string) || null,
+    notes:       (formData.get('notes') as string)?.trim() || null,
+  }
+  // Only write status when it was changed on the form. Otherwise a form opened
+  // earlier would undo a "Mark complete" / Job Completed tick made since.
+  const status        = formData.get('status') as string | null
+  const initialStatus = formData.get('initial_status') as string | null
+  if (status && status !== initialStatus) update.status = status
+
   const supabase = await createClient()
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('extra_jobs')
-    .update({
-      title,
-      description: (formData.get('description') as string)?.trim() || null,
-      status:      formData.get('status') as string,
-      due_date:    (formData.get('due_date') as string) || null,
-      notes:       (formData.get('notes') as string)?.trim() || null,
-    })
+    .update(update)
     .eq('id', extraJobId)
+    .select('id')
 
   if (error) return { error: error.message }
+  if (!data || data.length === 0) return { error: 'Update failed — the job could not be found or you do not have permission to edit it.' }
 
   revalidatePath(`/sites/${siteId}/stages/${stageId}/extra-jobs/${extraJobId}`)
   revalidatePath(`/sites/${siteId}/stages/${stageId}`)

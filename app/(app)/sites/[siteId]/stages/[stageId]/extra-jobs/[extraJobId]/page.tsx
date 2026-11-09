@@ -10,6 +10,7 @@ import EditExtraJobForm from './EditExtraJobForm'
 import ExtraJobLineItems from './ExtraJobLineItems'
 import { getExtraJobPresetRates } from './pricing-actions'
 import { MULCH_PRESET_OPTIONS } from '@/lib/extraJobPresets'
+import { EXTRA_JOB_LINES_SELECT, toExtraJobLines } from '@/lib/extraJobLines'
 import PhotoUpload from '@/app/_components/PhotoUpload'
 import DelayControl from '@/app/_components/DelayControl'
 import SourceQuotePdf from './SourceQuotePdf'
@@ -47,6 +48,7 @@ export default async function ExtraJobPage({ params }: Props) {
     { data: photoRows },
     { data: existingItems },
     presetRates,
+    { data: linesVersion },
   ] = await Promise.all([
     supabase
       .from('extra_jobs')
@@ -66,10 +68,17 @@ export default async function ExtraJobPage({ params }: Props) {
       .order('created_at', { ascending: true }),
     supabase
       .from('extra_job_quote_items')
-      .select('id, template_item_id, description, unit, quantity, unit_price, item_type, sort_order, quote_template_items(name, unit_price)')
+      .select(EXTRA_JOB_LINES_SELECT)
       .eq('extra_job_id', extraJobId)
       .order('sort_order', { ascending: true }),
     getExtraJobPresetRates(),
+    // Separate query so the page still loads before
+    // migration_extra_job_lines_save.sql has added the column.
+    supabase
+      .from('extra_jobs')
+      .select('lines_updated_at')
+      .eq('id', extraJobId)
+      .maybeSingle(),
   ])
 
   if (!job) notFound()
@@ -290,27 +299,8 @@ export default async function ExtraJobPage({ params }: Props) {
             stageId={stageId}
             canManage={canManage}
             isAdmin={isAdmin}
-            existingLines={(existingItems ?? []).map((i) => {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const tplRaw = (i as any).quote_template_items
-              const tpl = Array.isArray(tplRaw) ? tplRaw[0] : tplRaw
-              // Old quant-sheet rows stored template items by reference with no
-              // description of their own — resolve the name from the template
-              // so existing extra jobs still display correctly as line items.
-              const description = i.item_type === 'template'
-                ? (tpl?.name ?? i.description ?? '')
-                : (i.description ?? '')
-              const resolvedRate = i.unit_price !== null
-                ? Number(i.unit_price)
-                : (tpl?.unit_price != null ? Number(tpl.unit_price) : null)
-              return {
-                id:          i.id,
-                description,
-                qty:         i.quantity !== null ? Number(i.quantity) : null,
-                unit:        i.unit,
-                rate:        isAdmin ? resolvedRate : null,
-              }
-            })}
+            existingLines={toExtraJobLines(existingItems ?? [], isAdmin)}
+            linesUpdatedAt={(linesVersion as { lines_updated_at?: string | null } | null)?.lines_updated_at ?? null}
             presets={{
               labourRate:   isAdmin ? presetRates.labour : null,
               bobcatRate:   isAdmin ? presetRates.bobcat : null,

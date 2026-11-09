@@ -3,6 +3,8 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toggleLotFlag } from './actions'
+import { useSyncedState } from '@/lib/useSyncedState'
+import { UNAPPROVE_FIRST } from '@/lib/lotReview'
 
 type Flag = 'build_complete' | 'invoiced' | 'has_client_extras' | 'pending_review' | 'approved_for_invoicing'
 
@@ -32,16 +34,22 @@ export default function LotStatusToggles({
   isAdmin,
 }: Props) {
   const router = useRouter()
-  const [buildComplete,        setBuildComplete]        = useState(initBuild)
-  const [invoiced,             setInvoiced]             = useState(initInvoiced)
-  const [hasClientExtras,      setHasClientExtras]      = useState(initClientExtras)
-  const [pendingReview,        setPendingReview]        = useState(initPendingReview)
-  const [approvedForInvoicing, setApprovedForInvoicing] = useState(initApprovedForInvoicing)
+  // Follow the server values, e.g. a Final quant save flagging the lot
+  const [buildComplete,        setBuildComplete]        = useSyncedState(initBuild)
+  const [invoiced,             setInvoiced]             = useSyncedState(initInvoiced)
+  const [hasClientExtras,      setHasClientExtras]      = useSyncedState(initClientExtras)
+  const [pendingReview,        setPendingReview]        = useSyncedState(initPendingReview)
+  const [approvedForInvoicing, setApprovedForInvoicing] = useSyncedState(initApprovedForInvoicing)
   const [error, setError]             = useState<string | null>(null)
   const [isPending, startTransition]  = useTransition()
 
   function toggle(flag: Flag, current: boolean, set: (v: boolean) => void, refresh = false) {
     const next = !current
+    if (flag === 'pending_review' && next && approvedForInvoicing) {
+      setError(UNAPPROVE_FIRST)
+      return
+    }
+    const prevPendingReview = pendingReview
     set(next)
     setError(null)
     if (flag === 'approved_for_invoicing' && next) setPendingReview(false)
@@ -55,6 +63,8 @@ export default function LotStatusToggles({
       const result = await toggleLotFlag(null, fd)
       if (result?.error) {
         set(current)
+        // A failed approval didn't clear Pending review — show it again
+        if (flag === 'approved_for_invoicing' && next) setPendingReview(prevPendingReview)
         setError(result.error)
       } else if (refresh) {
         router.refresh()
@@ -103,7 +113,10 @@ export default function LotStatusToggles({
               type="button"
               disabled={isPending}
               onClick={() => toggle('pending_review', pendingReview, setPendingReview)}
+              title={approvedForInvoicing && !pendingReview ? 'Un-approve first' : undefined}
               className={`rounded-full px-3 py-1 text-xs font-medium transition-colors disabled:opacity-60 ${
+                approvedForInvoicing && !pendingReview ? 'opacity-50 ' : ''
+              }${
                 pendingReview ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : 'bg-surface-raised text-fg-muted hover:bg-surface-raised'
               }`}
             >

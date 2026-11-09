@@ -1,11 +1,18 @@
 'use client'
 
+import { useEffect } from 'react'
+import { reloadOnceIfStaleDeploy } from '@/lib/staleDeploy'
+
 export default function Error({
+  error,
   reset,
 }: {
   error: Error & { digest?: string }
   reset: () => void
 }) {
+  // An old tab hitting a newer deployment — reload once to pick up new code
+  useEffect(() => { reloadOnceIfStaleDeploy(error) }, [error])
+
   return (
     <div className="min-h-screen bg-stone-50 flex items-center justify-center px-4">
       <div className="max-w-sm w-full text-center space-y-4">
