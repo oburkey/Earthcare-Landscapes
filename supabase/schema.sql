@@ -2405,12 +2405,12 @@ CREATE OR REPLACE FUNCTION changed_columns(old_row jsonb, new_row jsonb, allowed
 RETURNS text[]
 LANGUAGE sql IMMUTABLE
 SET search_path = public
-AS $
+AS $$
   SELECT array_agg(n.key ORDER BY n.key)
   FROM jsonb_each(new_row) n
   WHERE NOT (n.key = ANY (allowed))
     AND n.value IS DISTINCT FROM (old_row -> n.key);
-$;
+$$;
 
 
 -- ── 1. invitations: token lookup function replaces "read by token" ─────────
@@ -2434,7 +2434,7 @@ RETURNS TABLE (
 LANGUAGE sql STABLE
 SECURITY DEFINER
 SET search_path = public
-AS $
+AS $$
   SELECT
     i.email::text,
     i.role::text,
@@ -2448,7 +2448,7 @@ AS $
   WHERE i.token::text = p_token
     AND i.accepted_at IS NULL
   LIMIT 1;
-$;
+$$;
 
 REVOKE ALL     ON FUNCTION get_invitation_by_token(text) FROM PUBLIC;
 GRANT  EXECUTE ON FUNCTION get_invitation_by_token(text) TO anon, authenticated;
@@ -2465,7 +2465,7 @@ CREATE OR REPLACE FUNCTION profiles_guard_columns()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = public
-AS $
+AS $$
 DECLARE
   bad text[];
 BEGIN
@@ -2482,7 +2482,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$;
+$$;
 
 DROP TRIGGER IF EXISTS profiles_guard_columns ON profiles;
 CREATE TRIGGER profiles_guard_columns
@@ -2541,7 +2541,7 @@ CREATE OR REPLACE FUNCTION lots_guard_columns()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = public
-AS $
+AS $$
 DECLARE
   r          role;
   admin_cols text[] := ARRAY['contract_price', 'invoiced', 'approved_for_invoicing',
@@ -2587,7 +2587,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$;
+$$;
 
 DROP TRIGGER IF EXISTS lots_guard_columns ON lots;
 CREATE TRIGGER lots_guard_columns
@@ -2621,7 +2621,7 @@ CREATE OR REPLACE FUNCTION extra_jobs_guard_columns()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = public
-AS $
+AS $$
 DECLARE
   admin_cols text[] := ARRAY['invoiced', 'approved_for_invoicing', 'approved_for_invoicing_at',
                              'pending_review', 'finance_notes', 'approved_by_name'];
@@ -2653,7 +2653,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$;
+$$;
 
 DROP TRIGGER IF EXISTS extra_jobs_guard_columns ON extra_jobs;
 CREATE TRIGGER extra_jobs_guard_columns
@@ -2667,7 +2667,7 @@ CREATE OR REPLACE FUNCTION stages_guard_pricing()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = public
-AS $
+AS $$
 BEGIN
   IF auth.uid() IS NULL OR current_user_role() = 'admin' THEN RETURN NEW; END IF;
 
@@ -2684,7 +2684,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$;
+$$;
 
 DROP TRIGGER IF EXISTS stages_guard_pricing ON stages;
 CREATE TRIGGER stages_guard_pricing

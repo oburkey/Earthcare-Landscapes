@@ -92,23 +92,27 @@ export type BulkFileMatch = {
   status: BulkMatchStatus
 }
 
-// Requires both the derived site abbreviation AND the lot number to match —
-// lot numbers routinely repeat across different sites, so matching on lot
-// number alone would risk silently attaching a plan to the wrong site's lot.
+// Numeric part of a stored lot number, ignoring leading zeros and any prefix:
+// "327", "0327" and "TLB327" all give 327.
+function lotNumberValue(lotNumber: string): number | null {
+  const digits = lotNumber.match(/\d+/)
+  return digits ? parseInt(digits[0], 10) : null
+}
+
+// Matches on lot number only. The lot pool is a single stage (see
+// getLotsForBulkMatch), so every candidate is already on the right site —
+// also requiring the site-name abbreviation to equal the filename prefix only
+// caused false "no match"es (e.g. a site whose name abbreviates to "TLB").
 // Anything ambiguous (zero or multiple candidates) comes back as no_match
 // for the admin to resolve manually.
 export function matchFilenameToLot(filename: string, lots: MatchableLot[]): BulkFileMatch {
   const parsed = parseSitePlanFilename(filename)
 
-  if (parsed.sitePrefix == null || parsed.lotNumber == null) {
+  if (parsed.lotNumber == null) {
     return { parsedLotNumber: parsed.lotNumber, parsedHomeDesign: parsed.homeDesign, matchedLotId: null, status: 'no_match' }
   }
 
-  const candidates = lots.filter((lot) => {
-    const lotNum = parseInt(lot.lotNumber, 10)
-    if (isNaN(lotNum) || lotNum !== parsed.lotNumber) return false
-    return deriveSiteAbbreviation(lot.siteName) === parsed.sitePrefix
-  })
+  const candidates = lots.filter((lot) => lotNumberValue(lot.lotNumber) === parsed.lotNumber)
 
   const matchedLotId = candidates.length === 1 ? candidates[0].id : null
 

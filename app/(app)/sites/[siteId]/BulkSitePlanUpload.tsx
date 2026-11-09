@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { getLotsForBulkMatch, importBulkSitePlans, type BulkImportResult } from './bulkSitePlanActions'
+
+// Import summary, including the files that had no matched lot when Import
+// was pressed (listed by parsed lot number, or filename if none parsed).
+type ImportSummary = BulkImportResult & { unmatched: string[] }
 import { matchFilenameToLot, type MatchableLot } from './bulkSitePlanParser'
 
 type Row = {
@@ -41,7 +45,7 @@ export default function BulkSitePlanUpload({ stageId }: Props) {
   const [rows, setRows] = useState<Row[]>([])
   const [dragOver, setDragOver] = useState(false)
   const [importing, startImporting] = useTransition()
-  const [result, setResult] = useState<BulkImportResult | null>(null)
+  const [result, setResult] = useState<ImportSummary | null>(null)
   const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -78,7 +82,10 @@ export default function BulkSitePlanUpload({ stageId }: Props) {
         parsedHomeDesign: match.parsedHomeDesign,
         matchedLotId: match.matchedLotId,
         status: match.status,
-        updateHomeDesign: false,
+        // Ticked by default when a design was parsed for a matched lot — it
+        // used to default off, so designs were silently never saved unless
+        // each row's box was ticked by hand.
+        updateHomeDesign: !!(match.parsedHomeDesign && match.matchedLotId),
         error: null,
         importedAt: null,
       }
@@ -93,7 +100,7 @@ export default function BulkSitePlanUpload({ stageId }: Props) {
 
   function setRowMatchedLot(index: number, lotId: string | null) {
     setRows((prev) => prev.map((r, i) => i === index
-      ? { ...r, matchedLotId: lotId, status: lotId ? 'ready' : 'no_match', error: null }
+      ? { ...r, matchedLotId: lotId, status: lotId ? 'ready' : 'no_match', error: null, updateHomeDesign: !!(lotId && r.parsedHomeDesign) }
       : r
     ))
   }
@@ -118,9 +125,13 @@ export default function BulkSitePlanUpload({ stageId }: Props) {
   function handleImport() {
     const readyRows = rows.filter((r) => r.matchedLotId && !r.importedAt)
     if (readyRows.length === 0) return
+    const unmatched = rows
+      .filter((r) => !r.matchedLotId && !r.importedAt)
+      .map((r) => r.parsedLotNumber != null ? String(r.parsedLotNumber) : r.filename)
 
     startImporting(async () => {
       let totalImported = 0
+      let totalHomeDesigns = 0
       const allErrors: BulkImportResult['errors'] = []
       setImportProgress({ done: 0, total: readyRows.length })
 
@@ -139,6 +150,7 @@ export default function BulkSitePlanUpload({ stageId }: Props) {
 
         const res = await importBulkSitePlans(fd)
         totalImported += res.imported
+        totalHomeDesigns += res.homeDesignsUpdated
         allErrors.push(...res.errors)
 
         const rowError = res.errors[0]?.error ?? null
@@ -146,7 +158,7 @@ export default function BulkSitePlanUpload({ stageId }: Props) {
         setRows((prev) => prev.map((r) =>
           r.file === row.file ? { ...r, error: rowError, importedAt: rowError ? null : now } : r
         ))
-        setResult({ imported: totalImported, errors: allErrors })
+        setResult({ imported: totalImported, homeDesignsUpdated: totalHomeDesigns, errors: allErrors, unmatched })
         setImportProgress((prev) => prev ? { done: prev.done + 1, total: prev.total } : null)
       }
 
@@ -317,8 +329,11 @@ export default function BulkSitePlanUpload({ stageId }: Props) {
       )}
 
       {result && (
-        <p className={`rounded-lg px-3 py-2 text-sm ${result.errors.length > 0 ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400' : 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'}`}>
-          Imported {result.imported} file{result.imported !== 1 ? 's' : ''}.
+        <p className={`rounded-lg px-3 py-2 text-sm ${result.errors.length > 0 || result.unmatched.length > 0 ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400' : 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'}`}>
+          {result.imported} lot{result.imported !== 1 ? 's' : ''} updated
+          {` (${result.homeDesignsUpdated} home design${result.homeDesignsUpdated !== 1 ? 's' : ''} saved)`},
+          {` ${result.unmatched.length} not matched`}
+          {result.unmatched.length > 0 && `: ${result.unmatched.join(', ')}`}.
           {result.errors.length > 0 && ` ${result.errors.length} failed — see rows above.`}
         </p>
       )}

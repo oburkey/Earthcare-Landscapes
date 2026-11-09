@@ -60,6 +60,7 @@ function extAndContentType(file: File): { ext: string; contentType: string } {
 
 export type BulkImportResult = {
   imported: number
+  homeDesignsUpdated: number
   errors: Array<{ filename: string; error: string }>
 }
 
@@ -69,10 +70,10 @@ export type BulkImportResult = {
 // number of rows as plain FormData (Files can't be JSON-encoded).
 export async function importBulkSitePlans(formData: FormData): Promise<BulkImportResult> {
   const profile = await requireAuth()
-  if (profile.role !== 'admin') return { imported: 0, errors: [{ filename: '', error: 'Only admins can bulk import site plans.' }] }
+  if (profile.role !== 'admin') return { imported: 0, homeDesignsUpdated: 0, errors: [{ filename: '', error: 'Only admins can bulk import site plans.' }] }
 
   const count = parseInt((formData.get('count') as string) ?? '0', 10)
-  if (!count || count <= 0) return { imported: 0, errors: [] }
+  if (!count || count <= 0) return { imported: 0, homeDesignsUpdated: 0, errors: [] }
 
   // Service-role client, not the session-bound one — this action is already
   // fully gated to admin above, so bypassing RLS here just removes it as a
@@ -82,6 +83,7 @@ export async function importBulkSitePlans(formData: FormData): Promise<BulkImpor
   const supabase = createAdminClient()
   const errors: Array<{ filename: string; error: string }> = []
   let imported = 0
+  let homeDesignsUpdated = 0
 
   // Paths whose lots got a plan added — revalidated once at the end rather
   // than per row.
@@ -133,13 +135,18 @@ export async function importBulkSitePlans(formData: FormData): Promise<BulkImpor
       const updateHomeDesign = formData.get(`update_home_design_${i}`) === 'true'
       const homeDesign = (formData.get(`home_design_${i}`) as string)?.trim() || null
       if (updateHomeDesign && homeDesign) {
-        const { error: hdError } = await supabase
+        const { data: hdRows, error: hdError } = await supabase
           .from('lots')
           .update({ home_design: homeDesign, updated_by: profile.id })
           .eq('id', lotId)
+          .select('id')
         if (hdError) {
           console.error('[bulkSitePlanActions] home design update failed', { filename, lotId, hdError })
           errors.push({ filename, error: `Uploaded, but failed to update home design: ${hdError.message}` })
+        } else if (!hdRows || hdRows.length === 0) {
+          errors.push({ filename, error: 'Uploaded, but failed to update home design: the lot could not be found.' })
+        } else {
+          homeDesignsUpdated++
         }
       }
 
@@ -155,5 +162,5 @@ export async function importBulkSitePlans(formData: FormData): Promise<BulkImpor
   revalidateTag('schedule')
   revalidateTag('stages')
 
-  return { imported, errors }
+  return { imported, homeDesignsUpdated, errors }
 }
