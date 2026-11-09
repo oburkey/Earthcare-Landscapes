@@ -10,8 +10,6 @@ interface Props {
   extraJobId: string
   siteId: string
   stageId: string
-  currentTitle: string
-  currentDescription: string | null
   currentStatus: ExtraJobStatus
   currentNotes: string | null
   currentDueDate: string | null
@@ -24,8 +22,6 @@ export default function EditExtraJobForm({
   extraJobId,
   siteId,
   stageId,
-  currentTitle,
-  currentDescription,
   currentStatus,
   currentNotes,
   currentDueDate,
@@ -49,38 +45,6 @@ export default function EditExtraJobForm({
       <input type="hidden" name="site_id"      value={siteId} />
       <input type="hidden" name="stage_id"     value={stageId} />
       <input type="hidden" name="initial_status" value={currentStatus} />
-
-      {canManage && (
-        <div>
-          <label htmlFor="title" className="block text-sm font-medium text-fg-secondary">
-            Title
-          </label>
-          <input
-            id="title"
-            name="title"
-            type="text"
-            required
-            defaultValue={currentTitle}
-            className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
-          />
-        </div>
-      )}
-
-      {canManage && (
-        <div>
-          <label htmlFor="description" className="block text-sm font-medium text-fg-secondary">
-            Description
-          </label>
-          <textarea
-            id="description"
-            name="description"
-            rows={2}
-            defaultValue={currentDescription ?? ''}
-            placeholder="Brief description of the work…"
-            className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 resize-none"
-          />
-        </div>
-      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
@@ -128,14 +92,6 @@ export default function EditExtraJobForm({
           className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 resize-none"
         />
       </div>
-
-      {/* Hidden fields for canManage=false (workers update status+notes only, title/description unchanged) */}
-      {!canManage && (
-        <>
-          <input type="hidden" name="title"       value={currentTitle} />
-          <input type="hidden" name="description" value={currentDescription ?? ''} />
-        </>
-      )}
 
       {state?.error && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{state.error}</p>

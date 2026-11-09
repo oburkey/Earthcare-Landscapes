@@ -21,13 +21,10 @@ export async function updateExtraJob(
   const extraJobId = formData.get('extra_job_id') as string
   const siteId     = formData.get('site_id') as string
   const stageId    = formData.get('stage_id') as string
-  const title      = (formData.get('title') as string)?.trim()
 
-  if (!title) return { error: 'Title is required.' }
-
+  // Title and description are edited in place (updateExtraJobText), not here,
+  // so a form opened earlier can't put back an old title or description.
   const update: Record<string, string | null> = {
-    title,
-    description: (formData.get('description') as string)?.trim() || null,
     due_date:    (formData.get('due_date') as string) || null,
     notes:       (formData.get('notes') as string)?.trim() || null,
   }
@@ -52,6 +49,44 @@ export async function updateExtraJob(
   revalidateTag('stages')
   revalidateTag('schedule')
   redirect(`/sites/${siteId}/stages/${stageId}/extra-jobs/${extraJobId}`)
+}
+
+// Title or description, edited in place at the top of the extra job page.
+export async function updateExtraJobText(
+  extraJobId: string,
+  siteId: string,
+  stageId: string,
+  field: 'title' | 'description',
+  value: string
+): Promise<ActionState> {
+  const profile = await requireAuth()
+  if (profile.role !== 'leading_hand' && profile.role !== 'supervisor' && profile.role !== 'admin') {
+    return { error: 'You do not have permission to edit extra jobs.' }
+  }
+  if (field !== 'title' && field !== 'description') return { error: 'Invalid field.' }
+
+  const trimmed = (value ?? '').trim()
+  if (field === 'title' && !trimmed) return { error: 'Title is required.' }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('extra_jobs')
+    .update({ [field]: trimmed || null })
+    .eq('id', extraJobId)
+    .select('id')
+
+  if (error) return { error: error.message }
+  if (!data || data.length === 0) return { error: 'Update failed — the job could not be found or you do not have permission to edit it.' }
+
+  revalidatePath(`/sites/${siteId}/stages/${stageId}/extra-jobs/${extraJobId}`)
+  revalidatePath(`/sites/${siteId}/stages/${stageId}`)
+  revalidatePath('/invoices')
+  revalidatePath('/schedule')
+  revalidatePath('/dashboard')
+  revalidateTag('stages')
+  revalidateTag('schedule')
+  revalidateTag('dashboard')
+  return null
 }
 
 function canManageDelay(role: string): boolean {

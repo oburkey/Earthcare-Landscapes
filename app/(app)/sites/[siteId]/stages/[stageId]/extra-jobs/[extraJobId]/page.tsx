@@ -9,6 +9,7 @@ import { uploadExtraJobPhoto, setExtraJobDelayed, clearExtraJobDelayed } from '.
 import EditExtraJobForm from './EditExtraJobForm'
 import ExtraJobLineItems from './ExtraJobLineItems'
 import ExtraJobInvoicingToggles from './ExtraJobInvoicingToggles'
+import ExtraJobInlineField from './ExtraJobInlineField'
 import { getExtraJobPresetRates } from './pricing-actions'
 import { MULCH_PRESET_OPTIONS } from '@/lib/extraJobPresets'
 import { EXTRA_JOB_LINES_SELECT, EXTRA_JOB_SECTIONS_SELECT, toExtraJobSections } from '@/lib/extraJobLines'
@@ -193,7 +194,16 @@ export default async function ExtraJobPage({ params }: Props) {
 
         {/* Header */}
         <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold text-fg">{job.title}</h1>
+          <h1 className="min-w-0 flex-1 text-xl font-semibold text-fg">
+            <ExtraJobInlineField
+              extraJobId={extraJobId}
+              siteId={siteId}
+              stageId={stageId}
+              field="title"
+              value={job.title}
+              canEdit={canManage}
+            />
+          </h1>
           <span className={`rounded-full px-2.5 py-1 text-xs font-semibold shrink-0 ${cfg.badge}`}>
             {cfg.label}
           </span>
@@ -228,13 +238,23 @@ export default async function ExtraJobPage({ params }: Props) {
         />
 
         {/* Details — single card of label/value rows, same pattern as the lot detail page */}
-        {(job.description || job.notes || dueDate) && (
+        {(job.description || job.notes || dueDate || canManage) && (
           <div className="rounded-xl border border-border bg-surface divide-y divide-border-subtle overflow-hidden">
             {dueDate && <InfoRow label="Due date" value={formatDate(dueDate)} />}
-            {job.description && (
+            {/* Edited in place by leading hand+; shown read-only to workers */}
+            {(job.description || canManage) && (
               <div className="px-4 py-3">
                 <p className="text-xs font-medium text-fg-muted mb-1">Description</p>
-                <p className="text-sm text-fg-secondary">{job.description}</p>
+                <ExtraJobInlineField
+                  extraJobId={extraJobId}
+                  siteId={siteId}
+                  stageId={stageId}
+                  field="description"
+                  value={job.description ?? ''}
+                  canEdit={canManage}
+                  placeholder="Add a description…"
+                  className="text-sm text-fg-secondary"
+                />
               </div>
             )}
             {job.notes && (
@@ -356,8 +376,6 @@ export default async function ExtraJobPage({ params }: Props) {
               extraJobId={extraJobId}
               siteId={siteId}
               stageId={stageId}
-              currentTitle={job.title}
-              currentDescription={job.description}
               currentStatus={status}
               currentNotes={job.notes}
               currentDueDate={(job as unknown as { due_date?: string | null }).due_date ?? null}
