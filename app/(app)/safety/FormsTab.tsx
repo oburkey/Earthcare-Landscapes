@@ -2,8 +2,7 @@
 
 import { useState } from 'react'
 import FormCompletionView, { type CompletionAssignment } from './FormCompletionView'
-import { getCompletionPdfData } from './forms-actions'
-import { generateFormCompletionPdf } from './formPdf'
+import { downloadSignedPdf } from './signedPdf'
 import type { SafetyFormType } from '@/types/database'
 
 export type MyAssignmentRow = {
@@ -52,11 +51,10 @@ export default function FormsTab({ assignments, tableExists, workerName }: Props
     setDownloadingId(assignmentId)
     setDownloadError(null)
     try {
-      const result = await getCompletionPdfData(assignmentId)
-      if ('error' in result) { setDownloadError(result.error); return }
-      await generateFormCompletionPdf(result)
+      const result = await downloadSignedPdf(assignmentId)
+      if (result.error) setDownloadError(result.error)
     } catch {
-      setDownloadError('Failed to generate PDF. Please try again.')
+      setDownloadError('Failed to download the PDF. Please try again.')
     } finally {
       setDownloadingId(null)
     }

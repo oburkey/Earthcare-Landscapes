@@ -195,7 +195,10 @@ function buildHtml(
 </div>`
 }
 
-export async function generateFormCompletionPdf(data: FormPdfData): Promise<void> {
+// Builds the signed-form PDF as a Blob (not downloaded). Called right after
+// submit to make the stored copy, and by admins' "Regenerate PDF" — always
+// from the completion's snapshot (getCompletionPdfData), never the template.
+export async function buildFormCompletionPdfBlob(data: FormPdfData): Promise<Blob> {
   // Pre-convert signature URLs to data URLs before building HTML.
   // html2canvas can silently fail to render <img> sources in detached elements;
   // giving it an already-decoded data URL removes all CORS and loading dependencies.
@@ -207,22 +210,16 @@ export async function generateFormCompletionPdf(data: FormPdfData): Promise<void
   const el = document.createElement('div')
   el.innerHTML = html
 
-  const slug     = data.workerName.replace(/\s+/g, '-').toLowerCase()
-  const dateStr  = new Date(data.completedAt).toLocaleDateString('en-CA', { timeZone: 'Australia/Perth' })
-  const typeStr  = data.formType === 'interactive' ? 'induction' : 'swms'
-  const filename = `earthcare-${typeStr}-${slug}-${dateStr}.pdf`
-
   const { default: html2pdf } = await import('html2pdf.js')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (html2pdf() as any)
+  return await (html2pdf() as any)
     .set({
       margin: 8,
-      filename,
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { scale: 3, useCORS: true, logging: false, backgroundColor: '#ffffff' },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
       pagebreak: { mode: ['css', 'legacy'] },
     })
     .from(el)
-    .save()
+    .outputPdf('blob') as Blob
 }

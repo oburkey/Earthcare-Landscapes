@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { assignForm, revokeAssignment, getCompletionPdfData } from './forms-actions'
-import { generateFormCompletionPdf } from './formPdf'
+import { assignForm, revokeAssignment } from './forms-actions'
+import { downloadSignedPdf, storeSignedPdf } from './signedPdf'
 import type { SafetyFormType } from '@/types/database'
 
 export type AssignmentManagementRow = {
@@ -17,6 +17,10 @@ export type AssignmentManagementRow = {
   dueDate: string | null
   completedAt: string | null
   createdAt: string
+  // Latest completion and its stored signed PDF
+  completionId: string | null
+  pdfStored: boolean
+  pdfError: string | null
 }
 
 export type TemplateOption = { id: string; title: string; formType: SafetyFormType; isSiteSpecific: boolean }
@@ -29,9 +33,10 @@ interface Props {
   workers: WorkerOption[]
   sites: SiteOption[]
   tableExists: boolean
+  isAdmin: boolean
 }
 
-export default function AssignFormsTab({ assignments: initial, templates, workers, sites, tableExists }: Props) {
+export default function AssignFormsTab({ assignments: initial, templates, workers, sites, tableExists, isAdmin }: Props) {
   const [assignments, setAssignments] = useState<AssignmentManagementRow[]>(initial)
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateOption | null>(null)
   const [selectedWorkers, setSelectedWorkers]   = useState<Set<string>>(new Set())
@@ -49,14 +54,26 @@ export default function AssignFormsTab({ assignments: initial, templates, worker
     setDownloadingId(assignmentId)
     setPdfError(null)
     try {
-      const result = await getCompletionPdfData(assignmentId)
-      if ('error' in result) { setPdfError(result.error); return }
-      await generateFormCompletionPdf(result)
+      const result = await downloadSignedPdf(assignmentId)
+      if (result.error) setPdfError(result.error)
     } catch {
-      setPdfError('Failed to generate PDF. Please try again.')
+      setPdfError('Failed to download the PDF. Please try again.')
     } finally {
       setDownloadingId(null)
     }
+  }
+
+  // Admin only: rebuild the missing signed PDF from the completion's snapshot
+  async function handleRegenerate(a: AssignmentManagementRow) {
+    if (!a.completionId) return
+    setDownloadingId(a.id)
+    setPdfError(null)
+    const result = await storeSignedPdf(a.id, a.completionId)
+    setAssignments(prev => prev.map(x => x.id === a.id
+      ? { ...x, pdfStored: !result.error, pdfError: result.error ?? null }
+      : x))
+    if (result.error) setPdfError(result.error)
+    setDownloadingId(null)
   }
 
   function toggleWorker(id: string) {
@@ -100,6 +117,9 @@ export default function AssignFormsTab({ assignments: initial, templates, worker
           siteName:      site?.name ?? null,
           dueDate:       dueDate || null,
           completedAt:   null,
+          completionId:  null,
+          pdfStored:     false,
+          pdfError:      null,
           createdAt:     now,
         }
       })
@@ -251,15 +271,31 @@ export default function AssignFormsTab({ assignments: initial, templates, worker
                       <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-accent-dim text-accent-fg">
                         Completed
                       </span>
-                      {a.id && (
+                      {a.pdfStored ? (
                         <button
                           type="button"
                           onClick={() => handleDownload(a.id)}
                           disabled={downloadingId === a.id}
                           className="text-xs font-medium text-fg-muted hover:text-green-700 disabled:opacity-50 transition-colors"
                         >
-                          {downloadingId === a.id ? 'Generating…' : 'PDF'}
+                          {downloadingId === a.id ? 'Downloading…' : 'PDF'}
                         </button>
+                      ) : (
+                        <>
+                          <span className="text-xs text-red-600" title={a.pdfError ?? undefined}>
+                            {a.pdfError ? 'PDF failed' : 'PDF missing'}
+                          </span>
+                          {isAdmin && a.completionId && (
+                            <button
+                              type="button"
+                              onClick={() => handleRegenerate(a)}
+                              disabled={downloadingId === a.id}
+                              className="text-xs font-medium text-fg-muted hover:text-green-700 disabled:opacity-50 transition-colors"
+                            >
+                              {downloadingId === a.id ? 'Regenerating…' : 'Regenerate PDF'}
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   ) : (

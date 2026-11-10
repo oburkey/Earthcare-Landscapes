@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAuth } from '@/lib/auth'
-import { uploadToR2, deleteFromR2, getR2FileAsDataUrl } from '@/lib/r2'
+import { uploadToR2, deleteFromR2, getR2FileAsDataUrl, getR2SignedUrl } from '@/lib/r2'
 import type { Role, SafetyFormType, FormSection } from '@/types/database'
 
 const ROLE_LEVEL: Record<Role, number> = {
@@ -182,6 +182,11 @@ export async function submitFormCompletion(formData: FormData) {
   const responses = JSON.parse(responsesRaw || '{}')
   const now = new Date().toISOString()
 
+  // Exactly what this person is signing, built here from the database —
+  // never taken from the browser.
+  const snapshot = await buildCompletionSnapshot(admin, assignmentId)
+  if ('error' in snapshot) return { error: snapshot.error }
+
   // Upload inductee signature
   let inducteeSignaturePath: string | null = null
   const inducteeSig = formData.get('inductee_signature') as File | null
@@ -206,7 +211,7 @@ export async function submitFormCompletion(formData: FormData) {
     } catch { /* non-fatal */ }
   }
 
-  const { error: insertError } = await supabase
+  const { data: inserted, error: insertError } = await supabase
     .from('safety_form_completions')
     .insert({
       assignment_id:           assignmentId,
@@ -216,12 +221,15 @@ export async function submitFormCompletion(formData: FormData) {
       witness_signature_path:  witnessSignaturePath,
       completed_at:            now,
       notes,
+      ...snapshot,
     })
+    .select('id')
+    .single()
 
-  if (insertError) {
+  if (insertError || !inserted) {
     if (inducteeSignaturePath) await deleteFromR2(inducteeSignaturePath).catch(() => {})
     if (witnessSignaturePath)  await deleteFromR2(witnessSignaturePath).catch(() => {})
-    return { error: insertError.message }
+    return { error: insertError?.message ?? 'Could not save the completed form.' }
   }
 
   // Mark assignment complete (bypasses RLS — worker has no UPDATE on assignments)
@@ -231,12 +239,47 @@ export async function submitFormCompletion(formData: FormData) {
     .eq('id', assignmentId)
 
   revalidatePath('/safety')
-  return { success: true }
+  return { success: true, completionId: inserted.id as string }
+}
+
+// ── Snapshot of what is signed ────────────────────────────────────────────
+
+type CompletionSnapshot = {
+  template_title_snapshot: string
+  content_snapshot_html:   string | null
+  sections_snapshot:       FormSection[] | null
+  site_details_snapshot:   Record<string, string> | null
+}
+
+async function buildCompletionSnapshot(
+  admin: ReturnType<typeof createAdminClient>,
+  assignmentId: string
+): Promise<CompletionSnapshot | { error: string }> {
+  const { data, error } = await admin
+    .from('safety_form_assignments')
+    .select('id, safety_form_templates(title, form_type, sections, content_html)')
+    .eq('id', assignmentId)
+    .single()
+  if (error || !data) return { error: 'Could not load the form being signed.' }
+
+  const tpl = (Array.isArray(data.safety_form_templates) ? data.safety_form_templates[0] : data.safety_form_templates) as
+    | { title: string; form_type: string; sections: FormSection[] | null; content_html: string | null }
+    | null
+  if (!tpl) return { error: 'Could not load the form being signed.' }
+
+  const isDocument = tpl.form_type === 'swms' || tpl.form_type === 'jsa'
+  return {
+    template_title_snapshot: tpl.title,
+    content_snapshot_html:   isDocument ? tpl.content_html : null,
+    sections_snapshot:       tpl.form_type === 'interactive' ? (tpl.sections ?? []) : null,
+    site_details_snapshot:   null,
+  }
 }
 
 // ── Completed form PDF data ───────────────────────────────────────────────
 
 type CompletionPdfData = {
+  completionId: string
   workerName: string
   siteName: string | null
   completedAt: string
@@ -263,7 +306,7 @@ export async function getCompletionPdfData(
       id, assigned_to,
       profiles!assigned_to (first_name, last_name),
       sites (name),
-      safety_form_templates (title, form_type, sections, content_html, require_witness)
+      safety_form_templates (form_type, require_witness)
     `)
     .eq('id', assignmentId)
     .single()
@@ -277,7 +320,7 @@ export async function getCompletionPdfData(
 
   const { data: comp, error: cErr } = await admin
     .from('safety_form_completions')
-    .select('responses, inductee_signature_path, witness_signature_path, completed_at, notes')
+    .select('id, responses, inductee_signature_path, witness_signature_path, completed_at, notes, template_title_snapshot, content_snapshot_html, sections_snapshot')
     .eq('assignment_id', assignmentId)
     .order('completed_at', { ascending: false })
     .limit(1)
@@ -297,14 +340,13 @@ export async function getCompletionPdfData(
       ? asgn.safety_form_templates[0]
       : asgn.safety_form_templates
   ) as {
-    title: string
     form_type: string
-    sections: unknown
-    content_html: string | null
     require_witness: boolean
   } | null
 
   if (!workerProfile || !template) return { error: 'Related data not found' }
+  // PDFs print only what was signed — never today's template
+  if (!comp.template_title_snapshot) return { error: 'This completion has no saved copy of the signed form.' }
 
   const [inducteeUrl, witnessUrl] = await Promise.all([
     comp.inductee_signature_path
@@ -316,18 +358,137 @@ export async function getCompletionPdfData(
   ])
 
   return {
+    completionId:        comp.id as string,
     workerName:          `${workerProfile.first_name} ${workerProfile.last_name}`.trim(),
     siteName:            site?.name ?? null,
     completedAt:         comp.completed_at as string,
     formType:            template.form_type as SafetyFormType,
-    templateTitle:       template.title,
-    sections:            (template.sections as FormSection[]) ?? [],
-    contentHtml:         template.content_html ?? null,
-    requireWitness:      template.require_witness,
+    templateTitle:       comp.template_title_snapshot as string,
+    sections:            (comp.sections_snapshot as FormSection[] | null) ?? [],
+    contentHtml:         (comp.content_snapshot_html as string | null) ?? null,
+    requireWitness:      template.require_witness || !!comp.witness_signature_path,
     responses:           (comp.responses as Record<string, boolean | 'yes' | 'no' | string>) ?? {},
     inducteeSignatureUrl: inducteeUrl || null,
     witnessSignatureUrl:  witnessUrl  || null,
     notes:               comp.notes as string | null ?? null,
+  }
+}
+
+// ── Stored signed PDF ─────────────────────────────────────────────────────
+// The PDF is made in the browser right after submit (from the snapshot via
+// getCompletionPdfData) and uploaded here. It is stored once: a completion
+// that already has a PDF can't be overwritten. If it couldn't be made or
+// uploaded, signed_pdf_error is set and an admin can regenerate it from the
+// snapshot. Completions have no UPDATE policy, so these writes use the admin
+// client after the checks below.
+
+const MAX_SIGNED_PDF_BYTES = 20 * 1024 * 1024
+
+async function loadCompletionForPdf(completionId: string) {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('safety_form_completions')
+    .select('id, assignment_id, profile_id, signed_pdf_path')
+    .eq('id', completionId)
+    .maybeSingle()
+  return { admin, completion: data as { id: string; assignment_id: string; profile_id: string; signed_pdf_path: string | null } | null }
+}
+
+export async function uploadSignedPdf(formData: FormData): Promise<{ success?: true; error?: string }> {
+  const profile = await requireAuth()
+  const completionId = formData.get('completion_id') as string
+  const file = formData.get('pdf') as File | null
+
+  const { admin, completion } = await loadCompletionForPdf(completionId)
+  if (!completion) return { error: 'Completed form not found.' }
+  // The signer uploads it at submit; afterwards only an admin can (Regenerate PDF)
+  if (completion.profile_id !== profile.id && profile.role !== 'admin') return { error: 'Access denied' }
+  if (completion.signed_pdf_path) return { error: 'A signed PDF is already stored for this form.' }
+
+  if (!file || file.size === 0) return { error: 'No PDF received.' }
+  if (file.size > MAX_SIGNED_PDF_BYTES) return { error: 'The PDF is too large (over 20 MB).' }
+  const buf = Buffer.from(await file.arrayBuffer())
+  if (buf.subarray(0, 5).toString('latin1') !== '%PDF-') return { error: 'The file is not a PDF.' }
+
+  const key = `form-signed-pdfs/${completion.assignment_id}/${completion.id}-${Date.now()}.pdf`
+  try {
+    await uploadToR2(key, buf, 'application/pdf')
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Upload failed'
+    await admin.from('safety_form_completions').update({ signed_pdf_error: message.slice(0, 500) })
+      .eq('id', completion.id).is('signed_pdf_path', null).select('id')
+    return { error: `Could not store the signed PDF: ${message}` }
+  }
+
+  // Only fills an empty slot, so two uploads at once can't both win
+  const { data: rows, error } = await admin
+    .from('safety_form_completions')
+    .update({ signed_pdf_path: key, signed_pdf_generated_at: new Date().toISOString(), signed_pdf_error: null })
+    .eq('id', completion.id)
+    .is('signed_pdf_path', null)
+    .select('id')
+  if (error || !rows || rows.length === 0) {
+    await deleteFromR2(key).catch(() => {})
+    return { error: error?.message ?? 'A signed PDF is already stored for this form.' }
+  }
+
+  revalidatePath('/safety')
+  return { success: true }
+}
+
+// Records why the PDF couldn't be made (e.g. the browser failed to render it).
+export async function reportSignedPdfError(completionId: string, message: string): Promise<{ success?: true; error?: string }> {
+  const profile = await requireAuth()
+  const { admin, completion } = await loadCompletionForPdf(completionId)
+  if (!completion) return { error: 'Completed form not found.' }
+  if (completion.profile_id !== profile.id && profile.role !== 'admin') return { error: 'Access denied' }
+  if (completion.signed_pdf_path) return { success: true }
+
+  const { error } = await admin
+    .from('safety_form_completions')
+    .update({ signed_pdf_error: (message || 'PDF could not be generated').slice(0, 500) })
+    .eq('id', completion.id)
+    .is('signed_pdf_path', null)
+    .select('id')
+  if (error) return { error: error.message }
+  revalidatePath('/safety')
+  return { success: true }
+}
+
+// Download link for the stored signed PDF. Never builds a new one.
+export async function getSignedPdfUrl(assignmentId: string): Promise<{ url?: string; error?: string }> {
+  const profile = await requireAuth()
+  const admin   = createAdminClient()
+
+  const { data: asgn } = await admin
+    .from('safety_form_assignments')
+    .select('id, assigned_to, profiles!assigned_to (first_name, last_name)')
+    .eq('id', assignmentId)
+    .maybeSingle()
+  if (!asgn) return { error: 'Assignment not found' }
+  if (ROLE_LEVEL[profile.role] < ROLE_LEVEL['supervisor'] && asgn.assigned_to !== profile.id) {
+    return { error: 'Access denied' }
+  }
+
+  const { data: comp } = await admin
+    .from('safety_form_completions')
+    .select('signed_pdf_path, signed_pdf_error, completed_at, template_title_snapshot')
+    .eq('assignment_id', assignmentId)
+    .order('completed_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (!comp) return { error: 'Completion record not found' }
+  if (!comp.signed_pdf_path) {
+    return { error: comp.signed_pdf_error ? `No signed PDF stored: ${comp.signed_pdf_error}` : 'No signed PDF stored for this form yet.' }
+  }
+
+  const worker = (Array.isArray(asgn.profiles) ? asgn.profiles[0] : asgn.profiles) as { first_name: string; last_name: string } | null
+  const perthDate = new Date(comp.completed_at as string).toLocaleDateString('en-CA', { timeZone: 'Australia/Perth' })
+  const name = `${comp.template_title_snapshot ?? 'Form'} - ${worker ? `${worker.first_name} ${worker.last_name}`.trim() : 'worker'} - ${perthDate}.pdf`
+  try {
+    return { url: await getR2SignedUrl(comp.signed_pdf_path as string, 300, name) }
+  } catch {
+    return { error: 'Could not create a download link. Please try again.' }
   }
 }
 

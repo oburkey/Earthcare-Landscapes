@@ -278,6 +278,7 @@ export default function SafetyView({
             }))}
             sites={sites}
             tableExists={tablesExist.safetyForms}
+            isAdmin={profile.role === 'admin'}
           />
           {profile.role === 'admin' && (
             <FormTemplatesTab

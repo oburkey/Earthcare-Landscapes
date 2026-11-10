@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import SignaturePad, { type SignaturePadHandle } from './SignaturePad'
 import { submitFormCompletion } from './forms-actions'
-import { generateFormCompletionPdf } from './formPdf'
+import { storeSignedPdf } from './signedPdf'
 import type { FormSection, SafetyFormType } from '@/types/database'
 
 export interface CompletionAssignment {
@@ -38,6 +38,9 @@ export default function FormCompletionView({ assignment, onClose, onCompleted }:
   const [confirmed, setConfirmed]   = useState(false)  // for SWMS/JSA ack checkbox
   const [submitting, setSubmitting] = useState(false)
   const [error, setError]           = useState<string | null>(null)
+  // After a successful submit: the signed PDF is being made, or couldn't be
+  const [savingPdf, setSavingPdf]   = useState(false)
+  const [pdfError, setPdfError]     = useState<string | null>(null)
 
   function setResponse(itemId: string, value: boolean | 'yes' | 'no' | string) {
     setResponses(prev => ({ ...prev, [itemId]: value }))
@@ -76,7 +79,6 @@ export default function FormCompletionView({ assignment, onClose, onCompleted }:
       return
     }
 
-    // Capture signature data URLs before submission so we can embed them in the PDF
     const inducteeDataUrl = inducteeRef.current?.toDataURL() ?? null
     const witnessDataUrl  = witnessRef.current?.toDataURL()  ?? null
 
@@ -95,28 +97,21 @@ export default function FormCompletionView({ assignment, onClose, onCompleted }:
       }
 
       const result = await submitFormCompletion(fd)
-      if (result?.error) {
-        setError(result.error)
+      if (result?.error || !result?.completionId) {
+        setError(result?.error ?? 'Submission failed')
         return
       }
 
-      // Fire-and-forget PDF download using locally captured data — no server roundtrip needed
-      generateFormCompletionPdf({
-        templateTitle:        assignment.templateTitle,
-        formType:             assignment.formType,
-        workerName:           assignment.workerName,
-        siteName:             assignment.siteName,
-        completedAt:          new Date().toISOString(),
-        sections:             assignment.sections,
-        contentHtml:          assignment.contentHtml,
-        requireWitness:       assignment.requireWitness,
-        responses,
-        inducteeSignatureUrl: inducteeDataUrl,
-        witnessSignatureUrl:  assignment.requireWitness ? witnessDataUrl : null,
-        notes:                notes.trim() || null,
-      }).catch(() => {}) // PDF failure must never block form submission
-
+      // The submission is saved. Now make the signed PDF from what was saved
+      // and store it; a failure here never undoes the submission.
       onCompleted(assignment.id)
+      setSavingPdf(true)
+      const pdf = await storeSignedPdf(assignment.id, result.completionId)
+      setSavingPdf(false)
+      if (pdf.error) {
+        setPdfError(pdf.error)
+        return
+      }
       onClose()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Submission failed')
@@ -146,9 +141,10 @@ export default function FormCompletionView({ assignment, onClose, onCompleted }:
         <button
           type="button"
           onClick={onClose}
-          className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-fg-secondary hover:bg-surface-raised transition-colors"
+          disabled={savingPdf}
+          className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-fg-secondary hover:bg-surface-raised transition-colors disabled:opacity-50"
         >
-          Cancel
+          {pdfError ? 'Close' : 'Cancel'}
         </button>
       </div>
 
@@ -260,20 +256,39 @@ export default function FormCompletionView({ assignment, onClose, onCompleted }:
           )}
         </div>
 
+        {/* Submitted, but the signed PDF couldn't be stored */}
+        {pdfError && (
+          <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 space-y-2 dark:border-amber-800 dark:bg-amber-900/20">
+            <p className="text-sm font-semibold text-fg">Form submitted.</p>
+            <p className="text-sm text-fg-secondary">
+              The signed PDF couldn&apos;t be saved ({pdfError}). Your submission is recorded — an admin can regenerate the PDF.
+            </p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800"
+            >
+              Done
+            </button>
+          </div>
+        )}
+
         {/* Error */}
         {error && (
           <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
         )}
 
         {/* Submit */}
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={submitting}
-          className="w-full rounded-xl bg-green-700 px-4 py-3 text-sm font-semibold text-white hover:bg-green-800 disabled:opacity-50 transition-colors"
-        >
-          {submitting ? 'Submitting…' : 'Submit & Sign'}
-        </button>
+        {!pdfError && (
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={submitting || savingPdf}
+            className="w-full rounded-xl bg-green-700 px-4 py-3 text-sm font-semibold text-white hover:bg-green-800 disabled:opacity-50 transition-colors"
+          >
+            {savingPdf ? 'Submitted — saving signed PDF…' : submitting ? 'Submitting…' : 'Submit & Sign'}
+          </button>
+        )}
       </div>
     </div>
   )

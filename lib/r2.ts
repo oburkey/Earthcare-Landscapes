@@ -67,14 +67,23 @@ export async function getR2SignedUrlSafe(
   }
 }
 
+// downloadName makes the browser save the file under that name instead of
+// opening it (Content-Disposition: attachment).
 export async function getR2SignedUrl(
   key: string,
-  expiresInSeconds = 3600
+  expiresInSeconds = 3600,
+  downloadName?: string
 ): Promise<string> {
   const client = createClient()
   return getSignedUrl(
     client,
-    new GetObjectCommand({ Bucket: getBucket(), Key: key }),
+    new GetObjectCommand({
+      Bucket: getBucket(),
+      Key: key,
+      ...(downloadName
+        ? { ResponseContentDisposition: `attachment; filename="${downloadName.replace(/[^\w.\- ]/g, '_')}"` }
+        : {}),
+    }),
     { expiresIn: expiresInSeconds }
   )
 }

@@ -220,7 +220,8 @@ async function fetchSafetyFormsRaw(supabase: Db, profileId: string, isSupervisor
             .select(`
               id, assigned_to, site_id, due_date, completed_at, created_at,
               safety_form_templates(title, form_type),
-              sites(name)
+              sites(name),
+              safety_form_completions(id, completed_at, signed_pdf_path, signed_pdf_error)
             `)
             .order('created_at', { ascending: false })
             .limit(500)
@@ -309,6 +310,11 @@ export default async function SafetyPage() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ? allAssignmentsRaw.map((r: any): AssignmentManagementRow => {
         const worker = staff.find(s => s.id === r.assigned_to)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const completions = ((r.safety_form_completions ?? []) as any[])
+          .slice()
+          .sort((x, y) => String(y.completed_at).localeCompare(String(x.completed_at)))
+        const latest = completions[0] ?? null
         return {
           id:            r.id,
           templateId:    '',
@@ -321,6 +327,9 @@ export default async function SafetyPage() {
           dueDate:       r.due_date,
           completedAt:   r.completed_at,
           createdAt:     r.created_at,
+          completionId:  latest?.id ?? null,
+          pdfStored:     !!latest?.signed_pdf_path,
+          pdfError:      latest?.signed_pdf_error ?? null,
         }
       })
     : []
