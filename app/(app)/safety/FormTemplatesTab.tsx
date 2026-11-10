@@ -21,6 +21,8 @@ export type TemplateRow = {
 interface Props {
   templates: TemplateRow[]
   tableExists: boolean
+  // Bumped by Safety Admin's top "New template" button to open the editor
+  createSignal?: number
 }
 
 const TYPE_OPTIONS: Array<{ value: SafetyFormType; label: string }> = [
@@ -49,7 +51,7 @@ type ModalState =
   | { mode: 'edit'; template: TemplateRow }
   | null
 
-export default function FormTemplatesTab({ templates: initial, tableExists }: Props) {
+export default function FormTemplatesTab({ templates: initial, tableExists, createSignal = 0 }: Props) {
   const [templates, setTemplates] = useState<TemplateRow[]>(initial)
   const [modal, setModal]         = useState<ModalState>(null)
   const [saving, setSaving]       = useState(false)
@@ -69,6 +71,12 @@ export default function FormTemplatesTab({ templates: initial, tableExists }: Pr
     setTitle(''); setFormType('interactive'); setDescription(''); setSiteSpecific(false)
     setRequireWitness(false); setSections([blankSection()]); setContentHtml(''); setError(null)
     setModal({ mode: 'create' })
+  }
+
+  const [seenCreateSignal, setSeenCreateSignal] = useState(createSignal)
+  if (createSignal !== seenCreateSignal) {
+    setSeenCreateSignal(createSignal)
+    openCreate()
   }
 
   function openEdit(t: TemplateRow) {

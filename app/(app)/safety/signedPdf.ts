@@ -31,7 +31,12 @@ export async function storeSignedPdf(assignmentId: string, completionId: string)
 export async function downloadSignedPdf(assignmentId: string): Promise<{ error?: string }> {
   const result = await getSignedPdfUrl(assignmentId)
   if (!result.url) return { error: result.error ?? 'No signed PDF stored for this form.' }
-  // The link is served as an attachment, so this downloads without leaving the page
-  window.location.href = result.url
+  startDownload(result.url)
   return {}
+}
+
+// Signed R2 links are served as attachments, so this downloads without
+// leaving the page.
+export function startDownload(url: string) {
+  window.location.assign(url)
 }

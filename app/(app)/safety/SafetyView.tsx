@@ -3,13 +3,14 @@
 import { useState, type Dispatch, type SetStateAction } from 'react'
 import type { Profile } from '@/types/database'
 import PreStartsTab from './PreStartsTab'
-import DocumentsTab from './DocumentsTab'
-import SignoffsTab from './SignoffsTab'
 import ToolboxMeetingsTab from './ToolboxMeetingsTab'
 import IncidentsTab from './IncidentsTab'
 import FormsTab, { type MyAssignmentRow } from './FormsTab'
-import FormTemplatesTab, { type TemplateRow } from './FormTemplatesTab'
-import AssignFormsTab, { type AssignmentManagementRow, type TemplateOption, type WorkerOption } from './AssignFormsTab'
+import { type TemplateRow } from './FormTemplatesTab'
+import { type WorkerOption } from './AssignFormsTab'
+import { type AssignmentManagementRow } from './FormsList'
+import SafetyAdminTab from './SafetyAdminTab'
+import { type ReferenceDocAdminRow } from './ReferenceDocsAdmin'
 
 export type PreStartsSetter = Dispatch<SetStateAction<PreStartRow[]>>
 
@@ -116,18 +117,17 @@ interface Props {
   sites:            SiteOption[]
   staff:            StaffOption[]
   vehicles:         VehicleOption[]
-  safetyDocs:       SafetyDocRow[]
-  mySignoffIds:     string[]
-  signoffs:         SignoffRow[]
   toolboxMeetings:  ToolboxMeetingRow[]
   incidents:        IncidentRow[]
   // Forms engine
   myAssignments:    MyAssignmentRow[]
   templates:        TemplateRow[]
   allAssignments:   AssignmentManagementRow[]
+  referenceDocs:    ReferenceDocAdminRow[]
+  todayPerth:       string
   preStartsHasMore: boolean
   tablesExist:      {
-    preStarts: boolean; safetyDocuments: boolean; toolboxMeetings: boolean; incidents: boolean
+    preStarts: boolean; toolboxMeetings: boolean; incidents: boolean
     safetyForms: boolean
   }
 }
@@ -139,14 +139,13 @@ export default function SafetyView({
   sites,
   staff,
   vehicles,
-  safetyDocs,
-  mySignoffIds,
-  signoffs,
   toolboxMeetings,
   incidents,
   myAssignments,
   templates,
   allAssignments,
+  referenceDocs,
+  todayPerth,
   preStartsHasMore,
   tablesExist,
 }: Props) {
@@ -163,7 +162,7 @@ export default function SafetyView({
   // Tab visibility per role:
   // worker+       → Pre-starts, My Forms
   // leading_hand+ → + Team (Toolbox Meetings + Incidents)
-  // supervisor+   → + Safety Admin (Documents, Sign-offs, Assign Forms, Form Templates)
+  // supervisor+   → + Safety Admin (forms, templates, reference documents, site safety details)
   const tabs: Array<{ id: Tab; label: string }> = [
     { id: 'prestarts',    label: 'Pre-starts' },
     { id: 'my_forms',     label: 'My Forms' },
@@ -251,42 +250,18 @@ export default function SafetyView({
       )}
 
       {activeTab === 'safety_admin' && isSupervisorPlus && (
-        <div className="space-y-8">
-          <DocumentsTab
-            docs={safetyDocs}
-            mySignoffIds={mySignoffIds}
-            signoffs={signoffs}
-            role={profile.role}
-            userId={profile.id}
-            userName={userName}
-            isSupervisorPlus={isSupervisorPlus}
-            tableExists={tablesExist.safetyDocuments}
-          />
-          <SignoffsTab
-            signoffs={signoffs}
-            docs={safetyDocs}
-            mySignoffIds={mySignoffIds}
-            isSupervisorPlus={isSupervisorPlus}
-          />
-          <AssignFormsTab
-            assignments={allAssignments}
-            templates={templates.map((t): TemplateOption => ({
-              id: t.id, title: t.title, formType: t.formType, isSiteSpecific: t.isSiteSpecific,
-            }))}
-            workers={staff.map((s): WorkerOption => ({
-              id: s.id, name: `${s.first_name} ${s.last_name}`.trim(),
-            }))}
-            sites={sites}
-            tableExists={tablesExist.safetyForms}
-            isAdmin={profile.role === 'admin'}
-          />
-          {profile.role === 'admin' && (
-            <FormTemplatesTab
-              templates={templates}
-              tableExists={tablesExist.safetyForms}
-            />
-          )}
-        </div>
+        <SafetyAdminTab
+          isAdmin={profile.role === 'admin'}
+          todayPerth={todayPerth}
+          assignments={allAssignments}
+          templates={templates}
+          workers={staff.map((s): WorkerOption => ({
+            id: s.id, name: `${s.first_name} ${s.last_name}`.trim(),
+          }))}
+          sites={sites}
+          referenceDocs={referenceDocs}
+          tableExists={tablesExist.safetyForms}
+        />
       )}
     </div>
   )

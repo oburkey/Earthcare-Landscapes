@@ -145,12 +145,14 @@ export async function revokeAssignment(id: string) {
 
   if (assignment?.completed_at) return { error: 'Cannot revoke a completed assignment' }
 
-  const { error } = await supabase
+  const { data: rows, error } = await supabase
     .from('safety_form_assignments')
     .delete()
     .eq('id', id)
+    .select('id')
 
   if (error) return { error: error.message }
+  if (!rows || rows.length === 0) return { error: 'Could not revoke — only admins can revoke assignments.' }
   revalidatePath('/safety')
   return { success: true }
 }
@@ -493,45 +495,63 @@ export async function getSignedPdfUrl(assignmentId: string): Promise<{ url?: str
 }
 
 // ── Site Reference Documents ───────────────────────────────────────────────
+// Uploaded PDFs with no signatures, per site. Managed in Safety Admin by
+// admins (RLS srd_admin); read-only for all staff, including on the site page.
 
-export async function createReferenceDoc(data: {
-  title: string
-  site_id: string
-  template_id: string | null
-  content_html: string
-}) {
+const MAX_REFERENCE_PDF_BYTES = 20 * 1024 * 1024
+
+export async function uploadReferenceDoc(formData: FormData): Promise<{ success?: true; error?: string }> {
   const profile = await requireAuth()
   if (profile.role !== 'admin') return { error: 'Admin access required' }
 
-  const supabase = await createClient()
-  const { data: row, error } = await supabase
-    .from('safety_reference_documents')
-    .insert({ ...data, uploaded_by: profile.id })
-    .select('id, title, site_id, template_id, content_html, uploaded_by, created_at, updated_at')
-    .single()
+  const title  = ((formData.get('title') as string) ?? '').trim()
+  const siteId = (formData.get('site_id') as string) || ''
+  const file   = formData.get('file') as File | null
+  if (!title)  return { error: 'Title is required.' }
+  if (!siteId) return { error: 'Select a site.' }
+  if (!file || file.size === 0) return { error: 'Choose a PDF to upload.' }
+  if (file.size > MAX_REFERENCE_PDF_BYTES) return { error: 'The PDF is too large (max 20 MB).' }
 
-  if (error) return { error: error.message }
-  revalidatePath(`/sites/${data.site_id}`)
-  return { success: true, doc: row }
-}
+  const buf = Buffer.from(await file.arrayBuffer())
+  if (buf.subarray(0, 5).toString('latin1') !== '%PDF-') return { error: 'The file must be a PDF.' }
 
-export async function updateReferenceDoc(id: string, data: {
-  title: string
-  content_html: string
-  site_id: string
-}) {
-  const profile = await requireAuth()
-  if (profile.role !== 'admin') return { error: 'Admin access required' }
+  const key = `safety-reference-docs/${siteId}/${crypto.randomUUID()}.pdf`
+  try {
+    await uploadToR2(key, buf, 'application/pdf')
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Upload failed.' }
+  }
 
   const supabase = await createClient()
   const { error } = await supabase
     .from('safety_reference_documents')
-    .update({ title: data.title, content_html: data.content_html })
-    .eq('id', id)
+    .insert({ title, site_id: siteId, file_path: key, file_name: file.name, uploaded_by: profile.id })
+    .select('id')
+    .single()
+  if (error) {
+    await deleteFromR2(key).catch(() => {})
+    return { error: error.message }
+  }
 
-  if (error) return { error: error.message }
-  revalidatePath(`/sites/${data.site_id}`)
+  revalidatePath('/safety')
+  revalidatePath(`/sites/${siteId}`)
   return { success: true }
+}
+
+export async function getReferenceDocUrl(id: string): Promise<{ url?: string; error?: string }> {
+  await requireAuth()
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('safety_reference_documents')
+    .select('file_path, file_name, title')
+    .eq('id', id)
+    .maybeSingle()
+  if (!data?.file_path) return { error: 'Document not found.' }
+  try {
+    return { url: await getR2SignedUrl(data.file_path, 300, data.file_name || `${data.title}.pdf`) }
+  } catch {
+    return { error: 'Could not create a download link. Please try again.' }
+  }
 }
 
 export async function deleteReferenceDoc(id: string, siteId: string) {
@@ -539,12 +559,18 @@ export async function deleteReferenceDoc(id: string, siteId: string) {
   if (profile.role !== 'admin') return { error: 'Admin access required' }
 
   const supabase = await createClient()
-  const { error } = await supabase
+  const { data: rows, error } = await supabase
     .from('safety_reference_documents')
     .delete()
     .eq('id', id)
+    .select('id, file_path')
 
   if (error) return { error: error.message }
+  if (!rows || rows.length === 0) return { error: 'Document not found, or you do not have permission to delete it.' }
+  const filePath = (rows[0] as { file_path: string | null }).file_path
+  if (filePath) await deleteFromR2(filePath).catch(() => {})
+
+  revalidatePath('/safety')
   revalidatePath(`/sites/${siteId}`)
   return { success: true }
 }

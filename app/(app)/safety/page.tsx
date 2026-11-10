@@ -1,8 +1,6 @@
 import { requireAuth } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import SafetyView, {
-  type SafetyDocRow,
-  type SignoffRow,
   type SiteOption,
   type StaffOption,
   type VehicleOption,
@@ -12,7 +10,9 @@ import SafetyView, {
 import { getPreStartsPage } from './actions'
 import type { MyAssignmentRow } from './FormsTab'
 import type { TemplateRow } from './FormTemplatesTab'
-import type { AssignmentManagementRow } from './AssignFormsTab'
+import type { AssignmentManagementRow } from './FormsList'
+import type { ReferenceDocAdminRow } from './ReferenceDocsAdmin'
+import { todayInPerth } from '@/lib/emails/dateUtils'
 import type { SafetyFormType, FormSection } from '@/types/database'
 
 export const metadata = { title: 'Safety — Earthcare Landscapes' }
@@ -34,64 +34,27 @@ async function fetchSitesStaffVehicles(supabase: Db) {
   }
 }
 
-async function fetchDocsAndSignoffs(supabase: Db, profileId: string, isSupervisorPlus: boolean) {
+// Safety Admin → Reference documents (all sites). Supervisor+ only.
+async function fetchReferenceDocs(supabase: Db, isSupervisorPlus: boolean): Promise<ReferenceDocAdminRow[]> {
+  if (!isSupervisorPlus) return []
   try {
-    let signoffsQuery = supabase
-      .from('document_signoffs')
-      .select('id, document_id, signed_by, signed_at, signature_notes, profiles(first_name, last_name), safety_documents(title)')
-      .order('signed_at', { ascending: false })
-    if (!isSupervisorPlus) signoffsQuery = signoffsQuery.eq('signed_by', profileId)
-
-    const [docsResult, mySignoffsResult, countResult, signoffsResult] = await Promise.all([
-      supabase
-        .from('safety_documents')
-        .select('id, title, description, file_path, uploaded_by, created_at, profiles(first_name, last_name)')
-        .order('created_at', { ascending: false }),
-      supabase.from('document_signoffs').select('document_id').eq('signed_by', profileId),
-      supabase.from('document_signoffs').select('document_id'),
-      signoffsQuery,
-    ])
-
-    if (docsResult.error?.code === '42P01' || docsResult.error?.message?.includes('does not exist')) {
-      return { safetyDocs: [] as SafetyDocRow[], mySignoffIds: [] as string[], signoffs: [] as SignoffRow[], docsExist: false }
-    }
-    if (docsResult.error) {
-      return { safetyDocs: [] as SafetyDocRow[], mySignoffIds: [] as string[], signoffs: [] as SignoffRow[], docsExist: true }
-    }
-
-    const mySignoffIds = (mySignoffsResult.data ?? []).map(s => s.document_id)
-
-    const countMap: Record<string, number> = {}
-    for (const s of (countResult.data ?? [])) {
-      countMap[s.document_id] = (countMap[s.document_id] ?? 0) + 1
-    }
-
+    const { data, error } = await supabase
+      .from('safety_reference_documents')
+      .select('id, title, site_id, file_path, file_name, created_at, sites(name)')
+      .order('created_at', { ascending: false })
+    if (error) return []
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const safetyDocs: SafetyDocRow[] = (docsResult.data ?? []).map((r: any): SafetyDocRow => ({
-      id:           r.id,
-      title:        r.title,
-      description:  r.description,
-      filePath:     r.file_path,
-      uploadedBy:   r.uploaded_by,
-      uploaderName: r.profiles ? `${r.profiles.first_name} ${r.profiles.last_name}`.trim() : 'Unknown',
-      signoffCount: countMap[r.id] ?? 0,
-      createdAt:    r.created_at,
+    return (data ?? []).map((r: any): ReferenceDocAdminRow => ({
+      id:        r.id,
+      title:     r.title,
+      siteId:    r.site_id,
+      siteName:  (Array.isArray(r.sites) ? r.sites[0]?.name : r.sites?.name) ?? 'Unknown site',
+      fileName:  r.file_name ?? null,
+      hasFile:   !!r.file_path,
+      createdAt: r.created_at,
     }))
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const signoffs: SignoffRow[] = (signoffsResult.data ?? []).map((r: any): SignoffRow => ({
-      id:             r.id,
-      documentId:     r.document_id,
-      documentTitle:  r.safety_documents?.title ?? 'Unknown',
-      signedBy:       r.signed_by,
-      signerName:     r.profiles ? `${r.profiles.first_name} ${r.profiles.last_name}`.trim() : 'Unknown',
-      signedAt:       r.signed_at,
-      signatureNotes: r.signature_notes,
-    }))
-
-    return { safetyDocs, mySignoffIds, signoffs, docsExist: true }
   } catch {
-    return { safetyDocs: [] as SafetyDocRow[], mySignoffIds: [] as string[], signoffs: [] as SignoffRow[], docsExist: false }
+    return []
   }
 }
 
@@ -253,14 +216,14 @@ export default async function SafetyPage() {
   const [
     { sites, staff, vehicles },
     preStartsPage,
-    docsAndSignoffs,
+    referenceDocs,
     toolbox,
     incidentsResult,
     safetyForms,
   ] = await Promise.all([
     fetchSitesStaffVehicles(supabase),
     getPreStartsPage(0, 15),
-    fetchDocsAndSignoffs(supabase, profile.id, isSupervisorPlus),
+    fetchReferenceDocs(supabase, isSupervisorPlus),
     fetchToolboxMeetings(supabase),
     fetchIncidents(supabase),
     fetchSafetyFormsRaw(supabase, profile.id, isSupervisorPlus),
@@ -270,7 +233,6 @@ export default async function SafetyPage() {
   const preStartsExist    = !preStartsPage.tableMissing
   const preStartsHasMore  = preStartsPage.hasMore
 
-  const { safetyDocs, mySignoffIds, signoffs, docsExist } = docsAndSignoffs
   const { toolboxMeetings, toolboxMeetingsExist } = toolbox
   const { incidents, incidentsExist } = incidentsResult
   const { myAssignmentsRaw, templatesRaw, allAssignmentsRaw, safetyFormsExist } = safetyForms
@@ -344,18 +306,16 @@ export default async function SafetyPage() {
           sites={sites}
           staff={staff}
           vehicles={vehicles}
-          safetyDocs={safetyDocs}
-          mySignoffIds={mySignoffIds}
-          signoffs={signoffs}
           toolboxMeetings={toolboxMeetings}
           incidents={incidents}
           myAssignments={myAssignments}
           templates={templates}
           allAssignments={allAssignments}
+          referenceDocs={referenceDocs}
+          todayPerth={todayInPerth()}
           preStartsHasMore={preStartsHasMore}
           tablesExist={{
             preStarts: preStartsExist,
-            safetyDocuments: docsExist,
             toolboxMeetings: toolboxMeetingsExist,
             incidents: incidentsExist,
             safetyForms: safetyFormsExist,

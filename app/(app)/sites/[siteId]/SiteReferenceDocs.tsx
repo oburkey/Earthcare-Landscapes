@@ -1,103 +1,47 @@
 'use client'
 
 import { useState } from 'react'
-import { createReferenceDoc, updateReferenceDoc, deleteReferenceDoc } from '@/app/(app)/safety/forms-actions'
+import { getReferenceDocUrl } from '@/app/(app)/safety/forms-actions'
+import { startDownload } from '@/app/(app)/safety/signedPdf'
 import Modal from '@/app/_components/Modal'
+
+// Read-only list of this site's WHS reference documents for the crew.
+// They're uploaded and managed in Safety → Safety Admin → Reference documents.
 
 export type ReferenceDocRow = {
   id: string
   title: string
-  contentHtml: string
-  uploadedBy: string
+  hasFile: boolean
+  contentHtml: string | null
   createdAt: string
   updatedAt: string
 }
 
 interface Props {
-  siteId: string
   docs: ReferenceDocRow[]
-  isAdmin: boolean
 }
 
-type ModalState =
-  | { mode: 'create' }
-  | { mode: 'edit'; doc: ReferenceDocRow }
-  | { mode: 'view'; doc: ReferenceDocRow }
-  | null
+export default function SiteReferenceDocs({ docs }: Props) {
+  const [viewing, setViewing] = useState<ReferenceDocRow | null>(null)
+  const [busyId, setBusyId]   = useState<string | null>(null)
+  const [error, setError]     = useState<string | null>(null)
 
-export default function SiteReferenceDocs({ siteId, docs: initial, isAdmin }: Props) {
-  const [docs, setDocs]         = useState<ReferenceDocRow[]>(initial)
-  const [modal, setModal]       = useState<ModalState>(null)
-  const [title, setTitle]       = useState('')
-  const [content, setContent]   = useState('')
-  const [saving, setSaving]     = useState(false)
-  const [deleting, setDeleting] = useState<string | null>(null)
-  const [error, setError]       = useState<string | null>(null)
-
-  function openCreate() {
-    setTitle(''); setContent(''); setError(null); setModal({ mode: 'create' })
-  }
-
-  function openEdit(doc: ReferenceDocRow) {
-    setTitle(doc.title); setContent(doc.contentHtml); setError(null); setModal({ mode: 'edit', doc })
-  }
-
-  async function handleSave() {
-    if (!title.trim()) { setError('Title is required'); return }
-    setSaving(true); setError(null)
-    try {
-      if (modal?.mode === 'create') {
-        const result = await createReferenceDoc({ title: title.trim(), site_id: siteId, template_id: null, content_html: content })
-        if (result?.error) { setError(result.error); return }
-        if (result.doc) {
-          const d = result.doc
-          setDocs(prev => [{
-            id: d.id, title: d.title, contentHtml: d.content_html,
-            uploadedBy: d.uploaded_by, createdAt: d.created_at, updatedAt: d.updated_at,
-          }, ...prev])
-        }
-      } else if (modal?.mode === 'edit') {
-        const result = await updateReferenceDoc(modal.doc.id, { title: title.trim(), content_html: content, site_id: siteId })
-        if (result?.error) { setError(result.error); return }
-        setDocs(prev => prev.map(d => d.id === (modal as { doc: ReferenceDocRow }).doc.id
-          ? { ...d, title: title.trim(), contentHtml: content, updatedAt: new Date().toISOString() }
-          : d
-        ))
-      }
-      setModal(null)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function handleDelete(doc: ReferenceDocRow) {
-    if (!confirm(`Delete "${doc.title}"?`)) return
-    setDeleting(doc.id)
-    const result = await deleteReferenceDoc(doc.id, siteId)
-    setDeleting(null)
-    if (result?.error) { setError(result.error); return }
-    setDocs(prev => prev.filter(d => d.id !== doc.id))
+  async function handleDownload(doc: ReferenceDocRow) {
+    setBusyId(doc.id); setError(null)
+    const result = await getReferenceDocUrl(doc.id)
+    setBusyId(null)
+    if (!result.url) { setError(result.error ?? 'Could not download.'); return }
+    startDownload(result.url)
   }
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-fg-secondary">WHS Reference Documents</h2>
-        {isAdmin && (
-          <button
-            type="button"
-            onClick={openCreate}
-            className="rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800 active:bg-green-900 transition-colors"
-          >
-            + Add document
-          </button>
-        )}
-      </div>
+      <h2 className="text-base font-semibold text-fg-secondary">WHS Reference Documents</h2>
 
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       {docs.length === 0 ? (
-        <p className="text-sm text-fg-muted">{isAdmin ? 'No documents yet.' : 'No WHS reference documents for this site.'}</p>
+        <p className="text-sm text-fg-muted">No WHS reference documents for this site.</p>
       ) : (
         <div className="rounded-xl border border-border bg-surface divide-y divide-border-subtle overflow-hidden">
           {docs.map(doc => (
@@ -105,52 +49,41 @@ export default function SiteReferenceDocs({ siteId, docs: initial, isAdmin }: Pr
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-fg">{doc.title}</p>
                 <p className="text-xs text-fg-muted">
-                  Updated {new Date(doc.updatedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  Updated {new Date(doc.updatedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Australia/Perth' })}
                 </p>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              {doc.hasFile ? (
                 <button
                   type="button"
-                  onClick={() => setModal({ mode: 'view', doc })}
-                  className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-secondary hover:bg-surface-raised transition-colors"
+                  onClick={() => handleDownload(doc)}
+                  disabled={busyId === doc.id}
+                  className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-secondary hover:bg-surface-raised disabled:opacity-50 transition-colors"
+                >
+                  {busyId === doc.id ? '…' : 'Download'}
+                </button>
+              ) : doc.contentHtml ? (
+                <button
+                  type="button"
+                  onClick={() => setViewing(doc)}
+                  className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-secondary hover:bg-surface-raised transition-colors"
                 >
                   View
                 </button>
-                {isAdmin && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => openEdit(doc)}
-                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-secondary hover:bg-surface-raised transition-colors"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(doc)}
-                      disabled={deleting === doc.id}
-                      className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
-                    >
-                      {deleting === doc.id ? '…' : 'Delete'}
-                    </button>
-                  </>
-                )}
-              </div>
+              ) : null}
             </div>
           ))}
         </div>
       )}
 
-      {/* View modal */}
-      {modal?.mode === 'view' && (
+      {viewing && (
         <Modal
-          title={modal.doc.title}
+          title={viewing.title}
           width="3xl"
-          onClose={() => setModal(null)}
+          onClose={() => setViewing(null)}
           headerAction={
             <button
               type="button"
-              onClick={() => setModal(null)}
+              onClick={() => setViewing(null)}
               className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-fg-secondary hover:bg-surface-raised transition-colors"
             >
               Close
@@ -159,63 +92,8 @@ export default function SiteReferenceDocs({ siteId, docs: initial, isAdmin }: Pr
         >
           <div
             className="prose prose-sm max-w-none text-fg"
-            dangerouslySetInnerHTML={{ __html: modal.doc.contentHtml }}
+            dangerouslySetInnerHTML={{ __html: viewing.contentHtml ?? '' }}
           />
-        </Modal>
-      )}
-
-      {/* Create / Edit modal */}
-      {(modal?.mode === 'create' || modal?.mode === 'edit') && (
-        <Modal
-          title={modal.mode === 'create' ? 'New WHS reference document' : 'Edit document'}
-          width="2xl"
-          onClose={() => setModal(null)}
-          footer={
-            <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setModal(null)}
-                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-fg-secondary hover:bg-surface-raised transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving}
-                className="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50 transition-colors"
-              >
-                {saving ? 'Saving…' : modal.mode === 'create' ? 'Create' : 'Save changes'}
-              </button>
-            </div>
-          }
-        >
-          <div className="space-y-4">
-
-            {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-
-            <div>
-              <label className="block text-sm font-medium text-fg mb-1">Title *</label>
-              <input
-                value={title}
-                onChange={e => setTitle(e.target.value)}
-                className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:outline-none focus:ring-1 focus:ring-green-600"
-                placeholder="e.g. WHS Management Plan"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-fg mb-1">Content (HTML)</label>
-              <textarea
-                rows={14}
-                value={content}
-                onChange={e => setContent(e.target.value)}
-                placeholder="Document content as HTML. Use &lt;p&gt;, &lt;ul&gt;, &lt;h3&gt; etc."
-                className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-fg font-mono placeholder:text-fg-muted focus:outline-none focus:ring-1 focus:ring-green-600 resize-y"
-              />
-            </div>
-
-          </div>
         </Modal>
       )}
     </div>

@@ -41,11 +41,11 @@ export default async function SitePage({ params, searchParams }: Props) {
   ])
 
   // Graceful: table may not exist yet
-  let refDocsRaw: Array<{ id: string; title: string; content_html: string; uploaded_by: string; created_at: string; updated_at: string }> | null = null
+  let refDocsRaw: Array<{ id: string; title: string; content_html: string | null; file_path: string | null; created_at: string; updated_at: string }> | null = null
   try {
     const { data, error } = await supabase
       .from('safety_reference_documents')
-      .select('id, title, content_html, uploaded_by, created_at, updated_at')
+      .select('id, title, content_html, file_path, created_at, updated_at')
       .eq('site_id', siteId)
       .order('created_at', { ascending: false })
     if (!error) refDocsRaw = data
@@ -54,8 +54,8 @@ export default async function SitePage({ params, searchParams }: Props) {
   if (!site) notFound()
 
   const refDocs: ReferenceDocRow[] = (refDocsRaw ?? []).map(r => ({
-    id: r.id, title: r.title, contentHtml: r.content_html,
-    uploadedBy: r.uploaded_by, createdAt: r.created_at, updatedAt: r.updated_at,
+    id: r.id, title: r.title, hasFile: !!r.file_path, contentHtml: r.content_html,
+    createdAt: r.created_at, updatedAt: r.updated_at,
   }))
 
   // Generate signed URLs for each plan document
@@ -220,11 +220,7 @@ export default async function SitePage({ params, searchParams }: Props) {
         </div>
 
         {/* WHS Reference Documents */}
-        <SiteReferenceDocs
-          siteId={siteId}
-          docs={refDocs}
-          isAdmin={isAdmin}
-        />
+        <SiteReferenceDocs docs={refDocs} />
         </>)}
 
       </div>
