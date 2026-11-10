@@ -5,6 +5,7 @@ import SignaturePad, { type SignaturePadHandle } from './SignaturePad'
 import { submitFormCompletion } from './forms-actions'
 import { storeSignedPdf } from './signedPdf'
 import type { FormSection, SafetyFormType } from '@/types/database'
+import type { SiteInfoLine } from '@/lib/swms'
 
 export interface CompletionAssignment {
   id: string
@@ -12,6 +13,7 @@ export interface CompletionAssignment {
   formType: SafetyFormType
   sections: FormSection[]
   contentHtml: string | null
+  siteInfo: SiteInfoLine[] | null  // induction: this site's safety details
   requireWitness: boolean
   siteName: string | null
   workerName: string
@@ -149,6 +151,21 @@ export default function FormCompletionView({ assignment, onClose, onCompleted }:
       </div>
 
       <div className="mx-auto w-full max-w-2xl px-4 py-6 space-y-8">
+
+        {/* ── Induction: site information ──────────────────────────────────── */}
+        {assignment.formType === 'interactive' && assignment.siteInfo && (
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-fg border-b border-border pb-1.5">Site information</h3>
+            <dl className="rounded-lg border border-border bg-surface divide-y divide-border-subtle">
+              {assignment.siteInfo.map(line => (
+                <div key={line.label} className="grid grid-cols-3 gap-3 px-3 py-2 text-sm">
+                  <dt className="text-fg-muted">{line.label}</dt>
+                  <dd className="col-span-2 text-fg whitespace-pre-wrap">{line.value || '—'}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        )}
 
         {/* ── Interactive form sections ────────────────────────────────────── */}
         {assignment.formType === 'interactive' && assignment.sections.map((section, si) => (

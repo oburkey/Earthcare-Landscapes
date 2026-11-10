@@ -6,6 +6,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAuth } from '@/lib/auth'
 import { uploadToR2, deleteFromR2, getR2FileAsDataUrl, getR2SignedUrl } from '@/lib/r2'
 import type { Role, SafetyFormType, FormSection } from '@/types/database'
+import { pickCompanySafety, pickSiteSafety, filledCount } from '@/lib/siteSafety'
+import { swmsDetailsFrom, pickSwmsDetails, renderSwmsHtml, inductionSiteInfo, BLANK_SWMS_FILL, type SiteInfoLine } from '@/lib/swms'
 
 const ROLE_LEVEL: Record<Role, number> = {
   client: 0, worker: 1, leading_hand: 2, supervisor: 3, admin: 4,
@@ -93,6 +95,23 @@ export async function assignForm(data: {
 
   const errors: string[] = []
   const created: string[] = []
+  const warnings: string[] = []
+
+  // A SWMS assigned for a site uses that site's own SWMS copy
+  let siteSwmsId: string | null = null
+  if (data.site_id) {
+    const { data: tpl } = await supabase
+      .from('safety_form_templates')
+      .select('form_type')
+      .eq('id', data.template_id)
+      .maybeSingle()
+    if (tpl?.form_type === 'swms') {
+      const swms = await getOrCreateSiteSwms(supabase, profile.id, data.site_id, data.template_id)
+      if ('error' in swms) return { error: swms.error }
+      siteSwmsId = swms.id
+      if (swms.warning) warnings.push(swms.warning)
+    }
+  }
 
   for (const workerId of data.worker_ids) {
     // Prevent duplicate pending assignments
@@ -117,6 +136,7 @@ export async function assignForm(data: {
         assigned_by:  profile.id,
         site_id:      data.site_id,
         due_date:     data.due_date,
+        site_swms_id: siteSwmsId,
       })
       .select('id')
       .single()
@@ -127,7 +147,64 @@ export async function assignForm(data: {
 
   revalidatePath('/safety')
   if (created.length === 0) return { error: errors[0] ?? 'No assignments created' }
-  return { success: true, created, errors: errors.length > 0 ? errors : undefined }
+  return {
+    success: true, created,
+    errors:   errors.length > 0 ? errors : undefined,
+    warnings: warnings.length > 0 ? warnings : undefined,
+  }
+}
+
+// One SWMS per site per template. Created on first assignment, copying the
+// company and site safety details as they are now; after that it keeps its
+// own copy (edited in Safety Admin → Site safety details).
+async function getOrCreateSiteSwms(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  profileId: string,
+  siteId: string,
+  templateId: string,
+): Promise<{ id: string; warning?: string } | { error: string }> {
+  const existing = await supabase
+    .from('site_swms')
+    .select('id')
+    .eq('site_id', siteId)
+    .eq('template_id', templateId)
+    .maybeSingle()
+  if (existing.data) return { id: existing.data.id as string }
+
+  const [{ data: companyRow }, { data: siteRow }] = await Promise.all([
+    supabase.from('company_safety_details').select('*').eq('id', true).maybeSingle(),
+    supabase.from('site_safety_details').select('*').eq('site_id', siteId).maybeSingle(),
+  ])
+  const site = siteRow ? pickSiteSafety(siteRow) : null
+
+  const { data: inserted, error } = await supabase
+    .from('site_swms')
+    .insert({
+      site_id:     siteId,
+      template_id: templateId,
+      details:     swmsDetailsFrom(companyRow ? pickCompanySafety(companyRow) : null, site),
+      created_by:  profileId,
+      updated_by:  profileId,
+    })
+    .select('id')
+    .single()
+
+  if (error || !inserted) {
+    // Someone else created it at the same moment (unique site + template)
+    const again = await supabase
+      .from('site_swms')
+      .select('id')
+      .eq('site_id', siteId)
+      .eq('template_id', templateId)
+      .maybeSingle()
+    if (again.data) return { id: again.data.id as string }
+    return { error: error?.message ?? 'Could not create the SWMS for this site.' }
+  }
+
+  const warning = !site || filledCount(site) === 0
+    ? 'This site has no safety details yet, so its SWMS starts with blank project details. Fill them in under Site safety details, then use Refresh on the SWMS.'
+    : undefined
+  return { id: inserted.id as string, warning }
 }
 
 export async function revokeAssignment(id: string) {
@@ -250,7 +327,7 @@ type CompletionSnapshot = {
   template_title_snapshot: string
   content_snapshot_html:   string | null
   sections_snapshot:       FormSection[] | null
-  site_details_snapshot:   Record<string, string> | null
+  site_details_snapshot:   SiteInfoLine[] | null
 }
 
 async function buildCompletionSnapshot(
@@ -259,7 +336,11 @@ async function buildCompletionSnapshot(
 ): Promise<CompletionSnapshot | { error: string }> {
   const { data, error } = await admin
     .from('safety_form_assignments')
-    .select('id, safety_form_templates(title, form_type, sections, content_html)')
+    .select(`
+      id, site_id,
+      safety_form_templates(title, form_type, sections, content_html),
+      site_swms(details, date_provided_to_pc, reviewed_by_name, reviewed_at)
+    `)
     .eq('id', assignmentId)
     .single()
   if (error || !data) return { error: 'Could not load the form being signed.' }
@@ -270,11 +351,41 @@ async function buildCompletionSnapshot(
   if (!tpl) return { error: 'Could not load the form being signed.' }
 
   const isDocument = tpl.form_type === 'swms' || tpl.form_type === 'jsa'
+  const swmsRaw = (Array.isArray(data.site_swms) ? data.site_swms[0] : data.site_swms) as SiteSwmsFillRow | null
+
+  // The induction shows the site's details at the top; keep them as shown
+  let siteInfo: SiteInfoLine[] | null = null
+  if (tpl.form_type === 'interactive' && data.site_id) {
+    const { data: siteRow } = await admin
+      .from('site_safety_details')
+      .select('*')
+      .eq('site_id', data.site_id)
+      .maybeSingle()
+    siteInfo = inductionSiteInfo(siteRow ? pickSiteSafety(siteRow) : null)
+  }
+
   return {
     template_title_snapshot: tpl.title,
-    content_snapshot_html:   isDocument ? tpl.content_html : null,
+    content_snapshot_html:   isDocument ? renderSwmsHtml(tpl.content_html, swmsFill(swmsRaw)) : null,
     sections_snapshot:       tpl.form_type === 'interactive' ? (tpl.sections ?? []) : null,
-    site_details_snapshot:   null,
+    site_details_snapshot:   siteInfo,
+  }
+}
+
+type SiteSwmsFillRow = {
+  details: unknown
+  date_provided_to_pc: string | null
+  reviewed_by_name: string | null
+  reviewed_at: string | null
+}
+
+function swmsFill(row: SiteSwmsFillRow | null) {
+  if (!row) return BLANK_SWMS_FILL
+  return {
+    details:          pickSwmsDetails(row.details),
+    dateProvidedToPc: row.date_provided_to_pc,
+    reviewedByName:   row.reviewed_by_name,
+    reviewedAt:       row.reviewed_at,
   }
 }
 
@@ -289,6 +400,7 @@ type CompletionPdfData = {
   templateTitle: string
   sections: FormSection[]
   contentHtml: string | null
+  siteInfo: SiteInfoLine[] | null
   requireWitness: boolean
   responses: Record<string, boolean | 'yes' | 'no' | string>
   inducteeSignatureUrl: string | null
@@ -322,7 +434,7 @@ export async function getCompletionPdfData(
 
   const { data: comp, error: cErr } = await admin
     .from('safety_form_completions')
-    .select('id, responses, inductee_signature_path, witness_signature_path, completed_at, notes, template_title_snapshot, content_snapshot_html, sections_snapshot')
+    .select('id, responses, inductee_signature_path, witness_signature_path, completed_at, notes, template_title_snapshot, content_snapshot_html, sections_snapshot, site_details_snapshot')
     .eq('assignment_id', assignmentId)
     .order('completed_at', { ascending: false })
     .limit(1)
@@ -368,6 +480,7 @@ export async function getCompletionPdfData(
     templateTitle:       comp.template_title_snapshot as string,
     sections:            (comp.sections_snapshot as FormSection[] | null) ?? [],
     contentHtml:         (comp.content_snapshot_html as string | null) ?? null,
+    siteInfo:            (comp.site_details_snapshot as SiteInfoLine[] | null) ?? null,
     requireWitness:      template.require_witness || !!comp.witness_signature_path,
     responses:           (comp.responses as Record<string, boolean | 'yes' | 'no' | string>) ?? {},
     inducteeSignatureUrl: inducteeUrl || null,

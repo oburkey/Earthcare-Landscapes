@@ -95,6 +95,8 @@ const HRWL_CATEGORIES = [
 ]
 
 // ── SWMS document builder ─────────────────────────────────────────────────────
+// {{placeholders}} are filled from each site's SWMS details (lib/swms.ts) when
+// the SWMS is shown and when it is signed. Blank values print as empty cells.
 
 interface SwmsParams {
   ref: string
@@ -122,50 +124,74 @@ function buildSwmsHtml(p: SwmsParams): string {
 
 ${sh(1, 'Project Information')}
 ${infoTable(
-  ['Head Contractor', '', 'Business Address / Phone', ''],
-  ['Principal Contractor / PCBU', '', 'Date SWMS Provided to PC', ''],
-  ['Project Manager / Workplace Location', '', 'Work Activity', p.title],
-  ['Site Manager / Contact Phone', ''],
+  ['PCBU (Company)', '{{company_name}}', 'ABN', '{{abn}}'],
+  ['Business Address', '{{address}}', 'Phone', '{{phone}}'],
+  ['WHS Contact', '{{whs_contact_name}}', 'WHS Contact Phone', '{{whs_contact_phone}}'],
+  ['Principal Contractor', '{{principal_contractor}}', 'PC Contact / Phone', '{{principal_contractor_contact}} {{principal_contractor_phone}}'],
+  ['Project', '{{project_name}}', 'Workplace Location', '{{project_address}}'],
+  ['Site Supervisor', '{{site_supervisor}}', 'Supervisor Phone', '{{site_supervisor_phone}}'],
+  ['Work Activity', p.title, 'Date SWMS Provided to PC', '{{date_provided_to_pc}}'],
 )}
 
 ${sh(2, 'SWMS Details')}
 ${infoTable(
-  ['Person responsible for ensuring compliance with this SWMS', 'Site Supervisor'],
-  ['Person responsible for reviewing control measures', 'Site Supervisor'],
+  ['Person responsible for ensuring compliance with this SWMS', '{{safety_responsible_person}}'],
+  ['Person responsible for reviewing control measures', '{{site_supervisor}}'],
   ['How will control measures be reviewed', 'Visual monitoring of control measures will be undertaken continuously. The SWMS will be reviewed and amended if there is any change in personnel, plant, environment or circumstances.'],
-  ['Review date', ''],
+  ['Reviewed by', '{{reviewed_by_name}}', 'Review date', '{{reviewed_at}}'],
 )}
 
-${sh(3, 'High Risk Construction Work &mdash; Tick Applicable')}
+${sh(3, 'Emergency Information')}
+${infoTable(
+  ['Nearest Hospital', '{{nearest_hospital}}', 'Hospital Phone', '{{nearest_hospital_phone}}'],
+  ['Hospital Address', '{{nearest_hospital_address}}'],
+  ['Assembly Point', '{{assembly_point}}', 'First Aid Kit', '{{first_aid_kit_location}}'],
+  ['Fire Extinguisher', '{{fire_extinguisher_location}}'],
+)}
+
+${sh(4, 'Site Hours and Access')}
+${infoTable(
+  ['Site Hours', '{{site_hours}}'],
+  ['Site Access', '{{site_access}}'],
+)}
+
+${sh(5, 'High Risk Construction Work &mdash; Tick Applicable')}
 ${hrwlSection(p.hrwlApplicable)}
 
-${sh(4, 'High Risk Work Licence')}
+${sh(6, 'High Risk Work Licence')}
 <div style="border:1px solid #d1d5db;padding:8px 10px;font-size:12px;margin-bottom:0;">
   ${p.hrwlLicenceNote}
 </div>
 
-${sh(5, 'Supplementary Information')}
+${sh(7, 'Supplementary Information')}
 ${infoTable(
   ['Plant and Equipment', p.plant],
   ['Training and Competencies Required', p.training],
   ['Hazardous Chemicals / SDS Required', p.chemicals],
 )}
 
-${sh(6, 'Mandatory PPE')}
+${sh(8, 'Mandatory PPE')}
 <div style="border:1px solid #d1d5db;padding:8px 10px;font-size:12px;margin-bottom:0;">
   ${p.ppe}
+  <div style="margin-top:6px;"><strong>Site requirements:</strong> {{required_ppe}}</div>
 </div>
 
-${sh(7, 'Site Specific Hazards, Risks and Control Measures')}
+${sh(9, 'Site Hazards and Environmental Controls')}
+${infoTable(
+  ['Site Hazards', '{{site_hazards}}'],
+  ['Environmental Controls', '{{environmental_controls}}'],
+)}
+
+${sh(10, 'Work Task Hazards, Risks and Control Measures')}
 ${hazardTable(p.hazards)}
 
-${sh(8, 'Consultation')}
+${sh(11, 'Consultation')}
 <div style="border:1px solid #d1d5db;padding:8px 10px;font-size:12px;margin-bottom:0;">
   <div style="margin-bottom:5px;">Workers involved in the high-risk construction work covered by this SWMS have been consulted in its development and will be briefed on its requirements before commencing work. <strong>Yes &#10003;</strong></div>
   <div>Have relevant PCBUs been consulted and do they acknowledge the hazards, risks and control measures? <strong>Yes / N/A</strong></div>
 </div>
 
-${sh(9, 'WHS Management Plan')}
+${sh(12, 'WHS Management Plan')}
 <div style="border:1px solid #d1d5db;padding:8px 10px;font-size:12px;margin-bottom:0;">
   This SWMS has been prepared in accordance with any relevant WHS Management Plan prepared for the construction site. <strong>Yes / N/A</strong>
 </div>
@@ -452,7 +478,8 @@ export async function seedSafetyFormTemplates(): Promise<SeedResult> {
   }
 }
 
-// ── Update existing SWMS templates (removes Section 10 + strips green) ────────
+// ── Update existing SWMS templates to the current seed version ───────────────
+// Overwrites the live SWMS-001 / SWMS-002 content_html (placeholder version).
 
 export type UpdateResult =
   | { success: true; updated: string[] }

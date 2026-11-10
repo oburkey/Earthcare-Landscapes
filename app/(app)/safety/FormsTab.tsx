@@ -13,6 +13,7 @@ export type MyAssignmentRow = {
   isSiteSpecific: boolean
   sections: CompletionAssignment['sections']
   contentHtml: string | null
+  siteInfo: CompletionAssignment['siteInfo']
   requireWitness: boolean
   siteId: string | null
   siteName: string | null
@@ -88,6 +89,7 @@ export default function FormsTab({ assignments, tableExists, workerName }: Props
             formType:       active.formType,
             sections:       active.sections,
             contentHtml:    active.contentHtml,
+            siteInfo:       active.siteInfo,
             requireWitness: active.requireWitness,
             siteName:       active.siteName,
             workerName,

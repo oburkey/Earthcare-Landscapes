@@ -55,11 +55,13 @@ export default function AssignFormPanel({ templates, workers, sites, onClose, on
 
     const created = result && 'created' in result ? result.created ?? [] : []
     const skipped = result && 'errors' in result && result.errors ? result.errors : []
+    const warnings = result && 'warnings' in result && result.warnings ? result.warnings : []
     if (created.length > 0) {
       router.refresh()
       onAssigned(
         `Assigned to ${created.length} worker${created.length !== 1 ? 's' : ''}.` +
-        (skipped.length > 0 ? ` ${skipped.length} skipped: ${skipped.join('; ')}` : '')
+        (skipped.length > 0 ? ` ${skipped.length} skipped: ${skipped.join('; ')}` : '') +
+        (warnings.length > 0 ? ` ${warnings.join(' ')}` : '')
       )
       onClose()
     } else if (skipped.length > 0) {

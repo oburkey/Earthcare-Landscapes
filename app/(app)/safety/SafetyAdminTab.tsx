@@ -7,6 +7,7 @@ import FormsList, { type AssignmentManagementRow } from './FormsList'
 import FormTemplatesTab, { type TemplateRow } from './FormTemplatesTab'
 import ReferenceDocsAdmin, { type ReferenceDocAdminRow } from './ReferenceDocsAdmin'
 import SiteSafetyDetails, { type SiteSafetyRow } from './SiteSafetyDetails'
+import SiteSwmsList, { type SiteSwmsRow } from './SiteSwmsList'
 import type { CompanySafetyValues } from '@/lib/siteSafety'
 
 // Safety Admin (supervisor+). Forms system only — the old upload-and-sign
@@ -22,6 +23,7 @@ interface Props {
   referenceDocs: ReferenceDocAdminRow[]
   companySafety: CompanySafetyValues | null
   siteSafety: SiteSafetyRow[]
+  siteSwms: SiteSwmsRow[]
   tableExists: boolean
 }
 
@@ -35,7 +37,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 export default function SafetyAdminTab({
-  isAdmin, todayPerth, assignments, templates, workers, sites, referenceDocs, companySafety, siteSafety, tableExists,
+  isAdmin, todayPerth, assignments, templates, workers, sites, referenceDocs, companySafety, siteSafety, siteSwms, tableExists,
 }: Props) {
   const [assignOpen, setAssignOpen]     = useState(false)
   const [createSignal, setCreateSignal] = useState(0)
@@ -109,6 +111,13 @@ export default function SafetyAdminTab({
           todayPerth={todayPerth}
           company={companySafety}
           sites={siteSafety}
+          renderSiteExtras={siteId => (
+            <SiteSwmsList
+              swms={siteSwms.filter(s => s.siteId === siteId)}
+              company={companySafety}
+              site={siteSafety.find(s => s.siteId === siteId)?.details ?? null}
+            />
+          )}
         />
       </Section>
     </div>

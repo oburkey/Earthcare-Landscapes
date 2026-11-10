@@ -15,6 +15,8 @@ import type { ReferenceDocAdminRow } from './ReferenceDocsAdmin'
 import { todayInPerth } from '@/lib/emails/dateUtils'
 import type { SiteSafetyRow } from './SiteSafetyDetails'
 import { pickCompanySafety, pickSiteSafety, type CompanySafetyValues } from '@/lib/siteSafety'
+import { renderSwmsHtml, pickSwmsDetails, inductionSiteInfo, BLANK_SWMS_FILL } from '@/lib/swms'
+import type { SiteSwmsRow } from './SiteSwmsList'
 import type { SafetyFormType, FormSection } from '@/types/database'
 
 export const metadata = { title: 'Safety — Earthcare Landscapes' }
@@ -185,7 +187,8 @@ async function fetchSafetyFormsRaw(supabase: Db, profileId: string, isSupervisor
         .select(`
           id, site_id, due_date, completed_at, created_at,
           safety_form_templates(id, title, form_type, sections, content_html, require_witness),
-          sites(name)
+          sites(name),
+          site_swms(details, date_provided_to_pc, reviewed_by_name, reviewed_at)
         `)
         .eq('assigned_to', profileId)
         .order('created_at', { ascending: false }),
@@ -222,7 +225,44 @@ async function fetchSafetyFormsRaw(supabase: Db, profileId: string, isSupervisor
     safetyFormsExist = false
   }
 
-  return { myAssignmentsRaw, templatesRaw, allAssignmentsRaw, safetyFormsExist }
+  // Site safety details shown at the top of my site inductions
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let inductionSiteRows: any[] = []
+  const inductionSiteIds = [...new Set(myAssignmentsRaw
+    .filter(r => !r.completed_at && r.site_id && r.safety_form_templates?.form_type === 'interactive')
+    .map(r => r.site_id as string))]
+  if (inductionSiteIds.length > 0) {
+    try {
+      const { data } = await supabase.from('site_safety_details').select('*').in('site_id', inductionSiteIds)
+      inductionSiteRows = data ?? []
+    } catch { /* table may not exist yet */ }
+  }
+
+  return { myAssignmentsRaw, templatesRaw, allAssignmentsRaw, safetyFormsExist, inductionSiteRows }
+}
+
+// Safety Admin → each site's SWMS (supervisor+)
+async function fetchSiteSwms(supabase: Db, isSupervisorPlus: boolean): Promise<SiteSwmsRow[]> {
+  if (!isSupervisorPlus) return []
+  try {
+    const { data, error } = await supabase
+      .from('site_swms')
+      .select('id, site_id, template_id, details, date_provided_to_pc, reviewed_by_name, reviewed_at, updated_at, safety_form_templates(title)')
+    if (error) return []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (data ?? []).map((r: any): SiteSwmsRow => ({
+      id:               r.id,
+      siteId:           r.site_id,
+      templateTitle:    (Array.isArray(r.safety_form_templates) ? r.safety_form_templates[0]?.title : r.safety_form_templates?.title) ?? 'SWMS',
+      details:          pickSwmsDetails(r.details),
+      dateProvidedToPc: r.date_provided_to_pc ?? null,
+      reviewedByName:   r.reviewed_by_name ?? null,
+      reviewedAt:       r.reviewed_at ?? null,
+      updatedAt:        r.updated_at,
+    }))
+  } catch {
+    return []
+  }
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -238,6 +278,7 @@ export default async function SafetyPage() {
     preStartsPage,
     referenceDocs,
     siteSafetyRaw,
+    siteSwms,
     toolbox,
     incidentsResult,
     safetyForms,
@@ -246,6 +287,7 @@ export default async function SafetyPage() {
     getPreStartsPage(0, 15),
     fetchReferenceDocs(supabase, isSupervisorPlus),
     fetchSiteSafetyRaw(supabase, isSupervisorPlus),
+    fetchSiteSwms(supabase, isSupervisorPlus),
     fetchToolboxMeetings(supabase),
     fetchIncidents(supabase),
     fetchSafetyFormsRaw(supabase, profile.id, isSupervisorPlus),
@@ -257,24 +299,38 @@ export default async function SafetyPage() {
 
   const { toolboxMeetings, toolboxMeetingsExist } = toolbox
   const { incidents, incidentsExist } = incidentsResult
-  const { myAssignmentsRaw, templatesRaw, allAssignmentsRaw, safetyFormsExist } = safetyForms
+  const { myAssignmentsRaw, templatesRaw, allAssignmentsRaw, safetyFormsExist, inductionSiteRows } = safetyForms
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const myAssignments: MyAssignmentRow[] = myAssignmentsRaw.map((r: any): MyAssignmentRow => ({
+  const myAssignments: MyAssignmentRow[] = myAssignmentsRaw.map((r: any): MyAssignmentRow => {
+    const formType = (r.safety_form_templates?.form_type ?? 'interactive') as SafetyFormType
+    // A SWMS shows its site's own details filled in (blank if it has none)
+    const swms = Array.isArray(r.site_swms) ? r.site_swms[0] : r.site_swms
+    const contentHtml = formType === 'swms' || formType === 'jsa'
+      ? renderSwmsHtml(r.safety_form_templates?.content_html ?? null, swms
+          ? { details: pickSwmsDetails(swms.details), dateProvidedToPc: swms.date_provided_to_pc, reviewedByName: swms.reviewed_by_name, reviewedAt: swms.reviewed_at }
+          : BLANK_SWMS_FILL)
+      : r.safety_form_templates?.content_html ?? null
+    const siteRow = formType === 'interactive' && r.site_id
+      ? inductionSiteRows.find((s: { site_id: string }) => s.site_id === r.site_id)
+      : undefined
+    return {
     id:             r.id,
     templateId:     r.safety_form_templates?.id ?? '',
     templateTitle:  r.safety_form_templates?.title ?? 'Unknown',
-    formType:       (r.safety_form_templates?.form_type ?? 'interactive') as SafetyFormType,
+    formType,
     isSiteSpecific: false,
     sections:       (r.safety_form_templates?.sections ?? []) as FormSection[],
-    contentHtml:    r.safety_form_templates?.content_html ?? null,
+    contentHtml,
+    siteInfo:       formType === 'interactive' && r.site_id ? inductionSiteInfo(siteRow ? pickSiteSafety(siteRow) : null) : null,
     requireWitness: r.safety_form_templates?.require_witness ?? false,
     siteId:         r.site_id,
     siteName:       r.sites?.name ?? null,
     dueDate:        r.due_date,
     completedAt:    r.completed_at,
     createdAt:      r.created_at,
-  }))
+    }
+  })
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const templates: TemplateRow[] = templatesRaw.map((r: any): TemplateRow => ({
@@ -351,6 +407,7 @@ export default async function SafetyPage() {
           referenceDocs={referenceDocs}
           companySafety={siteSafetyRaw.company}
           siteSafety={siteSafety}
+          siteSwms={siteSwms}
           todayPerth={todayInPerth()}
           preStartsHasMore={preStartsHasMore}
           tablesExist={{

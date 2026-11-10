@@ -414,7 +414,11 @@ export default function FormTemplatesTab({ templates: initial, tableExists, crea
                   placeholder="Paste or type the document HTML content here. Workers will read this before signing."
                   className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-fg font-mono placeholder:text-fg-muted focus:outline-none focus:ring-1 focus:ring-green-600 resize-y"
                 />
-                <p className="mt-1 text-xs text-fg-muted">Rendered as HTML. Use basic &lt;p&gt;, &lt;ul&gt;, &lt;h3&gt; tags.</p>
+                <p className="mt-1 text-xs text-fg-muted">
+                  Rendered as HTML. Use basic &lt;p&gt;, &lt;ul&gt;, &lt;h3&gt; tags. For a SWMS, placeholders such as
+                  {' '}<code>{'{{project_name}}'}</code>, <code>{'{{principal_contractor}}'}</code>, <code>{'{{nearest_hospital}}'}</code>,
+                  {' '}<code>{'{{reviewed_by_name}}'}</code> and <code>{'{{reviewed_at}}'}</code> are filled from each site&apos;s SWMS details.
+                </p>
               </div>
             )}
 

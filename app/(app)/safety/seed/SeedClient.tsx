@@ -81,9 +81,9 @@ export default function SeedClient() {
         <div>
           <h2 className="text-base font-semibold text-fg">Update SWMS templates</h2>
           <p className="mt-1 text-sm text-fg-muted">
-            Updates the content_html of the two existing SWMS templates (SWMS-001 and SWMS-002).
-            Removes Section 10 (sign-on register) and replaces green section headers with neutral styling.
-            Run this if the templates were seeded before these fixes.
+            Replaces the content of the two SWMS templates (SWMS-001 and SWMS-002) with the current
+            version: project, company, emergency and site details are filled automatically from each
+            site&apos;s SWMS. Any edits made to these two templates in Form Templates are overwritten.
           </p>
         </div>
 

@@ -1,5 +1,6 @@
 import { LOGO_DATA_URL } from '@/lib/pdfAssets'
 import type { FormSection, SafetyFormType } from '@/types/database'
+import { escapeHtml, type SiteInfoLine } from '@/lib/swms'
 
 export interface FormPdfData {
   templateTitle: string
@@ -9,6 +10,7 @@ export interface FormPdfData {
   completedAt: string
   sections: FormSection[]
   contentHtml: string | null
+  siteInfo: SiteInfoLine[] | null  // induction: site details as shown when signed
   requireWitness: boolean
   responses: Record<string, boolean | 'yes' | 'no' | string>
   inducteeSignatureUrl: string | null  // data URL or R2 signed URL
@@ -117,6 +119,18 @@ function buildInteractiveBody(sections: FormSection[], responses: Record<string,
   }).join('')
 }
 
+function buildSiteInfoBlock(siteInfo: SiteInfoLine[] | null): string {
+  if (!siteInfo || siteInfo.length === 0) return ''
+  const rows = siteInfo.map(line =>
+    `<tr>
+      <td class="resp-label" style="width:35%;font-weight:600;">${escapeHtml(line.label)}</td>
+      <td class="resp-label" style="width:65%;">${line.value ? escapeHtml(line.value).replace(/\r?\n/g, '<br>') : '<span style="color:#aaa">—</span>'}</td>
+    </tr>`
+  ).join('')
+  return `<div class="sec-hdr">Site Information</div>
+<table class="resp-table"><tbody>${rows}</tbody></table>`
+}
+
 function buildSigs(
   workerName: string,
   completedAt: string,
@@ -172,6 +186,7 @@ function buildHtml(
     </div>
     <div class="hdr-right"><img src="${LOGO_DATA_URL}" alt="Earthcare" /></div>
   </div>
+  ${buildSiteInfoBlock(data.siteInfo)}
   ${buildInteractiveBody(data.sections, data.responses)}
   ${buildNotesBlock(data.notes)}
   <div class="completion-record">
