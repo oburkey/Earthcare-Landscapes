@@ -375,7 +375,7 @@ export async function seedSafetyFormTemplates(): Promise<SeedResult> {
   if (!adminProfile) return { error: 'No admin profile found in database. Ensure at least one admin user exists.' }
 
   const TITLES = [
-    'Health, Safety & Site Induction Checklist',
+    'Health, Safety, Environment and Site Induction Checklist',
     'Safe Work Method Statement — Mobile Plant Movement',
     'Safe Work Method Statement — Working Near Services and Roads',
   ]
@@ -405,7 +405,7 @@ export async function seedSafetyFormTemplates(): Promise<SeedResult> {
     created_by: string
   }> = [
     {
-      title: 'Health, Safety & Site Induction Checklist',
+      title: 'Health, Safety, Environment and Site Induction Checklist',
       form_type: 'interactive',
       description: 'Form No: FHS001 — To be completed by all employees, contractors and visitors before commencing work on site. Requires inductee signature and witness/safety rep signature.',
       is_site_specific: true,
@@ -477,11 +477,13 @@ export async function updateSwmsTemplates(): Promise<UpdateResult> {
 
   const updated: string[] = []
   for (const { title, content_html } of updates) {
-    const { error } = await admin
+    const { data: rows, error } = await admin
       .from('safety_form_templates')
       .update({ content_html })
       .eq('title', title)
+      .select('id')
     if (error) return { error: `Failed to update "${title}": ${error.message}` }
+    if (!rows || rows.length === 0) return { error: `No template titled "${title}" was found — nothing updated.` }
     updated.push(title)
   }
 

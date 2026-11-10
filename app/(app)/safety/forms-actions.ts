@@ -49,12 +49,14 @@ export async function updateTemplate(id: string, data: {
   if (profile.role !== 'admin') return { error: 'Admin access required' }
 
   const supabase = await createClient()
-  const { error } = await supabase
+  const { data: rows, error } = await supabase
     .from('safety_form_templates')
     .update(data)
     .eq('id', id)
+    .select('id')
 
   if (error) return { error: error.message }
+  if (!rows || rows.length === 0) return { error: 'Template not found, or you do not have permission to edit it.' }
   revalidatePath('/safety')
   return { success: true }
 }
@@ -64,12 +66,14 @@ export async function setTemplateActive(id: string, isActive: boolean) {
   if (profile.role !== 'admin') return { error: 'Admin access required' }
 
   const supabase = await createClient()
-  const { error } = await supabase
+  const { data: rows, error } = await supabase
     .from('safety_form_templates')
     .update({ is_active: isActive })
     .eq('id', id)
+    .select('id')
 
   if (error) return { error: error.message }
+  if (!rows || rows.length === 0) return { error: 'Template not found, or you do not have permission to edit it.' }
   revalidatePath('/safety')
   return { success: true }
 }

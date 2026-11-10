@@ -74,6 +74,13 @@ const PDF_STYLES = `<style>
 .html2pdf__container .sig-block .sig-name { font-size: 8px; color: #777; margin-top: 4px; }
 </style>`
 
+// "10 November 2026" in Perth time, whatever the device's time zone
+function perthDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-AU', {
+    day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Australia/Perth',
+  })
+}
+
 function renderResponse(
   type: string,
   id: string,
@@ -117,9 +124,7 @@ function buildSigs(
   inducteeDataUrl: string | null,
   witnessDataUrl: string | null,
 ): string {
-  const date = new Date(completedAt).toLocaleDateString('en-AU', {
-    day: 'numeric', month: 'long', year: 'numeric',
-  })
+  const date = perthDate(completedAt)
   const inductee = inducteeDataUrl
     ? `<div class="sig-block">
         <div class="sig-label">Inductee / Worker Signature</div>
@@ -150,9 +155,7 @@ function buildHtml(
   inducteeDataUrl: string | null,
   witnessDataUrl: string | null,
 ): string {
-  const date = new Date(data.completedAt).toLocaleDateString('en-AU', {
-    day: 'numeric', month: 'long', year: 'numeric',
-  })
+  const date = perthDate(data.completedAt)
   const siteStr = data.siteName ? ` &nbsp;·&nbsp; Site: <strong>${data.siteName}</strong>` : ''
   const metaLine = `Worker: <strong>${data.workerName}</strong>${siteStr} &nbsp;·&nbsp; Completed: <strong>${date}</strong>`
 
@@ -205,7 +208,7 @@ export async function generateFormCompletionPdf(data: FormPdfData): Promise<void
   el.innerHTML = html
 
   const slug     = data.workerName.replace(/\s+/g, '-').toLowerCase()
-  const dateStr  = data.completedAt.slice(0, 10)
+  const dateStr  = new Date(data.completedAt).toLocaleDateString('en-CA', { timeZone: 'Australia/Perth' })
   const typeStr  = data.formType === 'interactive' ? 'induction' : 'swms'
   const filename = `earthcare-${typeStr}-${slug}-${dateStr}.pdf`
 

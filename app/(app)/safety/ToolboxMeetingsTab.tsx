@@ -32,7 +32,7 @@ async function downloadToolboxMeetingsPdf(
   onError: (msg: string) => void,
   onDone: () => void,
 ) {
-  const date = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
+  const date = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Australia/Perth' })
   const filterParts = [
     dateFrom || dateTo ? [dateFrom, dateTo].filter(Boolean).join(' — ') : 'All dates',
     siteFilter ? `Site: ${siteLabel}` : 'All sites',
@@ -75,7 +75,7 @@ async function downloadToolboxMeetingsPdf(
   el.innerHTML = html
   try {
     const { default: html2pdf } = await import('html2pdf.js')
-    const dateStr = new Date().toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-')
+    const dateStr = new Date().toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Australia/Perth' }).replace(/ /g, '-')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (html2pdf() as any)
       .set({
