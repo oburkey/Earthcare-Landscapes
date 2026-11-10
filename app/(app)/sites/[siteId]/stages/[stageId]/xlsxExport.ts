@@ -43,18 +43,28 @@ const COL = {
 
 // ── Client Summary styles ─────────────────────────────────────────────────────
 
-const THIN = { style: 'thin', color: { rgb: '000000' } }
-const ALL_BORDERS = { top: THIN, bottom: THIN, left: THIN, right: THIN }
+const THIN   = { style: 'thin',   color: { rgb: '000000' } }
+const MEDIUM = { style: 'medium', color: { rgb: '000000' } }
 const SUMMARY_HEADERS = ['Lot', 'Design', 'Notes', 'Budget', 'Total Amount']
 const SUMMARY_NUM_COLS = SUMMARY_HEADERS.length
 const SUMMARY_CURRENCY_COLS = new Set([3, 4])
 const SUMMARY_COL_WIDTHS = [18, 21, 12, 16, 16]
-const SUMMARY_TITLE_STYLE = { font: { bold: true, sz: 13 }, border: ALL_BORDERS }
-const SUMMARY_HEADER_STYLE = { ...HEADER_STYLE, border: ALL_BORDERS }
-const SUMMARY_ROW_STYLE = { border: ALL_BORDERS }
-const SUMMARY_TOTALS_STYLE = {
-  font: { bold: true },
-  border: { ...ALL_BORDERS, top: { style: 'medium', color: { rgb: '000000' } } },
+const SUMMARY_TITLE_STYLE = { font: { bold: true, sz: 13 } }
+const SUMMARY_HEADER_STYLE = HEADER_STYLE
+const SUMMARY_ROW_STYLE = {}
+const SUMMARY_TOTALS_STYLE = { font: { bold: true } }
+
+// Medium around the whole table, under the title, under the header and above
+// TOTAL; thin everywhere else. Each side is set on both neighbouring cells so
+// Excel draws it the same whichever cell it reads.
+function summaryBorder(r: number, c: number, totalsRow: number) {
+  const mediumBelow = (row: number) => row === 0 || row === 1 || row === totalsRow - 1 || row === totalsRow
+  return {
+    top:    r === 0 || mediumBelow(r - 1) ? MEDIUM : THIN,
+    bottom: mediumBelow(r) ? MEDIUM : THIN,
+    left:   c === 0 ? MEDIUM : THIN,
+    right:  c === SUMMARY_NUM_COLS - 1 ? MEDIUM : THIN,
+  }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -246,10 +256,11 @@ function buildSummarySheet(utils: XlsxUtils, data: StageEstimateExport, detailRo
 
   for (let c = 0; c < SUMMARY_NUM_COLS; c++) {
     const fmt = SUMMARY_CURRENCY_COLS.has(c) ? CURRENCY_FMT : undefined
-    setStyle(utils, ws, 0, c, SUMMARY_TITLE_STYLE)
-    setStyle(utils, ws, 1, c, SUMMARY_HEADER_STYLE)
-    for (let r = firstLotRow; r < totalsRow; r++) setStyle(utils, ws, r, c, SUMMARY_ROW_STYLE, fmt)
-    setStyle(utils, ws, totalsRow, c, SUMMARY_TOTALS_STYLE, fmt)
+    const withBorder = (style: CellStyle, r: number) => ({ ...style, border: summaryBorder(r, c, totalsRow) })
+    setStyle(utils, ws, 0, c, withBorder(SUMMARY_TITLE_STYLE, 0))
+    setStyle(utils, ws, 1, c, withBorder(SUMMARY_HEADER_STYLE, 1))
+    for (let r = firstLotRow; r < totalsRow; r++) setStyle(utils, ws, r, c, withBorder(SUMMARY_ROW_STYLE, r), fmt)
+    setStyle(utils, ws, totalsRow, c, withBorder(SUMMARY_TOTALS_STYLE, totalsRow), fmt)
   }
 
   return ws
