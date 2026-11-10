@@ -8,14 +8,16 @@ import { createAdminClient } from '@/lib/supabase/admin'
 const resend = new Resend(process.env.RESEND_API_KEY)
 const FROM   = process.env.RESEND_FROM ?? 'Earthcare Landscapes <noreply@earthcare.net.au>'
 
-export async function getScheduleEmailRecipients(reportType: 'weekly' | 'monthly' | 'issues'): Promise<string[]> {
+export async function getScheduleEmailRecipients(reportType: 'weekly' | 'monthly' | 'issues' | 'safety'): Promise<string[]> {
   const db = createAdminClient()
-  // 'issues' is an independent flag (wants_issues), not part of the
-  // weekly/monthly/both email_type sentinel — see
+  // 'issues' and 'safety' are independent flags (wants_issues / wants_safety),
+  // not part of the weekly/monthly/both email_type sentinel — see
   // supabase/migration_quant_issues.sql for why.
   const query = reportType === 'issues'
     ? db.from('email_recipients').select('email').eq('wants_issues', true)
-    : db.from('email_recipients').select('email').in('email_type', [reportType, 'both'])
+    : reportType === 'safety'
+      ? db.from('email_recipients').select('email').eq('wants_safety', true)
+      : db.from('email_recipients').select('email').in('email_type', [reportType, 'both'])
   const { data, error } = await query.order('email', { ascending: true })
   if (error) {
     console.error(`[emails/send] Failed to fetch ${reportType} recipients:`, error.message)

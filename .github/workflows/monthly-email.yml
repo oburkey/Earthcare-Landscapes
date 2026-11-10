@@ -18,3 +18,12 @@ jobs:
           curl -sfL -X POST "${{ secrets.APP_URL }}/api/send-monthly-email" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "Content-Type: application/json"
+
+      # Same daily run; the route only sends on the 1st (Perth) and only when
+      # at least one site's safety details are overdue for review.
+      - name: Send safety review email
+        if: always()
+        run: |
+          curl -sfL -X POST "${{ secrets.APP_URL }}/api/send-safety-review-email" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json"

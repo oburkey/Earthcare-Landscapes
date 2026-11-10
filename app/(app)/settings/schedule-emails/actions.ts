@@ -8,6 +8,7 @@ import { fetchWeeklyEmailData, fetchMonthlyEmailData } from '@/lib/emails/data'
 import { renderWeeklyEmailHtml } from '@/lib/emails/weeklyTemplate'
 import { renderMonthlyEmailHtml } from '@/lib/emails/monthlyTemplate'
 import { renderIssuesEmailHtml } from '@/lib/emails/issuesTemplate'
+import { fetchOverdueSafetySites, renderSafetyReviewEmailHtml } from '@/lib/emails/safetyReview'
 import { getQuantIssues } from '@/lib/quantIssues'
 import { sendScheduleEmail } from '@/lib/emails/send'
 import { formatDate, todayInPerth } from '@/lib/emails/dateUtils'
@@ -19,18 +20,18 @@ async function requireAdmin() {
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-type ListType = 'weekly' | 'monthly' | 'issues'
+type ListType = 'weekly' | 'monthly' | 'issues' | 'safety'
 
 function isListType(v: FormDataEntryValue | null): v is ListType {
-  return v === 'weekly' || v === 'monthly' || v === 'issues'
+  return v === 'weekly' || v === 'monthly' || v === 'issues' || v === 'safety'
 }
 
 // Rows are unique per email (email_recipients.email is UNIQUE). Weekly/monthly
 // share one sentinel column (email_type: 'weekly' | 'monthly' | 'both' | null)
 // — adding the other list upgrades to 'both', removing one side of 'both'
-// downgrades rather than deletes. 'issues' is a fully independent flag
-// (wants_issues) so it can be toggled without disturbing weekly/monthly, and
-// vice versa — a row is only deleted once nothing references it at all.
+// downgrades rather than deletes. 'issues' and 'safety' are fully independent
+// flags (wants_issues / wants_safety) so they can be toggled without disturbing
+// the other lists — a row is only deleted once nothing references it at all.
 export async function addEmailRecipient(
   _prev: MutationState,
   formData: FormData
@@ -48,11 +49,32 @@ export async function addEmailRecipient(
 
   const { data: existing } = await supabase
     .from('email_recipients')
-    .select('id, email_type, wants_issues')
+    .select('id, email_type, wants_issues, wants_safety')
     .eq('email', email)
     .maybeSingle()
 
-  if (list === 'issues') {
+  if (list === 'safety') {
+    if (existing) {
+      if (existing.wants_safety) return { error: 'That email is already on this list.' }
+      const { data: rows, error } = await supabase
+        .from('email_recipients')
+        .update({ wants_safety: true })
+        .eq('id', existing.id)
+        .select('id')
+      if (error) return { error: error.message }
+      if (!rows || rows.length === 0) return { error: 'Could not add — recipient not found.' }
+    } else {
+      const { error } = await supabase
+        .from('email_recipients')
+        .insert({ email, wants_safety: true, created_by: profile.id })
+        .select('id')
+        .single()
+      if (error) {
+        if (error.code === '23505') return { error: 'That email is already on this list.' }
+        return { error: error.message }
+      }
+    }
+  } else if (list === 'issues') {
     if (existing) {
       if (existing.wants_issues) return { error: 'That email is already on this list.' }
       const { error } = await supabase
@@ -112,7 +134,7 @@ export async function removeEmailRecipient(
 
   const { data: existing } = await supabase
     .from('email_recipients')
-    .select('email_type, wants_issues')
+    .select('email_type, wants_issues, wants_safety')
     .eq('id', id)
     .maybeSingle()
   if (!existing) return { error: 'Recipient not found.' }
@@ -121,7 +143,10 @@ export async function removeEmailRecipient(
   // list (e.g. weekly + issues) must survive with the other membership intact.
   let nextEmailType: 'weekly' | 'monthly' | 'both' | null = existing.email_type
   let nextWantsIssues = existing.wants_issues
-  if (list === 'issues') {
+  let nextWantsSafety = existing.wants_safety
+  if (list === 'safety') {
+    nextWantsSafety = false
+  } else if (list === 'issues') {
     nextWantsIssues = false
   } else if (existing.email_type === 'both') {
     nextEmailType = list === 'weekly' ? 'monthly' : 'weekly'
@@ -129,13 +154,13 @@ export async function removeEmailRecipient(
     nextEmailType = null
   }
 
-  if (nextEmailType === null && !nextWantsIssues) {
+  if (nextEmailType === null && !nextWantsIssues && !nextWantsSafety) {
     const { error } = await supabase.from('email_recipients').delete().eq('id', id)
     if (error) return { error: error.message }
   } else {
     const { error } = await supabase
       .from('email_recipients')
-      .update({ email_type: nextEmailType, wants_issues: nextWantsIssues })
+      .update({ email_type: nextEmailType, wants_issues: nextWantsIssues, wants_safety: nextWantsSafety })
       .eq('id', id)
     if (error) return { error: error.message }
   }
@@ -229,6 +254,37 @@ export async function sendTestIssuesEmail(): Promise<MutationState> {
     to: [profile.email],
     subject: `[TEST] Quant sheet & invoicing issues — ${formatDate(todayInPerth())}`,
     html,
+  })
+  if (error) return { error }
+  return { success: `Test email sent to ${profile.email}.` }
+}
+
+export async function previewSafetyReviewEmail(): Promise<{ html?: string; error?: string }> {
+  try {
+    await requireAdmin()
+    const sites = await fetchOverdueSafetySites()
+    return { html: renderSafetyReviewEmailHtml(sites) }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Failed to build preview.' }
+  }
+}
+
+// Always sends (even with nothing overdue) so the layout can be checked; the
+// scheduled run only sends when at least one site is overdue.
+export async function sendTestSafetyReviewEmail(): Promise<MutationState> {
+  let profile
+  try {
+    profile = await requireAdmin()
+  } catch {
+    return { error: 'Admin access required.' }
+  }
+  if (!profile.email) return { error: 'Your account has no email address on file.' }
+
+  const sites = await fetchOverdueSafetySites()
+  const { error } = await sendScheduleEmail({
+    to: [profile.email],
+    subject: `[TEST] Site safety details due for review — ${formatDate(todayInPerth())}`,
+    html: renderSafetyReviewEmailHtml(sites),
   })
   if (error) return { error }
   return { success: `Test email sent to ${profile.email}.` }

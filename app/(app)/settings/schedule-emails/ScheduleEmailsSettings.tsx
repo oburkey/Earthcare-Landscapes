@@ -3,13 +3,13 @@
 import { useActionState, useEffect, useState, useTransition } from 'react'
 import {
   addEmailRecipient, removeEmailRecipient,
-  previewWeeklyEmail, previewMonthlyEmail, previewIssuesEmail,
-  sendTestWeeklyEmail, sendTestMonthlyEmail, sendTestIssuesEmail,
+  previewWeeklyEmail, previewMonthlyEmail, previewIssuesEmail, previewSafetyReviewEmail,
+  sendTestWeeklyEmail, sendTestMonthlyEmail, sendTestIssuesEmail, sendTestSafetyReviewEmail,
 } from './actions'
 import type { MutationState } from '@/types/actions'
 
 export type RecipientRow = { id: string; email: string }
-type ListType = 'weekly' | 'monthly' | 'issues'
+type ListType = 'weekly' | 'monthly' | 'issues' | 'safety'
 
 const INPUT = 'block w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg shadow-sm placeholder:text-fg-muted focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600'
 const BUTTON_PRIMARY = 'rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 active:bg-green-900 disabled:opacity-50'
@@ -158,11 +158,13 @@ function PreviewSection() {
         <PreviewButton label="Preview weekly email" fetchPreview={previewWeeklyEmail} />
         <PreviewButton label="Preview monthly email" fetchPreview={previewMonthlyEmail} />
         <PreviewButton label="Preview issues email" fetchPreview={previewIssuesEmail} />
+        <PreviewButton label="Preview safety review email" fetchPreview={previewSafetyReviewEmail} />
       </div>
       <div className="flex flex-wrap gap-3 pt-2 border-t border-border-subtle">
         <SendTestButton label="Send test weekly email now" sendTest={sendTestWeeklyEmail} />
         <SendTestButton label="Send test monthly email now" sendTest={sendTestMonthlyEmail} />
         <SendTestButton label="Send test issues email now" sendTest={sendTestIssuesEmail} />
+        <SendTestButton label="Send test safety review email now" sendTest={sendTestSafetyReviewEmail} />
       </div>
     </div>
   )
@@ -171,11 +173,12 @@ function PreviewSection() {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ScheduleEmailsSettings({
-  weeklyRecipients, monthlyRecipients, issuesRecipients,
+  weeklyRecipients, monthlyRecipients, issuesRecipients, safetyRecipients,
 }: {
   weeklyRecipients: RecipientRow[]
   monthlyRecipients: RecipientRow[]
   issuesRecipients: RecipientRow[]
+  safetyRecipients: RecipientRow[]
 }) {
   return (
     <div className="space-y-8">
@@ -203,6 +206,17 @@ export default function ScheduleEmailsSettings({
           </p>
         </div>
         <RecipientsSection list="issues" recipients={issuesRecipients} />
+      </section>
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-base font-semibold text-fg">Site safety review email recipients</h2>
+          <p className="text-sm text-fg-muted">
+            Sent on the 1st of the month, only when an active site&apos;s safety details are overdue for review
+            (6+ months, or never reviewed). An email can also be on any other list.
+          </p>
+        </div>
+        <RecipientsSection list="safety" recipients={safetyRecipients} />
       </section>
 
       <section className="space-y-3">
