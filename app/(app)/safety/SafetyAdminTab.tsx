@@ -6,6 +6,8 @@ import NeedsAttention from './NeedsAttention'
 import FormsList, { type AssignmentManagementRow } from './FormsList'
 import FormTemplatesTab, { type TemplateRow } from './FormTemplatesTab'
 import ReferenceDocsAdmin, { type ReferenceDocAdminRow } from './ReferenceDocsAdmin'
+import SiteSafetyDetails, { type SiteSafetyRow } from './SiteSafetyDetails'
+import type { CompanySafetyValues } from '@/lib/siteSafety'
 
 // Safety Admin (supervisor+). Forms system only — the old upload-and-sign
 // documents are no longer shown (their tables and files are kept).
@@ -18,8 +20,9 @@ interface Props {
   workers: WorkerOption[]
   sites: SiteOption[]
   referenceDocs: ReferenceDocAdminRow[]
+  companySafety: CompanySafetyValues | null
+  siteSafety: SiteSafetyRow[]
   tableExists: boolean
-  siteSafetyDetails?: ReactNode
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -32,7 +35,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 export default function SafetyAdminTab({
-  isAdmin, todayPerth, assignments, templates, workers, sites, referenceDocs, tableExists, siteSafetyDetails,
+  isAdmin, todayPerth, assignments, templates, workers, sites, referenceDocs, companySafety, siteSafety, tableExists,
 }: Props) {
   const [assignOpen, setAssignOpen]     = useState(false)
   const [createSignal, setCreateSignal] = useState(0)
@@ -100,11 +103,14 @@ export default function SafetyAdminTab({
         <ReferenceDocsAdmin docs={referenceDocs} sites={sites} isAdmin={isAdmin} />
       </Section>
 
-      {siteSafetyDetails && (
-        <Section title="Site safety details">
-          {siteSafetyDetails}
-        </Section>
-      )}
+      <Section title="Site safety details">
+        <SiteSafetyDetails
+          isAdmin={isAdmin}
+          todayPerth={todayPerth}
+          company={companySafety}
+          sites={siteSafety}
+        />
+      </Section>
     </div>
   )
 }

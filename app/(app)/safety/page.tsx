@@ -13,6 +13,8 @@ import type { TemplateRow } from './FormTemplatesTab'
 import type { AssignmentManagementRow } from './FormsList'
 import type { ReferenceDocAdminRow } from './ReferenceDocsAdmin'
 import { todayInPerth } from '@/lib/emails/dateUtils'
+import type { SiteSafetyRow } from './SiteSafetyDetails'
+import { pickCompanySafety, pickSiteSafety, type CompanySafetyValues } from '@/lib/siteSafety'
 import type { SafetyFormType, FormSection } from '@/types/database'
 
 export const metadata = { title: 'Safety — Earthcare Landscapes' }
@@ -55,6 +57,24 @@ async function fetchReferenceDocs(supabase: Db, isSupervisorPlus: boolean): Prom
     }))
   } catch {
     return []
+  }
+}
+
+// Safety Admin → Site safety details: company row + each site's details.
+// Supervisor+ only. Mapped onto the active sites after Promise.all.
+async function fetchSiteSafetyRaw(supabase: Db, isSupervisorPlus: boolean) {
+  if (!isSupervisorPlus) return { company: null as CompanySafetyValues | null, siteRows: [] as Record<string, unknown>[] }
+  try {
+    const [{ data: companyRow }, { data: siteRows }] = await Promise.all([
+      supabase.from('company_safety_details').select('*').eq('id', true).maybeSingle(),
+      supabase.from('site_safety_details').select('*, reviewer:profiles!last_reviewed_by(first_name, last_name)'),
+    ])
+    return {
+      company:  companyRow ? pickCompanySafety(companyRow) : null,
+      siteRows: (siteRows ?? []) as Record<string, unknown>[],
+    }
+  } catch {
+    return { company: null as CompanySafetyValues | null, siteRows: [] as Record<string, unknown>[] }
   }
 }
 
@@ -217,6 +237,7 @@ export default async function SafetyPage() {
     { sites, staff, vehicles },
     preStartsPage,
     referenceDocs,
+    siteSafetyRaw,
     toolbox,
     incidentsResult,
     safetyForms,
@@ -224,6 +245,7 @@ export default async function SafetyPage() {
     fetchSitesStaffVehicles(supabase),
     getPreStartsPage(0, 15),
     fetchReferenceDocs(supabase, isSupervisorPlus),
+    fetchSiteSafetyRaw(supabase, isSupervisorPlus),
     fetchToolboxMeetings(supabase),
     fetchIncidents(supabase),
     fetchSafetyFormsRaw(supabase, profile.id, isSupervisorPlus),
@@ -296,6 +318,21 @@ export default async function SafetyPage() {
       })
     : []
 
+  const siteSafety: SiteSafetyRow[] = isSupervisorPlus
+    ? sites.map((s): SiteSafetyRow => {
+        const row = siteSafetyRaw.siteRows.find(r => r.site_id === s.id)
+        const reviewerRaw = row?.reviewer as { first_name: string; last_name: string } | { first_name: string; last_name: string }[] | null | undefined
+        const reviewer = Array.isArray(reviewerRaw) ? reviewerRaw[0] : reviewerRaw
+        return {
+          siteId:             s.id,
+          siteName:           s.name,
+          details:            row ? pickSiteSafety(row) : null,
+          lastReviewedAt:     (row?.last_reviewed_at as string | null | undefined) ?? null,
+          lastReviewedByName: reviewer ? `${reviewer.first_name} ${reviewer.last_name}`.trim() : null,
+        }
+      })
+    : []
+
   return (
     <div className="min-h-screen bg-bg">
       <div className="mx-auto max-w-5xl px-4 py-6">
@@ -312,6 +349,8 @@ export default async function SafetyPage() {
           templates={templates}
           allAssignments={allAssignments}
           referenceDocs={referenceDocs}
+          companySafety={siteSafetyRaw.company}
+          siteSafety={siteSafety}
           todayPerth={todayInPerth()}
           preStartsHasMore={preStartsHasMore}
           tablesExist={{

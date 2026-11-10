@@ -11,6 +11,8 @@ import { type WorkerOption } from './AssignFormsTab'
 import { type AssignmentManagementRow } from './FormsList'
 import SafetyAdminTab from './SafetyAdminTab'
 import { type ReferenceDocAdminRow } from './ReferenceDocsAdmin'
+import { type SiteSafetyRow } from './SiteSafetyDetails'
+import type { CompanySafetyValues } from '@/lib/siteSafety'
 
 export type PreStartsSetter = Dispatch<SetStateAction<PreStartRow[]>>
 
@@ -124,6 +126,8 @@ interface Props {
   templates:        TemplateRow[]
   allAssignments:   AssignmentManagementRow[]
   referenceDocs:    ReferenceDocAdminRow[]
+  companySafety:    CompanySafetyValues | null
+  siteSafety:       SiteSafetyRow[]
   todayPerth:       string
   preStartsHasMore: boolean
   tablesExist:      {
@@ -145,6 +149,8 @@ export default function SafetyView({
   templates,
   allAssignments,
   referenceDocs,
+  companySafety,
+  siteSafety,
   todayPerth,
   preStartsHasMore,
   tablesExist,
@@ -260,6 +266,8 @@ export default function SafetyView({
           }))}
           sites={sites}
           referenceDocs={referenceDocs}
+          companySafety={companySafety}
+          siteSafety={siteSafety}
           tableExists={tablesExist.safetyForms}
         />
       )}
